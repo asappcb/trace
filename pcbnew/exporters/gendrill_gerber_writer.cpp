@@ -85,7 +85,6 @@ bool GERBER_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory, b
         {
             wxString fullFilename = fn.GetFullPath();
             bool     isNonPlated = doing_npth || span.m_IsBackdrill;
-            bool     wroteDrillFile = false;
 
             int result = createDrillFile( fullFilename, isNonPlated, span );
 
@@ -101,21 +100,10 @@ bool GERBER_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory, b
                 break;
             }
 
-            wroteDrillFile = true;
-
             if( aReporter )
             {
                 msg.Printf( _( "Created file '%s'." ), fullFilename );
                 aReporter->Report( msg, RPT_SEVERITY_ACTION );
-            }
-
-            if( wroteDrillFile && span.m_IsBackdrill )
-            {
-                if( !writeBackdrillLayerPairFile( aPlotDirectory, aReporter, span ) )
-                {
-                    success = false;
-                    break;
-                }
             }
         }
 
@@ -390,7 +378,12 @@ int GERBER_WRITER::createDrillFile( wxString& aFullFilename, bool aIsNpth,
             last_item_is_via = false;
             const PAD* pad = dyn_cast<const PAD*>( hole_descr.m_ItemParent );
 
-            if( pad->GetProperty() == PAD_PROP::CASTELLATED )
+            if( hole_descr.m_IsBackdrill )
+            {
+                gbr_metadata.SetApertureAttrib(
+                        GBR_APERTURE_METADATA::GBR_APERTURE_ATTRIB_BACKDRILL );
+            }
+            else if( pad->GetProperty() == PAD_PROP::CASTELLATED )
             {
                 gbr_metadata.SetApertureAttrib(
                         GBR_APERTURE_METADATA::GBR_APERTURE_ATTRIB_CASTELLATEDDRILL );
@@ -453,49 +446,6 @@ int GERBER_WRITER::createDrillFile( wxString& aFullFilename, bool aIsNpth,
     plotter.EndPlot();
 
     return holes_count;
-}
-
-
-wxFileName GERBER_WRITER::getBackdrillLayerPairFileName( const DRILL_SPAN& aSpan ) const
-{
-    wxFileName fn = m_pcb->GetFileName();
-    wxString   pairName = wxString::FromUTF8( layerPairName( aSpan.Pair() ).c_str() );
-
-    fn.SetName( fn.GetName() + wxT( "-" ) + pairName + wxT( "-backdrill-drl" ) );
-    fn.SetExt( m_drillFileExtension );
-
-    return fn;
-}
-
-
-bool GERBER_WRITER::writeBackdrillLayerPairFile( const wxString& aPlotDirectory,
-                                                 REPORTER* aReporter, const DRILL_SPAN& aSpan )
-{
-    wxFileName fn = getBackdrillLayerPairFileName( aSpan );
-    fn.SetPath( aPlotDirectory );
-
-    wxString fullFilename = fn.GetFullPath();
-
-    if( createDrillFile( fullFilename, true, aSpan ) < 0 )
-    {
-        if( aReporter )
-        {
-            wxString msg;
-            msg.Printf( _( "Failed to create file '%s'." ), fullFilename );
-            aReporter->Report( msg, RPT_SEVERITY_ERROR );
-        }
-
-        return false;
-    }
-
-    if( aReporter )
-    {
-        wxString msg;
-        msg.Printf( _( "Created file '%s'." ), fullFilename );
-        aReporter->Report( msg, RPT_SEVERITY_ACTION );
-    }
-
-    return true;
 }
 
 

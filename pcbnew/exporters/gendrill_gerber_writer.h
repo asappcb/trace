@@ -119,10 +119,6 @@ private:
      * @return true if at least one via having this feature is found in m_holeListBuffer
      */
     bool hasViaType( IPC4761_FEATURES aFeature );
-
-    wxFileName getBackdrillLayerPairFileName( const DRILL_SPAN& aSpan ) const;
-    bool       writeBackdrillLayerPairFile( const wxString& aPlotDirectory, REPORTER* aReporter,
-                                            const DRILL_SPAN& aSpan );
 };
 
 #endif  //  #ifndef _GENDRILL_GERBER_WRITER_

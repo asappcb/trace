@@ -92,13 +92,10 @@ BOOST_AUTO_TEST_CASE( BackdrillCamOutputs )
     BOOST_CHECK( excellonContents.Contains( wxT( "; Backdrill" ) ) );
     BOOST_CHECK( excellonContents.Contains( wxT( "post-machining" ) ) );
 
+    // The redundant layer-pair-named backdrill file must no longer be produced; the single
+    // authoritative _Backdrills_Drill_ file above is the only backdrill NC file.
     wxFileName layerPairFile( tempDir.GetFullPath(), wxT( "backdrill_board-front-in3-backdrill.drl" ) );
-    BOOST_REQUIRE( layerPairFile.FileExists() );
-
-    wxFFile layerPairStream( layerPairFile.GetFullPath(), wxT( "rb" ) );
-    wxString layerPairContents;
-    BOOST_REQUIRE( layerPairStream.ReadAll( &layerPairContents ) );
-    BOOST_CHECK( layerPairContents.Contains( wxT( "; backdrill" ) ) );
+    BOOST_CHECK( !layerPairFile.FileExists() );
 
     wxFileName pthFile( tempDir.GetFullPath(), wxT( "backdrill_board-PTH.drl" ) );
     BOOST_REQUIRE( pthFile.FileExists() );
@@ -122,15 +119,10 @@ BOOST_AUTO_TEST_CASE( BackdrillCamOutputs )
     BOOST_CHECK( gerberContents.Contains( wxT( "%TA.AperFunction,BackDrill*%" ) ) );
     BOOST_CHECK( gerberContents.Contains( wxT( "%TF.FileFunction,NonPlated,1,4,Blind,Drill*%" ) ) );
 
+    // Likewise, the redundant Gerber layer-pair-named backdrill file must no longer be produced.
     wxFileName gerberLayerPairFile( tempDir.GetFullPath(),
                                     wxT( "backdrill_board-front-in3-backdrill-drl.gbr" ) );
-    BOOST_REQUIRE( gerberLayerPairFile.FileExists() );
-
-    wxFFile gerberLayerPairStream( gerberLayerPairFile.GetFullPath(), wxT( "rb" ) );
-    wxString gerberLayerPairContents;
-    BOOST_REQUIRE( gerberLayerPairStream.ReadAll( &gerberLayerPairContents ) );
-    BOOST_CHECK( gerberLayerPairContents.Contains( wxT( "%TF.FileFunction,NonPlated,1,4,Blind,Drill*%" ) ) );
-    BOOST_CHECK( gerberLayerPairContents.Contains( wxT( "%TA.AperFunction,BackDrill*%" ) ) );
+    BOOST_CHECK( !gerberLayerPairFile.FileExists() );
 
     wxFileName odbRoot( tempDir.GetFullPath(), wxEmptyString );
     odbRoot.AppendDir( wxT( "odb_out" ) );
@@ -171,12 +163,74 @@ BOOST_AUTO_TEST_CASE( BackdrillCamOutputs )
     matrixStream.Close();
     toolsStream.Close();
     gerberStream.Close();
-    gerberLayerPairStream.Close();
     excellonStream.Close();
-    layerPairStream.Close();
     pthStream.Close();
 
     wxFileName::Rmdir( odbRoot.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+    wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+}
+
+
+// A backdrill defined on a pad padstack was emitted in STEP and IPC-2581 but silently dropped
+// from the NC/Gerber drill output (which only scanned vias).  A pad backdrill must now produce
+// the same _Backdrills_Drill_ file and BackDrill aperture as a via backdrill.
+BOOST_AUTO_TEST_CASE( PadBackdrillCamOutputs )
+{
+    wxFileName tempDir = MakeTempDir();
+    wxFileName boardFile( tempDir.GetFullPath(), wxT( "pad_backdrill_board.kicad_pcb" ) );
+
+    BOARD board;
+    board.SetCopperLayerCount( 6 );
+    board.SetFileName( boardFile.GetFullPath() );
+
+    FOOTPRINT* fp = new FOOTPRINT( &board );
+    fp->SetPosition( VECTOR2I( 0, 0 ) );
+    board.Add( fp );
+
+    PAD* pad = new PAD( fp );
+    pad->SetAttribute( PAD_ATTRIB::PTH );
+    pad->SetLayerSet( PAD::PTHMask() );
+    pad->SetPosition( VECTOR2I( 0, 0 ) );
+    pad->SetSize( PADSTACK::ALL_LAYERS,
+                  VECTOR2I( pcbIUScale.mmToIU( 1.0 ), pcbIUScale.mmToIU( 1.0 ) ) );
+    pad->SetDrillSize( VECTOR2I( pcbIUScale.mmToIU( 0.30 ), pcbIUScale.mmToIU( 0.30 ) ) );
+
+    // Front-side backdrill on the pad padstack: F_Cu -> In3_Cu (UI indices 1 -> 4).
+    pad->Padstack().SetBackdrillSize( true, pcbIUScale.mmToIU( 0.50 ) );
+    pad->Padstack().SetBackdrillEndLayer( true, In3_Cu );
+    fp->Add( pad );
+
+    EXCELLON_WRITER excellon( &board );
+    excellon.SetOptions( false, false, VECTOR2I( 0, 0 ), false );
+    excellon.SetFormat( true );
+    BOOST_REQUIRE( excellon.CreateDrillandMapFilesSet( tempDir.GetFullPath(), true, false,
+                                                       nullptr ) );
+
+    wxFileName excellonFile( tempDir.GetFullPath(),
+                             wxT( "pad_backdrill_board_Backdrills_Drill_1_4.drl" ) );
+    BOOST_CHECK_MESSAGE( excellonFile.FileExists(),
+                         "Pad backdrill Excellon file should be produced" );
+
+    GERBER_WRITER gerber( &board );
+    gerber.SetOptions( VECTOR2I( 0, 0 ) );
+    gerber.SetFormat( 6 );
+    BOOST_REQUIRE( gerber.CreateDrillandMapFilesSet( tempDir.GetFullPath(), true, false, false,
+                                                     nullptr ) );
+
+    wxFileName gerberFile( tempDir.GetFullPath(),
+                           wxT( "pad_backdrill_board_Backdrills_Drill_1_4-drl.gbr" ) );
+    BOOST_CHECK_MESSAGE( gerberFile.FileExists(),
+                         "Pad backdrill Gerber file should be produced" );
+
+    if( gerberFile.FileExists() )
+    {
+        wxFFile stream( gerberFile.GetFullPath(), wxT( "rb" ) );
+        wxString contents;
+        BOOST_REQUIRE( stream.ReadAll( &contents ) );
+        BOOST_CHECK( contents.Contains( wxT( "%TA.AperFunction,BackDrill*%" ) ) );
+        stream.Close();
+    }
+
     wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
 }
 
