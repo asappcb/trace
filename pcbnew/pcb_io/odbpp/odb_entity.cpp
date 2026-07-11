@@ -362,6 +362,21 @@ void ODB_MATRIX_ENTITY::AddDrillMatrixLayer()
                 ODB_DRILL_SPAN padSpan( F_Cu, B_Cu, false, pad->GetAttribute() == PAD_ATTRIB::NPTH );
                 drill_layers[padSpan].push_back( pad );
             }
+
+            // Pads can also carry backdrill operations on their padstack; emit those as their
+            // own backdrill drill spans, exactly like via backdrills.
+            auto addPadBackdrillSpan = [&]( const PADSTACK::DRILL_PROPS& aDrill )
+            {
+                if( aDrill.start != UNDEFINED_LAYER && aDrill.end != UNDEFINED_LAYER
+                    && ( aDrill.size.x > 0 || aDrill.size.y > 0 ) )
+                {
+                    ODB_DRILL_SPAN backSpan( aDrill.start, aDrill.end, true, true );
+                    drill_layers[backSpan].push_back( pad );
+                }
+            };
+
+            addPadBackdrillSpan( pad->Padstack().SecondaryDrill() );
+            addPadBackdrillSpan( pad->Padstack().TertiaryDrill() );
         }
     }
 
@@ -789,6 +804,11 @@ void ODB_LAYER_ENTITY::InitDrillData()
     bool isPlatedDrillLayer = matchedSpan.has_value() && !matchedSpan->m_IsNonPlated
                               && !matchedSpan->m_IsBackdrill;
 
+    // Drill-hole features on a backdrill layer must be drawn at the backdrill diameter, so tell
+    // the features manager which span this layer represents.
+    if( isBackdrillLayer )
+        m_featuresMgr->SetBackdrillSpan( matchedSpan->m_StartLayer, matchedSpan->m_EndLayer );
+
     if( matchedSpan.has_value() && ( isNPTHLayer || isPlatedDrillLayer ) )
     {
         // Slotted (oval) holes are routed to a separate map; emit them on the matching
@@ -929,6 +949,46 @@ void ODB_LAYER_ENTITY::InitDrillData()
                 else if( item->Type() == PCB_PAD_T )
                 {
                     PAD* pad = static_cast<PAD*>( item );
+
+                    if( isBackdrillLayer )
+                    {
+                        auto drillMatches = [&]( const PADSTACK::DRILL_PROPS& aDrill )
+                        {
+                            return aDrill.start == matchedSpan->m_StartLayer
+                                    && aDrill.end == matchedSpan->m_EndLayer
+                                    && ( aDrill.size.x > 0 || aDrill.size.y > 0 );
+                        };
+
+                        const PADSTACK::DRILL_PROPS& secondary = pad->Padstack().SecondaryDrill();
+                        const PADSTACK::DRILL_PROPS& tertiary  = pad->Padstack().TertiaryDrill();
+
+                        const PADSTACK::DRILL_PROPS* drill = nullptr;
+
+                        if( drillMatches( secondary ) )
+                            drill = &secondary;
+                        else if( drillMatches( tertiary ) )
+                            drill = &tertiary;
+                        else
+                            continue;
+
+                        int diameter = drill->size.x;
+
+                        if( drill->size.y > 0 )
+                        {
+                            diameter = ( diameter > 0 ) ? std::min( diameter, drill->size.y )
+                                                        : drill->size.y;
+                        }
+
+                        if( diameter <= 0 )
+                            continue;
+
+                        m_tools.value().AddDrillTools( wxT( "NON_PLATED" ),
+                                                       ODB::SymDouble2String( diameter ),
+                                                       wxT( "BLIND" ) );
+
+                        m_layerItems[pad->GetNetCode()].push_back( item );
+                        continue;
+                    }
 
                     bool padIsNPTH = pad->GetAttribute() == PAD_ATTRIB::NPTH;
 

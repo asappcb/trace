@@ -820,14 +820,20 @@ void FEATURES_MANAGER::InitFeatureList( PCB_LAYER_ID aLayer, std::vector<BOARD_I
                 PAD dummy( *pad );
                 dummy.Padstack().SetMode( PADSTACK::MODE::NORMAL );
 
-                if( pad->GetDrillSizeX() == pad->GetDrillSizeY() )
+                // On a backdrill drill layer, draw the (round) backdrill diameter instead of
+                // the primary drill.
+                int      backdrill = backdrillDiameter( pad->Padstack() );
+                VECTOR2I holeSize = backdrill > 0 ? VECTOR2I( backdrill, backdrill )
+                                                  : pad->GetDrillSize();
+
+                if( backdrill > 0 || pad->GetDrillSizeX() == pad->GetDrillSizeY() )
                     dummy.SetShape( PADSTACK::ALL_LAYERS, PAD_SHAPE::CIRCLE ); // round hole shape
                 else
                     dummy.SetShape( PADSTACK::ALL_LAYERS, PAD_SHAPE::OVAL ); // slot hole shape
 
                 dummy.SetOffset( PADSTACK::ALL_LAYERS,
                                  VECTOR2I( 0, 0 ) ); // use hole position not pad position
-                dummy.SetSize( PADSTACK::ALL_LAYERS, pad->GetDrillSize() );
+                dummy.SetSize( PADSTACK::ALL_LAYERS, holeSize );
 
                 AddPadShape( dummy, aLayer );
 
@@ -952,10 +958,45 @@ void FEATURES_MANAGER::AddVia( const PCB_VIA* aVia, PCB_LAYER_ID aLayer )
 }
 
 
+int FEATURES_MANAGER::backdrillDiameter( const PADSTACK& aPadstack ) const
+{
+    if( !m_backdrillSpan )
+        return -1;
+
+    auto match = [&]( const PADSTACK::DRILL_PROPS& aDrill ) -> int
+    {
+        if( aDrill.start != m_backdrillSpan->first || aDrill.end != m_backdrillSpan->second
+            || ( aDrill.size.x <= 0 && aDrill.size.y <= 0 ) )
+        {
+            return -1;
+        }
+
+        int diameter = aDrill.size.x;
+
+        if( aDrill.size.y > 0 )
+            diameter = ( diameter > 0 ) ? std::min( diameter, aDrill.size.y ) : aDrill.size.y;
+
+        return diameter;
+    };
+
+    int diameter = match( aPadstack.SecondaryDrill() );
+
+    if( diameter <= 0 )
+        diameter = match( aPadstack.TertiaryDrill() );
+
+    return diameter;
+}
+
+
 void FEATURES_MANAGER::AddViaDrillHole( const PCB_VIA* aVia, PCB_LAYER_ID aLayer )
 {
     PAD dummy( nullptr ); // default pad shape is circle
     int hole = aVia->GetDrillValue();
+
+    // On a backdrill drill layer, draw the backdrill diameter, not the primary via drill.
+    if( int backdrill = backdrillDiameter( aVia->Padstack() ); backdrill > 0 )
+        hole = backdrill;
+
     dummy.SetPosition( aVia->GetStart() );
     dummy.SetSize( PADSTACK::ALL_LAYERS, VECTOR2I( hole, hole ) );
 

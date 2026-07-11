@@ -231,6 +231,29 @@ BOOST_AUTO_TEST_CASE( PadBackdrillCamOutputs )
         stream.Close();
     }
 
+    // ODB++: the pad backdrill must also reach the ODB++ output as a backdrill drill layer.
+    wxFileName odbRoot( tempDir.GetFullPath(), wxEmptyString );
+    odbRoot.AppendDir( wxT( "odb_out" ) );
+    BOOST_REQUIRE( odbRoot.Mkdir( wxS_DIR_DEFAULT, wxPATH_MKDIR_FULL ) );
+
+    PCB_IO_ODBPP odbExporter;
+    std::map<std::string, UTF8> props;
+    props["units"] = "mm";
+    props["sigfig"] = "4";
+    BOOST_REQUIRE_NO_THROW( odbExporter.SaveBoard( odbRoot.GetFullPath(), &board, &props ) );
+
+    wxFileName matrixFile( odbRoot.GetFullPath(), wxEmptyString );
+    matrixFile.AppendDir( wxT( "matrix" ) );
+    matrixFile.SetFullName( wxT( "matrix" ) );
+    BOOST_REQUIRE( matrixFile.FileExists() );
+
+    wxFFile matrixStream( matrixFile.GetFullPath(), wxT( "rb" ) );
+    wxString matrixContents;
+    BOOST_REQUIRE( matrixStream.ReadAll( &matrixContents ) );
+    BOOST_CHECK( matrixContents.Contains( wxT( "ADD_TYPE=BACKDRILL" ) ) );
+    matrixStream.Close();
+
+    wxFileName::Rmdir( odbRoot.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
     wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
 }
 
