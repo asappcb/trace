@@ -26,6 +26,7 @@
 #include <pcbnew/exporters/gendrill_excellon_writer.h>
 #include <pcbnew/exporters/gendrill_gerber_writer.h>
 #include <pcbnew/pcb_io/odbpp/pcb_io_odbpp.h>
+#include <pcbnew/pcb_io/kicad_sexpr/pcb_io_kicad_sexpr.h>
 #include <pcbnew/pcb_track.h>
 #include <base_units.h>
 
@@ -702,5 +703,154 @@ BOOST_AUTO_TEST_CASE( OdbPpPlatedSlotDrill )
     BOOST_CHECK_EQUAL( countLinesStartingWith( nonPlatedToolsContents, wxT( "TYPE=PLATED" ) ), 0 );
 
     wxFileName::Rmdir( odbRoot.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+    wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+}
+
+
+// A board with via backdrills (both sides) and post-machining must survive a native s-expr
+// write -> read round-trip with every backdrill/post-machining property preserved.
+BOOST_AUTO_TEST_CASE( BackdrillSexprRoundTrip )
+{
+    wxFileName tempDir = MakeTempDir();
+    wxFileName boardFile( tempDir.GetFullPath(), wxT( "backdrill_roundtrip.kicad_pcb" ) );
+
+    BOARD board;
+    board.SetCopperLayerCount( 6 );
+    board.SetFileName( boardFile.GetFullPath() );
+
+    auto via = new PCB_VIA( &board );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+    via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+
+    // Top backdrill F_Cu -> In3_Cu.
+    via->SetSecondaryDrillSize( pcbIUScale.mmToIU( 0.50 ) );
+    via->SetSecondaryDrillStartLayer( F_Cu );
+    via->SetSecondaryDrillEndLayer( In3_Cu );
+
+    // Bottom backdrill B_Cu -> In4_Cu.
+    via->SetTertiaryDrillSize( pcbIUScale.mmToIU( 0.40 ) );
+    via->SetTertiaryDrillStartLayer( B_Cu );
+    via->SetTertiaryDrillEndLayer( In4_Cu );
+
+    // Front post-machining (countersink).
+    via->SetFrontPostMachiningMode( PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK );
+    via->SetFrontPostMachiningSize( pcbIUScale.mmToIU( 0.80 ) );
+    via->SetFrontPostMachiningDepth( pcbIUScale.mmToIU( 0.15 ) );
+    via->SetFrontPostMachiningAngle( 900 );
+
+    board.Add( via );
+
+    PCB_IO_KICAD_SEXPR io;
+    BOOST_REQUIRE_NO_THROW( io.SaveBoard( boardFile.GetFullPath(), &board, nullptr ) );
+    BOOST_REQUIRE( boardFile.FileExists() );
+
+    std::unique_ptr<BOARD> reloaded( io.LoadBoard( boardFile.GetFullPath(), nullptr ) );
+    BOOST_REQUIRE( reloaded );
+
+    PCB_VIA* loadedVia = nullptr;
+
+    for( PCB_TRACK* track : reloaded->Tracks() )
+    {
+        if( track->Type() == PCB_VIA_T )
+        {
+            loadedVia = static_cast<PCB_VIA*>( track );
+            break;
+        }
+    }
+
+    BOOST_REQUIRE( loadedVia );
+
+    BOOST_CHECK( loadedVia->GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_BOTH );
+
+    BOOST_REQUIRE( loadedVia->GetTopBackdrillSize().has_value() );
+    BOOST_CHECK_EQUAL( *loadedVia->GetTopBackdrillSize(), pcbIUScale.mmToIU( 0.50 ) );
+    BOOST_CHECK( loadedVia->GetTopBackdrillLayer() == In3_Cu );
+
+    BOOST_REQUIRE( loadedVia->GetBottomBackdrillSize().has_value() );
+    BOOST_CHECK_EQUAL( *loadedVia->GetBottomBackdrillSize(), pcbIUScale.mmToIU( 0.40 ) );
+    BOOST_CHECK( loadedVia->GetBottomBackdrillLayer() == In4_Cu );
+
+    BOOST_CHECK( loadedVia->GetFrontPostMachiningMode()
+                 == PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK );
+    BOOST_CHECK_EQUAL( loadedVia->GetFrontPostMachiningSize(), pcbIUScale.mmToIU( 0.80 ) );
+    BOOST_CHECK_EQUAL( loadedVia->GetFrontPostMachiningDepth(), pcbIUScale.mmToIU( 0.15 ) );
+    BOOST_CHECK_EQUAL( loadedVia->GetFrontPostMachiningAngle(), 900 );
+
+    wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+}
+
+
+// KiCad 10.0 stored the TOP backdrill in the tertiary drill slot; the parser keys the
+// backdrill side on its start layer, so a top backdrill written under the "tertiary_drill"
+// token must still read back as a TOP backdrill (regression for the legacy on-disk layout,
+// exercised here through the real s-expr parser rather than by seeding DRILL_PROPS).
+BOOST_AUTO_TEST_CASE( BackdrillLegacyV10SlotLayoutRead )
+{
+    wxFileName tempDir = MakeTempDir();
+    wxFileName boardFile( tempDir.GetFullPath(), wxT( "backdrill_v10.kicad_pcb" ) );
+
+    // Build a board with a single top backdrill and save it (current format writes the top
+    // backdrill under the "backdrill" token).
+    {
+        BOARD board;
+        board.SetCopperLayerCount( 6 );
+        board.SetFileName( boardFile.GetFullPath() );
+
+        auto via = new PCB_VIA( &board );
+        via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) ) );
+        via->SetLayerPair( F_Cu, B_Cu );
+        via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+        via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+        via->SetSecondaryDrillSize( pcbIUScale.mmToIU( 0.50 ) );
+        via->SetSecondaryDrillStartLayer( F_Cu );
+        via->SetSecondaryDrillEndLayer( In3_Cu );
+        board.Add( via );
+
+        PCB_IO_KICAD_SEXPR io;
+        BOOST_REQUIRE_NO_THROW( io.SaveBoard( boardFile.GetFullPath(), &board, nullptr ) );
+    }
+
+    // Rewrite the file to emulate the KiCad 10.0 layout: the top backdrill stored under the
+    // "tertiary_drill" token instead of "backdrill".
+    {
+        wxFFile in( boardFile.GetFullPath(), wxT( "rb" ) );
+        wxString contents;
+        BOOST_REQUIRE( in.ReadAll( &contents ) );
+        in.Close();
+
+        BOOST_REQUIRE( contents.Contains( wxT( "(backdrill" ) ) );
+        contents.Replace( wxT( "(backdrill" ), wxT( "(tertiary_drill" ) );
+
+        wxFFile out( boardFile.GetFullPath(), wxT( "wb" ) );
+        BOOST_REQUIRE( out.Write( contents ) );
+        out.Close();
+    }
+
+    PCB_IO_KICAD_SEXPR io;
+    std::unique_ptr<BOARD> reloaded( io.LoadBoard( boardFile.GetFullPath(), nullptr ) );
+    BOOST_REQUIRE( reloaded );
+
+    PCB_VIA* loadedVia = nullptr;
+
+    for( PCB_TRACK* track : reloaded->Tracks() )
+    {
+        if( track->Type() == PCB_VIA_T )
+        {
+            loadedVia = static_cast<PCB_VIA*>( track );
+            break;
+        }
+    }
+
+    BOOST_REQUIRE( loadedVia );
+
+    // A top backdrill living in the tertiary slot must still resolve to a TOP backdrill.
+    BOOST_CHECK( loadedVia->GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_TOP );
+    BOOST_REQUIRE( loadedVia->GetTopBackdrillSize().has_value() );
+    BOOST_CHECK_EQUAL( *loadedVia->GetTopBackdrillSize(), pcbIUScale.mmToIU( 0.50 ) );
+    BOOST_CHECK( loadedVia->GetTopBackdrillLayer() == In3_Cu );
+    BOOST_CHECK( !loadedVia->GetBottomBackdrillSize().has_value() );
+
     wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
 }
