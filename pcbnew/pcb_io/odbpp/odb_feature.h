@@ -46,6 +46,7 @@ class PCB_IO_ODBPP;
 class FOOTPRINT;
 class PAD;
 class PCB_VIA;
+class PADSTACK;
 
 class FEATURES_MANAGER : public ATTR_MANAGER
 {
@@ -77,6 +78,16 @@ public:
     void AddVia( const PCB_VIA* aVia, PCB_LAYER_ID aLayer );
 
     void AddViaDrillHole( const PCB_VIA* aVia, PCB_LAYER_ID aLayer );
+
+    /// When the current layer is a backdrill span, drill-hole features are drawn at the
+    /// backdrill diameter (from the matching secondary/tertiary drill) instead of the primary
+    /// drill. Set before drawing a backdrill drill layer's features; cleared otherwise.
+    void SetBackdrillSpan( PCB_LAYER_ID aStart, PCB_LAYER_ID aEnd )
+    {
+        m_backdrillSpan = std::make_pair( aStart, aEnd );
+    }
+
+    void ClearBackdrillSpan() { m_backdrillSpan.reset(); }
 
     void AddViaProtection( const PCB_VIA* aVia, bool drill, PCB_LAYER_ID aLayer );
 
@@ -190,10 +201,16 @@ private:
 
     inline PCB_IO_ODBPP* GetODBPlugin() { return m_plugin; }
 
+    /// Diameter (IU) of the padstack's backdrill drill matching m_backdrillSpan, or -1 if the
+    /// span is unset or no matching backdrill drill exists.
+    int backdrillDiameter( const PADSTACK& aPadstack ) const;
+
     BOARD*        m_board;
     PCB_IO_ODBPP* m_plugin;
     wxString      m_layerName;
     uint32_t      m_symIndex = 0;
+
+    std::optional<std::pair<PCB_LAYER_ID, PCB_LAYER_ID>> m_backdrillSpan;
 
     std::list<std::unique_ptr<ODB_FEATURE>>      m_featuresList;
     std::map<BOARD_ITEM*, std::vector<uint32_t>> m_featureIDMap;

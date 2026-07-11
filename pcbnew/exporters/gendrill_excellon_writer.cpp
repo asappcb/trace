@@ -141,12 +141,9 @@ bool EXCELLON_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory,
                     file_type = TYPE_FILE::NPTH_FILE;
                 }
 
-                bool wroteDrillFile = false;
-
                 try
                 {
                     createDrillFile( file, span, file_type );
-                    wroteDrillFile = true;
                 }
                 catch( ... )     // Capture fmt::print exception on write issues
                 {
@@ -154,15 +151,6 @@ bool EXCELLON_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory,
                     msg.Printf( _( "Failed to write file '%s'." ), fullFilename );
                     aReporter->Report( msg, RPT_SEVERITY_ERROR );
                     success = false;
-                }
-
-                if( wroteDrillFile && span.m_IsBackdrill && getHolesCount() > 0 )
-                {
-                    if( !writeBackdrillLayerPairFile( aPlotDirectory, aReporter, span ) )
-                    {
-                        success = false;
-                        break;
-                    }
                 }
             }
         }
@@ -643,71 +631,6 @@ void EXCELLON_WRITER::writeEXCELLONEndOfFile()
     // add if minimal here
     fmt::print( m_file, "{}", "M30\n" );
     fclose( m_file );
-}
-
-
-wxFileName EXCELLON_WRITER::getBackdrillLayerPairFileName( const DRILL_SPAN& aSpan ) const
-{
-    wxFileName fn = m_pcb->GetFileName();
-    wxString   extend;
-
-    extend << wxT( "-" )
-           << wxString::FromUTF8( layerPairName( aSpan.Pair() ).c_str() )
-           << wxT( "-backdrill" );
-
-    fn.SetName( fn.GetName() + extend );
-    fn.SetExt( m_drillFileExtension );
-
-    return fn;
-}
-
-
-bool EXCELLON_WRITER::writeBackdrillLayerPairFile( const wxString& aPlotDirectory,
-                                                   REPORTER* aReporter, const DRILL_SPAN& aSpan )
-{
-    wxFileName fn = getBackdrillLayerPairFileName( aSpan );
-    fn.SetPath( aPlotDirectory );
-
-    wxString fullFilename = fn.GetFullPath();
-    FILE*    file = wxFopen( fullFilename, wxT( "w" ) );
-
-    if( file == nullptr )
-    {
-        if( aReporter )
-        {
-            wxString msg;
-            msg.Printf( _( "Failed to create file '%s'." ), fullFilename );
-            aReporter->Report( msg, RPT_SEVERITY_ERROR );
-        }
-
-        return false;
-    }
-    else if( aReporter )
-    {
-        wxString msg;
-        msg.Printf( _( "Created file '%s'" ), fullFilename );
-        aReporter->Report( msg, RPT_SEVERITY_ACTION );
-    }
-
-    try
-    {
-        createDrillFile( file, aSpan, TYPE_FILE::NPTH_FILE, true );
-    }
-    catch( ... )
-    {
-        fclose( file );
-
-        if( aReporter )
-        {
-            wxString msg;
-            msg.Printf( _( "Failed to write file '%s'." ), fullFilename );
-            aReporter->Report( msg, RPT_SEVERITY_ERROR );
-        }
-
-        return false;
-    }
-
-    return true;
 }
 
 
