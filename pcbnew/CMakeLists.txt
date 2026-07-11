@@ -297,6 +297,7 @@ set( PCBNEW_DRC_SRCS
     drc/drc_report.cpp
     drc/drc_test_provider.cpp
     drc/drc_test_provider_annular_width.cpp
+    drc/drc_test_provider_backdrill.cpp
     drc/drc_test_provider_disallow.cpp
     drc/drc_test_provider_creepage.cpp
     drc/drc_test_provider_connectivity.cpp

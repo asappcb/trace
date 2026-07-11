@@ -118,7 +118,9 @@ enum PCB_DRC_CODE
 
     DRCE_SCHEMATIC_FIELDS_PARITY, // Mismatch with schematic fields
 
-    DRCE_LAST = DRCE_SCHEMATIC_FIELDS_PARITY
+    DRCE_BACKDRILL_INVALID_SPAN, // Backdrill span references invalid layers or diameter
+
+    DRCE_LAST = DRCE_BACKDRILL_INVALID_SPAN
 };
 
 
@@ -257,6 +259,7 @@ private:
     static DRC_ITEM missingTuningProfile;
     static DRC_ITEM tuningProfileImplicitRules;
     static DRC_ITEM trackOnPostMachinedLayer;
+    static DRC_ITEM backdrillInvalidSpan;
     static DRC_ITEM trackNotCenteredOnVia;
     static DRC_ITEM schematicFieldsParity;
 
