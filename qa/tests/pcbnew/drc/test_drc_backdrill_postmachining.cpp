@@ -388,6 +388,59 @@ BOOST_FIXTURE_TEST_CASE( PadBackdrillLayerDetection, BACKDRILL_TEST_FIXTURE )
 
 
 /**
+ * Regression for the pad ordinal layer math: an F_Cu -> In3_Cu backdrill on a 6-layer board maps
+ * In3_Cu to the same ordinal as B_Cu, so the old code wrongly reported In4_Cu/B_Cu as backdrilled.
+ * With LAYER_RANGE::Contains the span covers exactly F_Cu..In3_Cu.  Mirrors the via behaviour.
+ */
+BOOST_FIXTURE_TEST_CASE( PadBackdrillIn3LayerDetection, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    FOOTPRINT* fp = CreateFootprintWithPad(
+            VECTOR2I( pcbIUScale.mmToIU( 30 ), pcbIUScale.mmToIU( 20 ) ), netCode );
+    PAD* pad = fp->Pads().front();
+
+    SetPadBackdrill( pad, F_Cu, In3_Cu, pcbIUScale.mmToIU( 1.0 ) );
+
+    // The F_Cu -> In3_Cu span covers F_Cu, In1_Cu, In2_Cu, In3_Cu.
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( F_Cu ) );
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( In1_Cu ) );
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( In2_Cu ) );
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( In3_Cu ) );
+
+    // In4_Cu and B_Cu are past the must-cut and must NOT be reported (the ordinal bug flagged them).
+    BOOST_CHECK( !pad->IsBackdrilledOrPostMachined( In4_Cu ) );
+    BOOST_CHECK( !pad->IsBackdrilledOrPostMachined( B_Cu ) );
+}
+
+
+/**
+ * A bottom-anchored pad backdrill (B_Cu -> In3_Cu) must report only the bottom-side copper, as the
+ * via case does (GitLab #23902).  Enum-order iteration would have flagged the top inner layers.
+ */
+BOOST_FIXTURE_TEST_CASE( PadBottomBackdrillLayerDetection, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    FOOTPRINT* fp = CreateFootprintWithPad(
+            VECTOR2I( pcbIUScale.mmToIU( 30 ), pcbIUScale.mmToIU( 30 ) ), netCode );
+    PAD* pad = fp->Pads().front();
+
+    SetPadBackdrill( pad, B_Cu, In3_Cu, pcbIUScale.mmToIU( 1.0 ) );
+
+    // Top-side layers must NOT be reported.
+    BOOST_CHECK( !pad->IsBackdrilledOrPostMachined( F_Cu ) );
+    BOOST_CHECK( !pad->IsBackdrilledOrPostMachined( In1_Cu ) );
+    BOOST_CHECK( !pad->IsBackdrilledOrPostMachined( In2_Cu ) );
+
+    // The B_Cu -> In3_Cu span covers In3_Cu, In4_Cu, B_Cu.
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( In3_Cu ) );
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( In4_Cu ) );
+    BOOST_CHECK( pad->IsBackdrilledOrPostMachined( B_Cu ) );
+}
+
+
+/**
  * Test that GetEffectiveShape returns the backdrill hole shape for affected layers
  */
 BOOST_FIXTURE_TEST_CASE( ViaEffectiveShapeOnBackdrilledLayer, BACKDRILL_TEST_FIXTURE )
