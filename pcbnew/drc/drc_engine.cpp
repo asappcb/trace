@@ -1469,6 +1469,7 @@ DRC_CONSTRAINT DRC_ENGINE::EvalRules( DRC_CONSTRAINT_T aConstraintType, const BO
                 case BACKDRILL_STUB_LENGTH_CONSTRAINT:
                 case CONNECTION_WIDTH_CONSTRAINT:
                 case HOLE_TO_HOLE_CONSTRAINT:
+                case BACKDRILL_HOLE_TO_HOLE_CONSTRAINT:
                 {
                     if( implicit )
                     {
@@ -1552,6 +1553,7 @@ DRC_CONSTRAINT DRC_ENGINE::EvalRules( DRC_CONSTRAINT_T aConstraintType, const BO
                             break;
 
                         case HOLE_TO_HOLE_CONSTRAINT:
+                        case BACKDRILL_HOLE_TO_HOLE_CONSTRAINT:
                             REPORT( wxString::Format( _( "Checking %s hole to hole: min %s." ),
                                                       EscapeHTML( c->constraint.GetName() ),
                                                       MessageTextFromValue( c->constraint.m_Value.Min() ) ) )
@@ -1760,7 +1762,8 @@ DRC_CONSTRAINT DRC_ENGINE::EvalRules( DRC_CONSTRAINT_T aConstraintType, const BO
                         REPORT( _( "Rule layer not matched; rule ignored." ) )
                     }
                 }
-                else if( c->constraint.m_Type == HOLE_TO_HOLE_CONSTRAINT
+                else if( ( c->constraint.m_Type == HOLE_TO_HOLE_CONSTRAINT
+                           || c->constraint.m_Type == BACKDRILL_HOLE_TO_HOLE_CONSTRAINT )
                         && ( !a->HasHole() || !b->HasHole() ) )
                 {
                     // Hole-to-hole only applies between two mechanical holes; this covers both
@@ -2680,7 +2683,8 @@ SHOWMATCH_DOMAIN_SPEC getShowMatchDomainSpec( DRC_CONSTRAINT_T aConstraint )
     case HOLE_CLEARANCE_CONSTRAINT:
     case BACKDRILL_CLEARANCE_CONSTRAINT: return { SHOWMATCH_DOMAIN::HOLE_ITEMS, SHOWMATCH_DOMAIN::ALL_ITEMS, true, false };
 
-    case HOLE_TO_HOLE_CONSTRAINT: return { SHOWMATCH_DOMAIN::HOLE_ITEMS };
+    case HOLE_TO_HOLE_CONSTRAINT:
+    case BACKDRILL_HOLE_TO_HOLE_CONSTRAINT: return { SHOWMATCH_DOMAIN::HOLE_ITEMS };
 
     case COURTYARD_CLEARANCE_CONSTRAINT: return { SHOWMATCH_DOMAIN::FOOTPRINTS };
 

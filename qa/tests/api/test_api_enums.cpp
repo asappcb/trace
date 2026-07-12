@@ -314,7 +314,8 @@ BOOST_AUTO_TEST_CASE( DesignRuleType )
                                 DRCE_BACKDRILL_INVALID_SPAN,
                                 DRCE_BACKDRILL_STUB_TOO_LONG,
                                 DRCE_POST_MACHINING_DEPTH_INVALID,
-                                DRCE_BACKDRILL_TO_COPPER_CLEARANCE } )
+                                DRCE_BACKDRILL_TO_COPPER_CLEARANCE,
+                                DRCE_BACKDRILL_HOLE_TO_HOLE } )
     {
         ProtoType proto = ToProtoEnum<PCB_DRC_CODE, ProtoType>( value );
         BOOST_REQUIRE( proto != ProtoType::DRCET_UNKNOWN );

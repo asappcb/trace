@@ -44,7 +44,8 @@ public:
     DRC_TEST_PROVIDER_HOLE_TO_HOLE () :
             DRC_TEST_PROVIDER(),
             m_board( nullptr ),
-            m_largestHoleToHoleClearance( 0 )
+            m_largestHoleToHoleClearance( 0 ),
+            m_hasBackdrillHoleToHoleRules( false )
     {}
 
     virtual ~DRC_TEST_PROVIDER_HOLE_TO_HOLE() = default;
@@ -56,9 +57,33 @@ public:
 private:
     bool testHoleAgainstHole( BOARD_ITEM* aItem, SHAPE_SEGMENT* aHole, BOARD_ITEM* aOther );
 
+    // A hole whose bore is enlarged beyond the primary drill by a backdrill or post-machining.
+    static bool isBackdrillHole( const BOARD_ITEM* aItem )
+    {
+        if( aItem->Type() == PCB_VIA_T )
+        {
+            const PCB_VIA* via = static_cast<const PCB_VIA*>( aItem );
+            return via->GetLargestHoleDiameter() > via->GetDrillValue();
+        }
+
+        if( aItem->Type() == PCB_PAD_T )
+        {
+            const PAD* pad = static_cast<const PAD*>( aItem );
+
+            if( !pad->HasHole() )
+                return false;
+
+            return pad->GetEffectiveHoleShape( UNDEFINED_LAYER )->GetWidth()
+                   > pad->GetEffectiveHoleShape()->GetWidth();
+        }
+
+        return false;
+    }
+
     BOARD*    m_board;
     DRC_RTREE m_holeTree;
     int       m_largestHoleToHoleClearance;
+    bool      m_hasBackdrillHoleToHoleRules;
 };
 
 
@@ -89,8 +114,18 @@ static std::shared_ptr<SHAPE_SEGMENT> getHoleShape( BOARD_ITEM* aItem )
 
 bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
 {
+    // A dedicated backdrill_hole_to_hole rule governs spacing for pairs involving an enlarged
+    // backdrill bore; the provider must run (and report DRCE_BACKDRILL_HOLE_TO_HOLE) even when the
+    // ordinary hole-to-hole codes are ignored.
+    m_hasBackdrillHoleToHoleRules =
+            m_drcEngine->HasRulesForConstraintType( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT );
+
+    bool checkBackdrill = m_hasBackdrillHoleToHoleRules
+                          && !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_HOLE_TO_HOLE );
+
     if( m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_TOO_CLOSE )
-            && m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_COLOCATED ) )
+            && m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_COLOCATED )
+            && !checkBackdrill )
     {
         REPORT_AUX( wxT( "Hole to hole violations ignored. Tests not run." ) );
         return true;        // continue with other tests
@@ -98,52 +133,60 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
 
     m_board = m_drcEngine->GetBoard();
 
-    DRC_CONSTRAINT worstClearanceConstraint;
+    DRC_CONSTRAINT worstConstraint;
 
-    if( m_drcEngine->QueryWorstConstraint( HOLE_TO_HOLE_CONSTRAINT, worstClearanceConstraint ) )
+    bool hasHoleToHole = m_drcEngine->QueryWorstConstraint( HOLE_TO_HOLE_CONSTRAINT, worstConstraint );
+    m_largestHoleToHoleClearance = hasHoleToHole ? worstConstraint.GetValue().Min() : 0;
+
+    // Fold the worst backdrill_hole_to_hole value into the search margin too, and let the provider
+    // run even when there is no ordinary hole_to_hole constraint.
+    if( m_hasBackdrillHoleToHoleRules
+            && m_drcEngine->QueryWorstConstraint( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT, worstConstraint ) )
     {
-        m_largestHoleToHoleClearance = worstClearanceConstraint.GetValue().Min();
-
-        // Backdrills and post-machining counterbores enlarge the drilled bore beyond the primary
-        // via/pad drill.  The r-tree indexes holes by their primary GetEffectiveHoleShape(), so
-        // widen the search margin by the largest such enlargement to be sure pairs whose enlarged
-        // bores (not just primary drills) are within clearance are still visited; the precise
-        // per-pair test uses the actual enlarged hole.
-        int maxBackdrillEnlargement = 0;
-
-        for( PCB_TRACK* track : m_board->Tracks() )
-        {
-            if( track->Type() != PCB_VIA_T )
-                continue;
-
-            PCB_VIA* via = static_cast<PCB_VIA*>( track );
-
-            maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
-                                                via->GetLargestHoleDiameter() - via->GetDrillValue() );
-        }
-
-        for( FOOTPRINT* footprint : m_board->Footprints() )
-        {
-            for( PAD* pad : footprint->Pads() )
-            {
-                if( !pad->HasHole() )
-                    continue;
-
-                int primaryWidth = pad->GetEffectiveHoleShape()->GetWidth();
-                int enlargedWidth = pad->GetEffectiveHoleShape( UNDEFINED_LAYER )->GetWidth();
-
-                maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
-                                                    enlargedWidth - primaryWidth );
-            }
-        }
-
-        m_largestHoleToHoleClearance += maxBackdrillEnlargement;
+        m_largestHoleToHoleClearance =
+                std::max( m_largestHoleToHoleClearance, worstConstraint.GetValue().Min() );
     }
-    else
+
+    if( !hasHoleToHole && !m_hasBackdrillHoleToHoleRules )
     {
         REPORT_AUX( wxT( "No hole to hole constraints found. Skipping check." ) );
         return true;        // continue with other tests
     }
+
+    // Backdrills and post-machining counterbores enlarge the drilled bore beyond the primary
+    // via/pad drill.  The r-tree indexes holes by their primary GetEffectiveHoleShape(), so widen
+    // the search margin by the largest such enlargement to be sure pairs whose enlarged bores (not
+    // just primary drills) are within clearance are still visited; the precise per-pair test uses
+    // the actual enlarged hole.
+    int maxBackdrillEnlargement = 0;
+
+    for( PCB_TRACK* track : m_board->Tracks() )
+    {
+        if( track->Type() != PCB_VIA_T )
+            continue;
+
+        PCB_VIA* via = static_cast<PCB_VIA*>( track );
+
+        maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
+                                            via->GetLargestHoleDiameter() - via->GetDrillValue() );
+    }
+
+    for( FOOTPRINT* footprint : m_board->Footprints() )
+    {
+        for( PAD* pad : footprint->Pads() )
+        {
+            if( !pad->HasHole() )
+                continue;
+
+            int primaryWidth = pad->GetEffectiveHoleShape()->GetWidth();
+            int enlargedWidth = pad->GetEffectiveHoleShape( UNDEFINED_LAYER )->GetWidth();
+
+            maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
+                                                enlargedWidth - primaryWidth );
+        }
+    }
+
+    m_largestHoleToHoleClearance += maxBackdrillEnlargement;
 
     if( !reportPhase( _( "Checking hole to hole clearances..." ) ) )
         return false;   // DRC cancelled
@@ -298,7 +341,9 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::testHoleAgainstHole( BOARD_ITEM* aItem, SHA
                                                           BOARD_ITEM* aOther )
 {
     bool reportCoLocation = !m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_COLOCATED );
-    bool reportHole2Hole = !m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    bool reportHole2Hole = !m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_TOO_CLOSE )
+                           || ( m_hasBackdrillHoleToHoleRules
+                                && !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_HOLE_TO_HOLE ) );
 
     if( !reportCoLocation && !reportHole2Hole )
         return false;
@@ -341,8 +386,28 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::testHoleAgainstHole( BOARD_ITEM* aItem, SHA
         int actual = aHole->GetSeg().Distance( otherHole->GetSeg() );
         actual = std::max( 0, actual - aHole->GetWidth() / 2 - otherHole->GetWidth() / 2 );
 
-        auto constraint = m_drcEngine->EvalRules( HOLE_TO_HOLE_CONSTRAINT, aItem, aOther,
-                                                  UNDEFINED_LAYER /* holes pierce all layers */ );
+        // A pair involving an enlarged backdrill/post-machining bore is governed by the dedicated
+        // backdrill_hole_to_hole rule when one exists and matches (reported as
+        // DRCE_BACKDRILL_HOLE_TO_HOLE); otherwise by the ordinary hole_to_hole.
+        int            errorCode = DRCE_DRILLED_HOLES_TOO_CLOSE;
+        DRC_CONSTRAINT constraint;
+
+        if( m_hasBackdrillHoleToHoleRules
+                && ( isBackdrillHole( aItem ) || isBackdrillHole( aOther ) ) )
+        {
+            constraint = m_drcEngine->EvalRules( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT, aItem, aOther,
+                                                 UNDEFINED_LAYER );
+
+            if( !constraint.IsNull() )
+                errorCode = DRCE_BACKDRILL_HOLE_TO_HOLE;
+        }
+
+        if( errorCode == DRCE_DRILLED_HOLES_TOO_CLOSE )
+        {
+            constraint = m_drcEngine->EvalRules( HOLE_TO_HOLE_CONSTRAINT, aItem, aOther,
+                                                 UNDEFINED_LAYER /* holes pierce all layers */ );
+        }
+
         int  minClearance = std::max( 0, constraint.GetValue().Min() - epsilon );
 
         if( constraint.GetSeverity() != RPT_SEVERITY_IGNORE
@@ -354,7 +419,7 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::testHoleAgainstHole( BOARD_ITEM* aItem, SHA
             if( aItem->m_Uuid > aOther->m_Uuid )
                 std::swap( aItem, aOther );
 
-            std::shared_ptr<DRC_ITEM> drcItem = DRC_ITEM::Create( DRCE_DRILLED_HOLES_TOO_CLOSE );
+            std::shared_ptr<DRC_ITEM> drcItem = DRC_ITEM::Create( errorCode );
             drcItem->SetErrorDetail( formatMsg( _( "(%s min %s; actual %s)" ),
                                                 constraint.GetName(),
                                                 minClearance,
