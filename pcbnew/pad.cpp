@@ -1318,6 +1318,63 @@ std::shared_ptr<SHAPE_SEGMENT> PAD::GetEffectiveHoleShape() const
 }
 
 
+std::shared_ptr<SHAPE_SEGMENT> PAD::GetEffectiveHoleShape( PCB_LAYER_ID aLayer ) const
+{
+    std::shared_ptr<SHAPE_SEGMENT> primary = GetEffectiveHoleShape();
+
+    if( !primary )
+        return primary;
+
+    // On a specific layer the bore only matters where a backdrill/post-machining span reaches;
+    // elsewhere the hole is the primary drill.  UNDEFINED_LAYER asks for the widest bore anywhere.
+    if( aLayer != UNDEFINED_LAYER && !IsBackdrilledOrPostMachined( aLayer ) )
+        return primary;
+
+    // Largest round bore drilled/machined into the hole.  Mirrors the set PAD::GetEffectiveShape()
+    // folds in on a backdrilled/post-machined layer, plus the tertiary drill.  The per-mechanism
+    // attribution to individual layers is not resolved further: on an affected layer a pad carrying
+    // differently-sized top and bottom bores is modelled at the larger of them -- conservative, and
+    // consistent with GetEffectiveShape().
+    int bore = 0;
+
+    const PADSTACK::DRILL_PROPS& secDrill = m_padStack.SecondaryDrill();
+
+    if( secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER )
+        bore = std::max( bore, secDrill.size.x );
+
+    const PADSTACK::DRILL_PROPS& terDrill = m_padStack.TertiaryDrill();
+
+    if( terDrill.start != UNDEFINED_LAYER && terDrill.end != UNDEFINED_LAYER )
+        bore = std::max( bore, terDrill.size.x );
+
+    const PADSTACK::POST_MACHINING_PROPS& frontPM = m_padStack.FrontPostMachining();
+
+    if( frontPM.mode.has_value()
+            && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+            && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+    {
+        bore = std::max( bore, frontPM.size );
+    }
+
+    const PADSTACK::POST_MACHINING_PROPS& backPM = m_padStack.BackPostMachining();
+
+    if( backPM.mode.has_value()
+            && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+            && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+    {
+        bore = std::max( bore, backPM.size );
+    }
+
+    // Keep the primary hole's axis and widen it to the bore, so a round hole becomes a wider round
+    // hole and a slot becomes a wider slot (conservatively covering both the slot and a centred
+    // round bore).  A bore no larger than the primary width leaves the hole unchanged.
+    if( bore > primary->GetWidth() )
+        return std::make_shared<SHAPE_SEGMENT>( primary->GetSeg(), bore );
+
+    return primary;
+}
+
+
 int PAD::GetBoundingRadius() const
 {
     if( m_polyDirty[ ERROR_OUTSIDE ] )

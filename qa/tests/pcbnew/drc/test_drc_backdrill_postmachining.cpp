@@ -1123,3 +1123,129 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToCopperClear, BACKDRILL_TEST_FIXTURE )
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
     BOOST_CHECK_EQUAL( violations.size(), 0u );
 }
+
+
+/**
+ * Pads carry backdrills too.  A backdrilled pad whose 0.8mm primary drill clears the hole-to-hole
+ * minimum against a nearby via, but whose 1.2mm backdrill bore does not, must be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPadBackdrillHoleToHoleTooClose, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.3 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int netCode = GetNetCode( "TestNet" );
+
+    // Backdrilled pad: 0.8mm primary drill, 1.2mm backdrill bore (F_Cu -> In3_Cu).
+    FOOTPRINT* fp = CreateFootprintWithPad( VECTOR2I( 0, 0 ), netCode );
+    SetPadBackdrill( fp->Pads().front(), F_Cu, In3_Cu, pcbIUScale.mmToIU( 1.2 ) );
+
+    // Plain via 0.95mm away: 0.3mm drill.  Primary edges are 0.40mm apart (clear); the 1.2mm bore
+    // and the 0.3mm drill are only 0.20mm apart, under the 0.3mm minimum.
+    PCB_VIA* via = new PCB_VIA( m_board.get() );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 0.95 ), 0 ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.3 ) );
+    via->SetWidth( PADSTACK::ALL_LAYERS, pcbIUScale.mmToIU( 0.6 ) );
+    via->SetNetCode( netCode );
+    m_board->Add( via );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * The same backdrilled pad and via spaced so even the bore clears the minimum must not be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPadBackdrillHoleToHoleClear, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.3 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int netCode = GetNetCode( "TestNet" );
+
+    FOOTPRINT* fp = CreateFootprintWithPad( VECTOR2I( 0, 0 ), netCode );
+    SetPadBackdrill( fp->Pads().front(), F_Cu, In3_Cu, pcbIUScale.mmToIU( 1.2 ) );
+
+    // Via 1.6mm away: the 0.6mm bore radius and 0.15mm drill radius are 0.85mm apart, well clear.
+    PCB_VIA* via = new PCB_VIA( m_board.get() );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 1.6 ), 0 ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.3 ) );
+    via->SetWidth( PADSTACK::ALL_LAYERS, pcbIUScale.mmToIU( 0.6 ) );
+    via->SetNetCode( netCode );
+    m_board->Add( via );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}
+
+
+/**
+ * A backdrilled pad's enlarged bore must be honoured in hole-to-copper clearance too.  A
+ * different-net track on a backdrilled layer, clear of the 0.8mm primary drill but inside the
+ * 1.2mm bore's clearance, must be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPadBackdrillHoleToCopperTooClose, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.25 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int padNet = GetNetCode( "PadNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I padPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+    FOOTPRINT* fp = CreateFootprintWithPad( padPos, padNet );
+    // Backdrill bore (1.8mm) wider than the 1.5mm copper land, so on the backdrilled layer the
+    // track faces the bore, and on an unaffected layer it clears the copper -- separating the two.
+    SetPadBackdrill( fp->Pads().front(), F_Cu, In2_Cu, pcbIUScale.mmToIU( 1.8 ) );
+
+    // Track on backdrilled F_Cu, 1.2mm from the pad centre: 0.175mm from the 0.9mm bore radius
+    // (< 0.25mm hole clearance -> violation, but > 0.1mm copper clearance so the hole test still
+    // runs) and 0.675mm from the 0.4mm primary radius (clear under the old primary-only model).
+    int x = pcbIUScale.mmToIU( 11.2 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 F_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * The same pad and track, but the track is on B_Cu below the In2_Cu must-cut: the bore does not
+ * reach it, only the 0.8mm primary drill does, and 0.85mm out that clears -> no violation.  Pins
+ * the pad layer-awareness.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPadBackdrillHoleToCopperUnaffectedLayer, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.25 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int padNet = GetNetCode( "PadNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I padPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+    FOOTPRINT* fp = CreateFootprintWithPad( padPos, padNet );
+    SetPadBackdrill( fp->Pads().front(), F_Cu, In2_Cu, pcbIUScale.mmToIU( 1.8 ) );
+
+    // Track on B_Cu 1.2mm out: the bore does not reach B_Cu, so against the 0.4mm primary radius
+    // the hole gap is 0.675mm and against the 0.75mm copper land the gap is 0.325mm -- both clear.
+    int x = pcbIUScale.mmToIU( 11.2 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 B_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}

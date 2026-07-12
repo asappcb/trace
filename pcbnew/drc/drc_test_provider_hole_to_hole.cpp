@@ -77,9 +77,10 @@ static std::shared_ptr<SHAPE_SEGMENT> getHoleShape( BOARD_ITEM* aItem )
     }
     else if( aItem->Type() == PCB_PAD_T )
     {
-        // Round drills come back as a zero-length segment; oval (slotted) holes carry the
-        // slot axis, so the same shape models both round holes and milled slots exactly.
-        return static_cast<PAD*>( aItem )->GetEffectiveHoleShape();
+        // Round drills come back as a zero-length segment; oval (slotted) holes carry the slot
+        // axis.  UNDEFINED_LAYER widens the segment to any backdrill/post-machining bore, so
+        // hole-to-hole accounts for a pad's enlarged bore just like a via's.
+        return static_cast<PAD*>( aItem )->GetEffectiveHoleShape( UNDEFINED_LAYER );
     }
 
     return std::make_shared<SHAPE_SEGMENT>( VECTOR2I( 0, 0 ), VECTOR2I( 0, 0 ), 0 );
@@ -104,10 +105,10 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
         m_largestHoleToHoleClearance = worstClearanceConstraint.GetValue().Min();
 
         // Backdrills and post-machining counterbores enlarge the drilled bore beyond the primary
-        // via drill.  The r-tree indexes holes by their primary GetEffectiveHoleShape(), so widen
-        // the search margin by the largest such enlargement to be sure pairs whose enlarged bores
-        // (not just primary drills) are within clearance are still visited; the precise per-pair
-        // test uses the actual largest hole diameter.
+        // via/pad drill.  The r-tree indexes holes by their primary GetEffectiveHoleShape(), so
+        // widen the search margin by the largest such enlargement to be sure pairs whose enlarged
+        // bores (not just primary drills) are within clearance are still visited; the precise
+        // per-pair test uses the actual enlarged hole.
         int maxBackdrillEnlargement = 0;
 
         for( PCB_TRACK* track : m_board->Tracks() )
@@ -119,6 +120,21 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
 
             maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
                                                 via->GetLargestHoleDiameter() - via->GetDrillValue() );
+        }
+
+        for( FOOTPRINT* footprint : m_board->Footprints() )
+        {
+            for( PAD* pad : footprint->Pads() )
+            {
+                if( !pad->HasHole() )
+                    continue;
+
+                int primaryWidth = pad->GetEffectiveHoleShape()->GetWidth();
+                int enlargedWidth = pad->GetEffectiveHoleShape( UNDEFINED_LAYER )->GetWidth();
+
+                maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
+                                                    enlargedWidth - primaryWidth );
+            }
         }
 
         m_largestHoleToHoleClearance += maxBackdrillEnlargement;
