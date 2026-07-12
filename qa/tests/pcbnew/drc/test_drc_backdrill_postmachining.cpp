@@ -519,6 +519,48 @@ BOOST_FIXTURE_TEST_CASE( ViaEffectiveShapeTertiaryBackdrill, BACKDRILL_TEST_FIXT
 
 
 /**
+ * For a milled (slotted) pad hole that is also backdrilled, GetEffectiveShape must model the
+ * removed copper as the slot widened to the bore (keeping the slot length), not a centred circle
+ * of the bore diameter that drops the slot ends.
+ */
+BOOST_FIXTURE_TEST_CASE( PadBackdrillSlotEffectiveShapeKeepsSlot, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    FOOTPRINT* fp = new FOOTPRINT( m_board.get() );
+    fp->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 50 ), pcbIUScale.mmToIU( 50 ) ) );
+    fp->SetReference( "U9" );
+
+    PAD* pad = new PAD( fp );
+    pad->SetPosition( fp->GetPosition() );
+    pad->SetNumber( "1" );
+    pad->SetShape( PADSTACK::ALL_LAYERS, PAD_SHAPE::OVAL );
+    pad->SetSize( PADSTACK::ALL_LAYERS,
+                  VECTOR2I( pcbIUScale.mmToIU( 2.0 ), pcbIUScale.mmToIU( 1.0 ) ) );
+    pad->SetDrillShape( PAD_DRILL_SHAPE::OBLONG );
+    // Slot 1.5mm (X) x 0.5mm (Y): a 1.0mm-long slot 0.5mm wide.
+    pad->SetDrillSize( VECTOR2I( pcbIUScale.mmToIU( 1.5 ), pcbIUScale.mmToIU( 0.5 ) ) );
+    pad->SetAttribute( PAD_ATTRIB::PTH );
+    pad->SetLayerSet( LSET::AllCuMask() | LSET( { F_Mask, B_Mask } ) );
+    pad->SetNetCode( netCode );
+    fp->Add( pad );
+    m_board->Add( fp );
+
+    // Backdrill bore 0.8mm: wider than the 0.5mm slot width, shorter than the 1.5mm slot length.
+    SetPadBackdrill( pad, F_Cu, In2_Cu, pcbIUScale.mmToIU( 0.8 ) );
+
+    BOOST_REQUIRE( pad->IsBackdrilledOrPostMachined( F_Cu ) );
+
+    std::shared_ptr<SHAPE> shape = pad->GetEffectiveShape( F_Cu );
+    BOOST_REQUIRE( shape );
+
+    // The removed-copper bbox spans the slot: ~1.8mm along the slot axis (1.0 slot + 0.8 bore),
+    // well over the 0.8mm a bare circle-of-the-bore would give.
+    BOOST_CHECK_GT( shape->BBox().GetWidth(), pcbIUScale.mmToIU( 1.0 ) );
+}
+
+
+/**
  * Test that connectivity correctly excludes backdrilled layers for zones
  */
 BOOST_FIXTURE_TEST_CASE( ZoneConnectivityWithBackdrill, BACKDRILL_TEST_FIXTURE )
