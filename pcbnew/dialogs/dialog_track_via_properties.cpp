@@ -1290,136 +1290,69 @@ bool DIALOG_TRACK_VIA_PROPERTIES::TransferDataFromWindow()
                     }
                 }
 
-                // Backdrill
-                PADSTACK::DRILL_PROPS tertiaryDrill;
-                PADSTACK::DRILL_PROPS secondaryDrill;
-
-                secondaryDrill.start = UNDEFINED_LAYER;
-                secondaryDrill.end   = UNDEFINED_LAYER;
-                secondaryDrill.size  = {0, 0};
-                secondaryDrill.shape  = PAD_DRILL_SHAPE::UNDEFINED;
-
-                tertiaryDrill.start = UNDEFINED_LAYER;
-                tertiaryDrill.end   = UNDEFINED_LAYER;
-                tertiaryDrill.size  = {0, 0};
-                tertiaryDrill.shape  = PAD_DRILL_SHAPE::UNDEFINED;
-
+                // Backdrill. Route through the PADSTACK setter API (which shares
+                // PADSTACK::backdrillWriteSlot with the pad dialog) so both editors use a single
+                // slot-write strategy: a backdrill written by KiCad 10.0 (top backdrill in the
+                // tertiary slot) is preserved in place rather than canonicalized, and both editors
+                // agree on where a newly added slot lands.
                 if( m_backdrillChoice->GetSelection() != wxNOT_FOUND )
                 {
-                    switch( static_cast<BACKDRILL_MODE>( m_backdrillChoice->GetSelection() ) )
+                    BACKDRILL_MODE mode =
+                            static_cast<BACKDRILL_MODE>( m_backdrillChoice->GetSelection() );
+
+                    // Establishes which sides carry a backdrill (adding/removing slots and seeding a
+                    // default size for a freshly added side).
+                    m_viaStack->SetBackdrillMode( mode );
+
+                    const bool wantTop = mode == BACKDRILL_MODE::BACKDRILL_TOP
+                                         || mode == BACKDRILL_MODE::BACKDRILL_BOTH;
+                    const bool wantBottom = mode == BACKDRILL_MODE::BACKDRILL_BOTTOM
+                                            || mode == BACKDRILL_MODE::BACKDRILL_BOTH;
+
+                    if( wantTop )
                     {
-                    case BACKDRILL_MODE::NO_BACKDRILL:
-                        break;
-
-                    case BACKDRILL_MODE::BACKDRILL_BOTTOM:
-                        if( m_backdrillBackSize.IsIndeterminate() || m_backdrillBackSize.IsNull() )
-                        {
-                            tertiaryDrill.size = m_viaStack->TertiaryDrill().size;
-                        }
-                        else
-                        {
-                            tertiaryDrill.size = VECTOR2I( m_backdrillBackSize.GetIntValue(),
-                                                           m_backdrillBackSize.GetIntValue() );
-                        }
-
-                        tertiaryDrill.start = B_Cu;
-                        tertiaryDrill.shape = PAD_DRILL_SHAPE::CIRCLE;
-
-                        if( m_backdrillBackLayer->GetLayerSelection() != UNDEFINED_LAYER )
-                            tertiaryDrill.end = ToLAYER_ID( m_backdrillBackLayer->GetLayerSelection() );
-
-                        break;
-
-                    case BACKDRILL_MODE::BACKDRILL_TOP:
-                        if( m_backdrillFrontSize.IsIndeterminate() || m_backdrillFrontSize.IsNull() )
-                        {
-                            secondaryDrill.size = m_viaStack->SecondaryDrill().size;
-                        }
-                        else
-                        {
-                            secondaryDrill.size = VECTOR2I( m_backdrillFrontSize.GetIntValue(),
-                                                            m_backdrillFrontSize.GetIntValue() );
-                        }
-
-                        secondaryDrill.start = F_Cu;
-                        secondaryDrill.shape = PAD_DRILL_SHAPE::CIRCLE;
+                        if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull() )
+                            m_viaStack->SetBackdrillSize( true, m_backdrillFrontSize.GetIntValue() );
 
                         if( m_backdrillFrontLayer->GetLayerSelection() != UNDEFINED_LAYER )
-                            secondaryDrill.end = ToLAYER_ID( m_backdrillFrontLayer->GetLayerSelection() );
+                            m_viaStack->SetBackdrillEndLayer(
+                                    true, ToLAYER_ID( m_backdrillFrontLayer->GetLayerSelection() ) );
+                    }
 
-                        break;
-
-                    case BACKDRILL_MODE::BACKDRILL_BOTH:
-                        if( m_backdrillFrontSize.IsIndeterminate() || m_backdrillFrontSize.IsNull() )
-                        {
-                            secondaryDrill.size = m_viaStack->SecondaryDrill().size;
-                        }
-                        else
-                        {
-                            secondaryDrill.size = VECTOR2I( m_backdrillFrontSize.GetIntValue(),
-                                                            m_backdrillFrontSize.GetIntValue() );
-                        }
-
-                        secondaryDrill.start = F_Cu;
-                        secondaryDrill.shape = PAD_DRILL_SHAPE::CIRCLE;
-
-                        if( m_backdrillFrontLayer->GetLayerSelection() != UNDEFINED_LAYER )
-                            secondaryDrill.end = ToLAYER_ID( m_backdrillFrontLayer->GetLayerSelection() );
-
-                        if( m_backdrillBackSize.IsIndeterminate() || m_backdrillBackSize.IsNull() )
-                        {
-                            tertiaryDrill.size = m_viaStack->TertiaryDrill().size;
-                        }
-                        else
-                        {
-                            tertiaryDrill.size = VECTOR2I( m_backdrillBackSize.GetIntValue(),
-                                                           m_backdrillBackSize.GetIntValue() );
-                        }
-
-                        tertiaryDrill.start = B_Cu;
-                        tertiaryDrill.shape = PAD_DRILL_SHAPE::CIRCLE;
+                    if( wantBottom )
+                    {
+                        if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull() )
+                            m_viaStack->SetBackdrillSize( false, m_backdrillBackSize.GetIntValue() );
 
                         if( m_backdrillBackLayer->GetLayerSelection() != UNDEFINED_LAYER )
-                            tertiaryDrill.end = ToLAYER_ID( m_backdrillBackLayer->GetLayerSelection() );
-
-                        break;
-                    }
-
-                    if( via->Padstack().SecondaryDrill() != secondaryDrill )
-                    {
-                        m_viaStack->SecondaryDrill() = secondaryDrill;
-                        updatePadstack = true;
-                    }
-
-                    if( via->Padstack().TertiaryDrill() != tertiaryDrill )
-                    {
-                        m_viaStack->TertiaryDrill() = tertiaryDrill;
-                        updatePadstack = true;
+                            m_viaStack->SetBackdrillEndLayer(
+                                    false, ToLAYER_ID( m_backdrillBackLayer->GetLayerSelection() ) );
                     }
                 }
                 else
                 {
-                    if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull() )
+                    // Mode is indeterminate across the selection: resize existing backdrills only,
+                    // never adding or removing a side.
+                    if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull()
+                            && m_viaStack->GetBackdrillSize( true ).has_value() )
                     {
-                        int frontSize = m_backdrillFrontSize.GetIntValue();
-
-                        if( m_viaStack->SecondaryDrill().size != VECTOR2I( frontSize, frontSize ) )
-                        {
-                            m_viaStack->SecondaryDrill().size = VECTOR2I( frontSize, frontSize );
-                            updatePadstack = true;
-                        }
+                        m_viaStack->SetBackdrillSize( true, m_backdrillFrontSize.GetIntValue() );
                     }
 
-                    if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull() )
+                    if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull()
+                            && m_viaStack->GetBackdrillSize( false ).has_value() )
                     {
-                        int backSize = m_backdrillBackSize.GetIntValue();
-
-                        if( m_viaStack->TertiaryDrill().size != VECTOR2I( backSize, backSize ) )
-                        {
-                            m_viaStack->TertiaryDrill().size = VECTOR2I( backSize, backSize );
-                            updatePadstack = true;
-                        }
+                        m_viaStack->SetBackdrillSize( false, m_backdrillBackSize.GetIntValue() );
                     }
+                }
+
+                // Compare against this via's own padstack (not a snapshot of the shared m_viaStack,
+                // which persists across the multi-selection loop) so every via that differs from the
+                // edited target is flagged for update.
+                if( m_viaStack->SecondaryDrill() != via->Padstack().SecondaryDrill()
+                        || m_viaStack->TertiaryDrill() != via->Padstack().TertiaryDrill() )
+                {
+                    updatePadstack = true;
                 }
 
                 // Post Machining

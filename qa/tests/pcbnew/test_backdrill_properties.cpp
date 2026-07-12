@@ -215,6 +215,52 @@ BOOST_AUTO_TEST_CASE( EditingLegacyBackdrillStaysInPlaceAndReadable )
 }
 
 
+// The via dialog (dialog_track_via_properties.cpp) now edits backdrills through the same PADSTACK
+// setter API the pad dialog uses (SetBackdrillMode + SetBackdrillSize/SetBackdrillEndLayer) instead
+// of hand-writing canonical slots. This exercises that exact operation sequence against a KiCad 10.0
+// layout (top backdrill in the tertiary slot) and asserts it preserves the slot in place rather than
+// canonicalizing it into the secondary slot, so via and pad edits agree and older KiCad reads it back.
+BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
+{
+    // A KiCad 10.0 top-only backdrill: top drill lives in the tertiary slot.
+    PADSTACK stack( nullptr );
+    stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+
+    PADSTACK::DRILL_PROPS& tertiary = stack.TertiaryDrill();
+    tertiary.size = { pcbIUScale.mmToIU( 0.6 ), pcbIUScale.mmToIU( 0.6 ) };
+    tertiary.start = F_Cu;
+    tertiary.end = In1_Cu;
+    tertiary.shape = PAD_DRILL_SHAPE::CIRCLE;
+
+    // Edit as BACKDRILL_TOP with a new size and must-cut layer, mirroring the via dialog's apply path.
+    stack.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_TOP );
+    stack.SetBackdrillSize( true, pcbIUScale.mmToIU( 0.8 ) );
+    stack.SetBackdrillEndLayer( true, In2_Cu );
+
+    // Stays in the tertiary slot it already occupied; no duplicate top backdrill in secondary.
+    BOOST_CHECK_EQUAL( stack.TertiaryDrill().start, F_Cu );
+    BOOST_CHECK_EQUAL( stack.TertiaryDrill().size.x, pcbIUScale.mmToIU( 0.8 ) );
+    BOOST_CHECK_EQUAL( stack.TertiaryDrill().end, In2_Cu );
+    BOOST_CHECK_EQUAL( stack.SecondaryDrill().size.x, 0 );
+    BOOST_CHECK( stack.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_TOP );
+
+    // Now add a bottom backdrill (mode -> BOTH). The legacy top stays in tertiary; the new bottom is
+    // displaced to the free secondary slot rather than overwriting the preserved top.
+    stack.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_BOTH );
+    stack.SetBackdrillSize( false, pcbIUScale.mmToIU( 0.7 ) );
+    stack.SetBackdrillEndLayer( false, In3_Cu );
+
+    BOOST_CHECK_EQUAL( stack.TertiaryDrill().start, F_Cu );
+    BOOST_CHECK_EQUAL( stack.TertiaryDrill().size.x, pcbIUScale.mmToIU( 0.8 ) );
+    BOOST_CHECK_EQUAL( stack.SecondaryDrill().start, B_Cu );
+    BOOST_CHECK_EQUAL( stack.SecondaryDrill().size.x, pcbIUScale.mmToIU( 0.7 ) );
+    BOOST_CHECK_EQUAL( stack.SecondaryDrill().end, In3_Cu );
+    BOOST_CHECK( stack.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_BOTH );
+    BOOST_CHECK_EQUAL( stack.GetBackdrillSize( true ).value_or( 0 ), pcbIUScale.mmToIU( 0.8 ) );
+    BOOST_CHECK_EQUAL( stack.GetBackdrillSize( false ).value_or( 0 ), pcbIUScale.mmToIU( 0.7 ) );
+}
+
+
 // Clearing the must-cut layer removes the backdrill: a sized drill with no must-cut does not
 // exist (the via layer sanitizer enforces the same rule).
 BOOST_AUTO_TEST_CASE( ClearingMustCutRemovesBackdrill )
