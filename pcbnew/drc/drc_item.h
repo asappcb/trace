@@ -120,7 +120,9 @@ enum PCB_DRC_CODE
 
     DRCE_BACKDRILL_INVALID_SPAN, // Backdrill span references invalid layers or diameter
 
-    DRCE_LAST = DRCE_BACKDRILL_INVALID_SPAN
+    DRCE_BACKDRILL_STUB_TOO_LONG, // Residual via barrel left by a backdrill exceeds the constraint
+
+    DRCE_LAST = DRCE_BACKDRILL_STUB_TOO_LONG
 };
 
 
@@ -260,6 +262,7 @@ private:
     static DRC_ITEM tuningProfileImplicitRules;
     static DRC_ITEM trackOnPostMachinedLayer;
     static DRC_ITEM backdrillInvalidSpan;
+    static DRC_ITEM backdrillStubTooLong;
     static DRC_ITEM trackNotCenteredOnVia;
     static DRC_ITEM schematicFieldsParity;
 

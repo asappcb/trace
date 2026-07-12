@@ -1,6 +1,7 @@
 annular_width
 assertion
 assign_component_class
+backdrill_stub_length
 board_edge
 bridged_mask
 blind_via
