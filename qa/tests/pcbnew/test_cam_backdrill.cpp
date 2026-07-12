@@ -488,6 +488,62 @@ BOOST_AUTO_TEST_CASE( DrillReportWithTools )
 }
 
 
+// The plain-text drill report (.rpt) must carry a dedicated backdrill section for a backdrilled
+// board: a per-span header, the tool summary, and a backdrilled-holes total. Without this the
+// backdrill spans were only counted in the through/blind sections and invisible to a fabricator
+// reading the report.
+BOOST_AUTO_TEST_CASE( DrillReportBackdrillSection )
+{
+    wxFileName tempDir = MakeTempDir();
+    wxFileName boardFile( tempDir.GetFullPath(), wxT( "backdrill_report.kicad_pcb" ) );
+
+    BOARD board;
+    board.SetCopperLayerCount( 6 );
+    board.SetFileName( boardFile.GetFullPath() );
+
+    auto via = new PCB_VIA( &board );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 5 ), pcbIUScale.mmToIU( 5 ) ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+    via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+    via->SetSecondaryDrillSize( pcbIUScale.mmToIU( 0.40 ) );
+    via->SetSecondaryDrillStartLayer( F_Cu );
+    via->SetSecondaryDrillEndLayer( In3_Cu );
+    board.Add( via );
+
+    wxFileName reportFile( tempDir.GetFullPath(), wxT( "backdrill_report-drl.rpt" ) );
+
+    EXCELLON_WRITER excellon( &board );
+    excellon.SetOptions( false, false, VECTOR2I( 0, 0 ), false );
+    excellon.SetFormat( true );
+    BOOST_CHECK_NO_THROW( excellon.GenDrillReportFile( reportFile.GetFullPath() ) );
+    BOOST_REQUIRE( reportFile.FileExists() );
+
+    wxFFile reportStream( reportFile.GetFullPath(), wxT( "rb" ) );
+    wxString reportContents;
+    BOOST_REQUIRE( reportStream.ReadAll( &reportContents ) );
+    reportStream.Close();
+
+    BOOST_CHECK_MESSAGE( reportContents.Contains( wxT( "backdrill span: 'F.Cu' to 'In3.Cu':" ) ),
+                         "Drill report should contain a backdrill span header" );
+
+    // The backdrill hole is non-plated; the section must summarize the NPTH tool list, so the tool
+    // (0.400mm) is listed and the count is 1 -- not silently skipped to zero.
+    BOOST_CHECK_MESSAGE( reportContents.Contains( wxT( "0.400mm" ) ),
+                         "Drill report should list the backdrill tool diameter" );
+    BOOST_CHECK_MESSAGE( reportContents.Contains( wxT( "Total backdrilled holes count 1" ) ),
+                         "Drill report backdrilled-holes total should count the backdrill hole" );
+
+    // The backdrill must not cannibalize the plated-through section: the via's own 0.30mm
+    // through-drill is still reported as a plated hole.
+    BOOST_CHECK_MESSAGE( reportContents.Contains( wxT( "plated through holes:" ) )
+                                 && reportContents.Contains( wxT( "0.300mm" ) ),
+                         "Drill report should still list the 0.300mm plated through-drill" );
+
+    wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+}
+
+
 // Regression test for https://gitlab.com/kicad/code/kicad/-/issues/24014
 // A non-filled PCB_SHAPE rectangle on F.SilkS was emitted as a donut_rc symbol with a
 // corner radius smaller than half the line width.  Many ODB++ viewers reject the
