@@ -126,7 +126,9 @@ enum PCB_DRC_CODE
 
     DRCE_BACKDRILL_TO_COPPER_CLEARANCE, // Backdrill bore too close to copper (backdrill_clearance)
 
-    DRCE_LAST = DRCE_BACKDRILL_TO_COPPER_CLEARANCE
+    DRCE_BACKDRILL_HOLE_TO_HOLE, // Backdrill bore too close to another hole (backdrill_hole_to_hole)
+
+    DRCE_LAST = DRCE_BACKDRILL_HOLE_TO_HOLE
 };
 
 
@@ -269,6 +271,7 @@ private:
     static DRC_ITEM backdrillStubTooLong;
     static DRC_ITEM postMachiningDepthInvalid;
     static DRC_ITEM backdrillToCopperClearance;
+    static DRC_ITEM backdrillHoleToHole;
     static DRC_ITEM trackNotCenteredOnVia;
     static DRC_ITEM schematicFieldsParity;
 

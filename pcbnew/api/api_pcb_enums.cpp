@@ -380,6 +380,8 @@ CustomRuleConstraintType ToProtoEnum( DRC_CONSTRAINT_T aValue )
         return CustomRuleConstraintType::CRCT_BACKDRILL_STUB_LENGTH;
     case BACKDRILL_CLEARANCE_CONSTRAINT:
         return CustomRuleConstraintType::CRCT_BACKDRILL_CLEARANCE;
+    case BACKDRILL_HOLE_TO_HOLE_CONSTRAINT:
+        return CustomRuleConstraintType::CRCT_BACKDRILL_HOLE_TO_HOLE;
     case NET_CHAIN_STUB_LENGTH_CONSTRAINT:
         return CustomRuleConstraintType::CRCT_NET_CHAIN_STUB_LENGTH;
     case NET_CHAIN_RETURN_PATH_CONSTRAINT:
@@ -438,6 +440,7 @@ DRC_CONSTRAINT_T FromProtoEnum( CustomRuleConstraintType aValue )
     case CustomRuleConstraintType::CRCT_NET_CHAIN_STUB_LENGTH: return NET_CHAIN_STUB_LENGTH_CONSTRAINT;
     case CustomRuleConstraintType::CRCT_BACKDRILL_STUB_LENGTH: return BACKDRILL_STUB_LENGTH_CONSTRAINT;
     case CustomRuleConstraintType::CRCT_BACKDRILL_CLEARANCE:   return BACKDRILL_CLEARANCE_CONSTRAINT;
+    case CustomRuleConstraintType::CRCT_BACKDRILL_HOLE_TO_HOLE: return BACKDRILL_HOLE_TO_HOLE_CONSTRAINT;
     case CustomRuleConstraintType::CRCT_NET_CHAIN_RETURN_PATH: return NET_CHAIN_RETURN_PATH_CONSTRAINT;
 
     default:
@@ -2124,6 +2127,7 @@ DrcErrorType ToProtoEnum( PCB_DRC_CODE aValue )
     case DRCE_BACKDRILL_STUB_TOO_LONG:          return DrcErrorType::DRCET_BACKDRILL_STUB_TOO_LONG;
     case DRCE_POST_MACHINING_DEPTH_INVALID:     return DrcErrorType::DRCET_POST_MACHINING_DEPTH_INVALID;
     case DRCE_BACKDRILL_TO_COPPER_CLEARANCE:    return DrcErrorType::DRCET_BACKDRILL_TO_COPPER_CLEARANCE;
+    case DRCE_BACKDRILL_HOLE_TO_HOLE:           return DrcErrorType::DRCET_BACKDRILL_HOLE_TO_HOLE;
     default:
         wxCHECK_MSG( false, DrcErrorType::DRCET_UNKNOWN,
                      "Unhandled case in ToProtoEnum<PCB_DRC_CODE>" );
@@ -2207,6 +2211,7 @@ PCB_DRC_CODE FromProtoEnum( DrcErrorType aValue )
     case DrcErrorType::DRCET_BACKDRILL_STUB_TOO_LONG:        return DRCE_BACKDRILL_STUB_TOO_LONG;
     case DrcErrorType::DRCET_POST_MACHINING_DEPTH_INVALID:   return DRCE_POST_MACHINING_DEPTH_INVALID;
     case DrcErrorType::DRCET_BACKDRILL_TO_COPPER_CLEARANCE:  return DRCE_BACKDRILL_TO_COPPER_CLEARANCE;
+    case DrcErrorType::DRCET_BACKDRILL_HOLE_TO_HOLE:         return DRCE_BACKDRILL_HOLE_TO_HOLE;
 
     case DrcErrorType::DRCET_UNKNOWN:
     default:

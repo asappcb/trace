@@ -1008,6 +1008,30 @@ std::filesystem::path WriteBackdrillClearanceRule( BOARD* aBoard, const wxString
     aBoard->GetDesignSettings().m_DRCEngine->InitEngine( wxFileName( druPath.string() ) );
     return tmpDir;
 }
+
+
+// Write a .kicad_dru with a single backdrill_hole_to_hole min rule and point the fixture's DRC
+// engine at it.  Returns the temp dir so the caller can remove it.
+std::filesystem::path WriteBackdrillHoleToHoleRule( BOARD* aBoard, const wxString& aTag,
+                                                    const wxString& aMinClearance )
+{
+    namespace fs = std::filesystem;
+    fs::path tmpDir = fs::temp_directory_path()
+                      / ( "kicad_drc_backdrill_h2h_" + aTag.ToStdString() );
+    fs::create_directories( tmpDir );
+    fs::path druPath = tmpDir / "backdrill_hole_to_hole.kicad_dru";
+
+    {
+        std::ofstream out( druPath );
+        out << "(version 1)\n"
+            << "(rule \"BackdrillH2H\"\n"
+            << "    (constraint backdrill_hole_to_hole (min " << aMinClearance.ToStdString() << "))\n"
+            << ")\n";
+    }
+
+    aBoard->GetDesignSettings().m_DRCEngine->InitEngine( wxFileName( druPath.string() ) );
+    return tmpDir;
+}
 } // namespace
 
 
@@ -1647,4 +1671,49 @@ BOOST_AUTO_TEST_CASE( BackdrillToCopperClearanceItemRoundTrips )
     std::shared_ptr<DRC_ITEM> byKey = DRC_ITEM::Create( wxT( "backdrill_to_copper_clearance" ) );
     BOOST_REQUIRE( byKey );
     BOOST_CHECK_EQUAL( byKey->GetErrorCode(), DRCE_BACKDRILL_TO_COPPER_CLEARANCE );
+}
+
+
+/**
+ * A backdrill_hole_to_hole custom rule governs the spacing between an enlarged backdrill bore and a
+ * neighbouring hole, distinct from ordinary hole-to-hole.  A pair that clears the lenient
+ * hole_to_hole minimum but not a stricter backdrill_hole_to_hole rule must be reported as
+ * DRCE_BACKDRILL_HOLE_TO_HOLE (and not DRCE_DRILLED_HOLES_TOO_CLOSE).
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToHoleDedicated, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.1 );
+
+    int netCode = GetNetCode( "TestNet" );
+
+    // Two 0.8mm backdrill bores (radius 0.4mm) 1.0mm apart -> 0.2mm bore-to-bore gap.
+    CreateBackdrilledVia( VECTOR2I( 0, 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.8 ) );
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 1.0 ), 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.8 ) );
+
+    std::filesystem::path dir =
+            WriteBackdrillHoleToHoleRule( m_board.get(), wxT( "dedicated" ), wxT( "0.5mm" ) );
+
+    // 0.2mm gap clears the 0.1mm ordinary minimum but not the 0.5mm backdrill rule.
+    std::vector<DRC_ITEM> backdrill = RunDRCForErrorCode( DRCE_BACKDRILL_HOLE_TO_HOLE );
+    BOOST_CHECK_GE( backdrill.size(), 1u );
+
+    std::vector<DRC_ITEM> ordinary = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_EQUAL( ordinary.size(), 0u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
+ * The dedicated backdrill hole-to-hole item must be registered so its severity shows in Board Setup
+ * and its exclusions round-trip through the settings key.
+ */
+BOOST_AUTO_TEST_CASE( BackdrillHoleToHoleItemRoundTrips )
+{
+    std::shared_ptr<DRC_ITEM> byKey = DRC_ITEM::Create( wxT( "backdrill_hole_to_hole" ) );
+    BOOST_REQUIRE( byKey );
+    BOOST_CHECK_EQUAL( byKey->GetErrorCode(), DRCE_BACKDRILL_HOLE_TO_HOLE );
 }

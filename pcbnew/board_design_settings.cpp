@@ -1633,6 +1633,9 @@ int BOARD_DESIGN_SETTINGS::GetBiggestClearanceValue() const
 
         m_DRCEngine->QueryWorstConstraint( HOLE_TO_HOLE_CONSTRAINT, constraint );
         biggest = std::max( biggest, constraint.Value().Min() );
+
+        m_DRCEngine->QueryWorstConstraint( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT, constraint );
+        biggest = std::max( biggest, constraint.Value().Min() );
     }
 
     // Clip to avoid integer overflows in subsequent calculations
