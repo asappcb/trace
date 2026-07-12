@@ -356,6 +356,43 @@ BOOST_AUTO_TEST_CASE( ViaDialogExplicitModePropagatesToDifferingVia )
 }
 
 
+// In indeterminate mode a determinate size edit resizes an existing backdrill on the shared stack
+// (and flags the update), but a same-valued field changes nothing. The set of backdrilled sides is
+// never altered by this branch.
+BOOST_AUTO_TEST_CASE( ViaDialogMixedSelectionSizeEditResizesExistingBackdrill )
+{
+    PADSTACK shared( nullptr );
+    shared.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+    shared.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_TOP );
+    shared.SetBackdrillSize( true, pcbIUScale.mmToIU( 0.6 ) );
+    shared.SetBackdrillEndLayer( true, In1_Cu );
+
+    PADSTACK via = shared;
+
+    // A new front size, mode still indeterminate: resize the existing top backdrill and flag it.
+    bool changed = ApplyViaBackdrillEdit( shared, via, std::nullopt, pcbIUScale.mmToIU( 0.9 ),
+                                          std::nullopt, UNDEFINED_LAYER, UNDEFINED_LAYER );
+
+    BOOST_CHECK( changed );
+    BOOST_CHECK_EQUAL( shared.GetBackdrillSize( true ).value_or( 0 ), pcbIUScale.mmToIU( 0.9 ) );
+    BOOST_CHECK( shared.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_TOP );
+    BOOST_CHECK( !shared.GetBackdrillSize( false ).has_value() ); // no side added
+
+    // Re-applying the same size flags nothing.
+    PADSTACK viaResized = shared;
+    changed = ApplyViaBackdrillEdit( shared, viaResized, std::nullopt, pcbIUScale.mmToIU( 0.9 ),
+                                     std::nullopt, UNDEFINED_LAYER, UNDEFINED_LAYER );
+    BOOST_CHECK( !changed );
+
+    // A size for a side the shared stack does not have (no bottom backdrill) is ignored: the branch
+    // never creates a side.
+    changed = ApplyViaBackdrillEdit( shared, viaResized, std::nullopt, std::nullopt,
+                                     pcbIUScale.mmToIU( 0.5 ), UNDEFINED_LAYER, UNDEFINED_LAYER );
+    BOOST_CHECK( !changed );
+    BOOST_CHECK( !shared.GetBackdrillSize( false ).has_value() );
+}
+
+
 // Clearing the must-cut layer removes the backdrill: a sized drill with no must-cut does not
 // exist (the via layer sanitizer enforces the same rule).
 BOOST_AUTO_TEST_CASE( ClearingMustCutRemovesBackdrill )
