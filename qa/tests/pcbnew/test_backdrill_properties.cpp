@@ -26,6 +26,7 @@
 #include <padstack.h>
 #include <layer_ids.h>
 #include <base_units.h>
+#include <dialogs/backdrill_via_edit.h>
 
 #include <google/protobuf/any.pb.h>
 #include <api/board/board_types.pb.h>
@@ -215,14 +216,10 @@ BOOST_AUTO_TEST_CASE( EditingLegacyBackdrillStaysInPlaceAndReadable )
 }
 
 
-// The via dialog (dialog_track_via_properties.cpp) now edits backdrills through the same PADSTACK
-// setter API the pad dialog uses (SetBackdrillMode + SetBackdrillSize/SetBackdrillEndLayer) instead
-// of hand-writing canonical slots. This exercises that exact operation sequence against a KiCad 10.0
-// layout (top backdrill in the tertiary slot) and asserts it preserves the slot in place rather than
-// canonicalizing it into the secondary slot, so via and pad edits agree and older KiCad reads it back.
-BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
+// Builds a PADSTACK seeded like a KiCad 10.0 top-only backdrill: the top drill lives in the
+// tertiary slot (start F_Cu), not the canonical secondary slot.
+static PADSTACK makeLegacyTopBackdrill()
 {
-    // A KiCad 10.0 top-only backdrill: top drill lives in the tertiary slot.
     PADSTACK stack( nullptr );
     stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
 
@@ -232,10 +229,26 @@ BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
     tertiary.end = In1_Cu;
     tertiary.shape = PAD_DRILL_SHAPE::CIRCLE;
 
-    // Edit as BACKDRILL_TOP with a new size and must-cut layer, mirroring the via dialog's apply path.
-    stack.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_TOP );
-    stack.SetBackdrillSize( true, pcbIUScale.mmToIU( 0.8 ) );
-    stack.SetBackdrillEndLayer( true, In2_Cu );
+    return stack;
+}
+
+
+// The via dialog delegates backdrill edits to ApplyViaBackdrillEdit (the same slot-write strategy
+// the pad dialog uses). Driving that helper directly against a KiCad 10.0 layout (top backdrill in
+// the tertiary slot) must preserve the slot in place rather than canonicalizing it into the
+// secondary slot, so via and pad edits agree and older KiCad reads it back.
+BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
+{
+    PADSTACK stack = makeLegacyTopBackdrill();
+    PADSTACK original = stack;
+
+    // Edit as BACKDRILL_TOP with a new size and must-cut layer, exactly as the dialog's OK handler
+    // maps its controls onto the helper.
+    bool changed = ApplyViaBackdrillEdit( stack, original, BACKDRILL_MODE::BACKDRILL_TOP,
+                                          pcbIUScale.mmToIU( 0.8 ), std::nullopt, In2_Cu,
+                                          UNDEFINED_LAYER );
+
+    BOOST_CHECK( changed );
 
     // Stays in the tertiary slot it already occupied; no duplicate top backdrill in secondary.
     BOOST_CHECK_EQUAL( stack.TertiaryDrill().start, F_Cu );
@@ -246,10 +259,12 @@ BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
 
     // Now add a bottom backdrill (mode -> BOTH). The legacy top stays in tertiary; the new bottom is
     // displaced to the free secondary slot rather than overwriting the preserved top.
-    stack.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_BOTH );
-    stack.SetBackdrillSize( false, pcbIUScale.mmToIU( 0.7 ) );
-    stack.SetBackdrillEndLayer( false, In3_Cu );
+    PADSTACK beforeBoth = stack;
+    changed = ApplyViaBackdrillEdit( stack, beforeBoth, BACKDRILL_MODE::BACKDRILL_BOTH,
+                                     pcbIUScale.mmToIU( 0.8 ), pcbIUScale.mmToIU( 0.7 ), In2_Cu,
+                                     In3_Cu );
 
+    BOOST_CHECK( changed );
     BOOST_CHECK_EQUAL( stack.TertiaryDrill().start, F_Cu );
     BOOST_CHECK_EQUAL( stack.TertiaryDrill().size.x, pcbIUScale.mmToIU( 0.8 ) );
     BOOST_CHECK_EQUAL( stack.SecondaryDrill().start, B_Cu );
@@ -261,27 +276,83 @@ BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
 }
 
 
-// Selecting NO_BACKDRILL in the via dialog now calls SetBackdrillMode(NO_BACKDRILL). Against a
-// KiCad 10.0 layout (top backdrill in the tertiary slot) it must clear the drill that actually
-// carries the backdrill (keyed on its start layer), leaving no stale sized slot behind.
+// Selecting NO_BACKDRILL clears the drill that actually carries the backdrill (keyed on its start
+// layer), leaving no stale sized slot behind, even on a KiCad 10.0 layout.
 BOOST_AUTO_TEST_CASE( ViaDialogNoBackdrillClearsLegacyLayout )
 {
-    PADSTACK stack( nullptr );
-    stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
-
-    PADSTACK::DRILL_PROPS& tertiary = stack.TertiaryDrill();
-    tertiary.size = { pcbIUScale.mmToIU( 0.6 ), pcbIUScale.mmToIU( 0.6 ) };
-    tertiary.start = F_Cu;
-    tertiary.end = In1_Cu;
-    tertiary.shape = PAD_DRILL_SHAPE::CIRCLE;
+    PADSTACK stack = makeLegacyTopBackdrill();
+    PADSTACK original = stack;
 
     BOOST_REQUIRE( stack.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_TOP );
 
-    stack.SetBackdrillMode( BACKDRILL_MODE::NO_BACKDRILL );
+    bool changed = ApplyViaBackdrillEdit( stack, original, BACKDRILL_MODE::NO_BACKDRILL,
+                                          std::nullopt, std::nullopt, UNDEFINED_LAYER,
+                                          UNDEFINED_LAYER );
 
+    BOOST_CHECK( changed );
     BOOST_CHECK( stack.GetBackdrillMode() == BACKDRILL_MODE::NO_BACKDRILL );
     BOOST_CHECK_EQUAL( stack.TertiaryDrill().size.x, 0 );
     BOOST_CHECK_EQUAL( stack.SecondaryDrill().size.x, 0 );
+}
+
+
+// Regression for the multi-selection dirtying bug: when vias in the selection disagree on their
+// backdrill, the dialog shows an indeterminate mode (std::nullopt) and blank size fields. Applying
+// with nothing edited must NOT flag any via for update, so the shared stack (seeded from the first
+// via) is never stamped onto vias the user did not touch.
+BOOST_AUTO_TEST_CASE( ViaDialogMixedSelectionNoEditLeavesViasUntouched )
+{
+    // Shared stack seeded from the first selected via: no backdrill.
+    PADSTACK shared( nullptr );
+    shared.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+
+    // A second via in the selection that DOES have a top backdrill.
+    PADSTACK viaWithBackdrill( nullptr );
+    viaWithBackdrill.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+    viaWithBackdrill.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_TOP );
+    viaWithBackdrill.SetBackdrillEndLayer( true, In1_Cu );
+
+    PADSTACK sharedBefore = shared;
+
+    // Indeterminate mode, no size edits: nothing should change or be flagged.
+    bool changed = ApplyViaBackdrillEdit( shared, viaWithBackdrill, std::nullopt, std::nullopt,
+                                          std::nullopt, UNDEFINED_LAYER, UNDEFINED_LAYER );
+
+    BOOST_CHECK( !changed );                             // the backdrilled via is not flagged...
+    BOOST_CHECK( shared == sharedBefore );               // ...and the shared stack is untouched.
+    BOOST_CHECK( viaWithBackdrill.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_TOP );
+
+    // The first via (matching the shared stack) is likewise not flagged.
+    PADSTACK firstVia = shared;
+    changed = ApplyViaBackdrillEdit( shared, firstVia, std::nullopt, std::nullopt, std::nullopt,
+                                     UNDEFINED_LAYER, UNDEFINED_LAYER );
+    BOOST_CHECK( !changed );
+}
+
+
+// An explicit mode choice propagates the edited backdrill to a differing via (the intended
+// multi-selection behavior), while an identical via is not flagged.
+BOOST_AUTO_TEST_CASE( ViaDialogExplicitModePropagatesToDifferingVia )
+{
+    PADSTACK shared( nullptr );
+    shared.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+    shared.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_BOTTOM );
+    shared.SetBackdrillSize( false, pcbIUScale.mmToIU( 0.7 ) );
+    shared.SetBackdrillEndLayer( false, In2_Cu );
+
+    // A via that currently has no backdrill differs from the edited target -> flagged.
+    PADSTACK plainVia( nullptr );
+    plainVia.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+
+    bool changed = ApplyViaBackdrillEdit( shared, plainVia, BACKDRILL_MODE::BACKDRILL_BOTTOM,
+                                          std::nullopt, pcbIUScale.mmToIU( 0.7 ), UNDEFINED_LAYER,
+                                          In2_Cu );
+    BOOST_CHECK( changed );
+
+    // A via already matching the target is not flagged.
+    changed = ApplyViaBackdrillEdit( shared, shared, BACKDRILL_MODE::BACKDRILL_BOTTOM, std::nullopt,
+                                     pcbIUScale.mmToIU( 0.7 ), UNDEFINED_LAYER, In2_Cu );
+    BOOST_CHECK( !changed );
 }
 
 

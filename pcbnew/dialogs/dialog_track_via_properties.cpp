@@ -21,6 +21,7 @@
 
 #include <core/kicad_algo.h>
 #include <dialogs/dialog_track_via_properties.h>
+#include <dialogs/backdrill_via_edit.h>
 #include <pcb_layer_box_selector.h>
 #include <tools/pcb_selection_tool.h>
 #include <board_design_settings.h>
@@ -1290,76 +1291,41 @@ bool DIALOG_TRACK_VIA_PROPERTIES::TransferDataFromWindow()
                     }
                 }
 
-                // Backdrill. Route through the PADSTACK setter API (which shares
-                // PADSTACK::backdrillWriteSlot with the pad dialog) so both editors use a single
-                // slot-write strategy: a backdrill written by KiCad 10.0 (top backdrill in the
-                // tertiary slot) is preserved in place rather than canonicalized, and both editors
-                // agree on where a newly added slot lands.
+                // Backdrill. Delegate to ApplyViaBackdrillEdit so the via and pad dialogs share a
+                // single slot-write strategy (PADSTACK::backdrillWriteSlot), and so the
+                // multi-selection decision is unit-testable without a wx harness. A backdrill
+                // written by KiCad 10.0 (top backdrill in the tertiary slot) is preserved in place
+                // rather than canonicalized.
+                std::optional<BACKDRILL_MODE> backdrillMode;
+
                 if( m_backdrillChoice->GetSelection() != wxNOT_FOUND )
+                    backdrillMode = static_cast<BACKDRILL_MODE>( m_backdrillChoice->GetSelection() );
+
+                std::optional<int> frontBackdrillSize;
+
+                if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull() )
+                    frontBackdrillSize = m_backdrillFrontSize.GetIntValue();
+
+                std::optional<int> backBackdrillSize;
+
+                if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull() )
+                    backBackdrillSize = m_backdrillBackSize.GetIntValue();
+
+                PCB_LAYER_ID frontBackdrillEnd = UNDEFINED_LAYER;
+
+                if( m_backdrillFrontLayer->GetLayerSelection() != UNDEFINED_LAYER )
+                    frontBackdrillEnd = ToLAYER_ID( m_backdrillFrontLayer->GetLayerSelection() );
+
+                PCB_LAYER_ID backBackdrillEnd = UNDEFINED_LAYER;
+
+                if( m_backdrillBackLayer->GetLayerSelection() != UNDEFINED_LAYER )
+                    backBackdrillEnd = ToLAYER_ID( m_backdrillBackLayer->GetLayerSelection() );
+
+                if( ApplyViaBackdrillEdit( *m_viaStack, via->Padstack(), backdrillMode,
+                                           frontBackdrillSize, backBackdrillSize, frontBackdrillEnd,
+                                           backBackdrillEnd ) )
                 {
-                    BACKDRILL_MODE mode =
-                            static_cast<BACKDRILL_MODE>( m_backdrillChoice->GetSelection() );
-
-                    // Establishes which sides carry a backdrill (adding/removing slots and seeding a
-                    // default size for a freshly added side).
-                    m_viaStack->SetBackdrillMode( mode );
-
-                    const bool wantTop = mode == BACKDRILL_MODE::BACKDRILL_TOP
-                                         || mode == BACKDRILL_MODE::BACKDRILL_BOTH;
-                    const bool wantBottom = mode == BACKDRILL_MODE::BACKDRILL_BOTTOM
-                                            || mode == BACKDRILL_MODE::BACKDRILL_BOTH;
-
-                    if( wantTop )
-                    {
-                        if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull() )
-                            m_viaStack->SetBackdrillSize( true, m_backdrillFrontSize.GetIntValue() );
-
-                        if( m_backdrillFrontLayer->GetLayerSelection() != UNDEFINED_LAYER )
-                            m_viaStack->SetBackdrillEndLayer(
-                                    true, ToLAYER_ID( m_backdrillFrontLayer->GetLayerSelection() ) );
-                    }
-
-                    if( wantBottom )
-                    {
-                        if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull() )
-                            m_viaStack->SetBackdrillSize( false, m_backdrillBackSize.GetIntValue() );
-
-                        if( m_backdrillBackLayer->GetLayerSelection() != UNDEFINED_LAYER )
-                            m_viaStack->SetBackdrillEndLayer(
-                                    false, ToLAYER_ID( m_backdrillBackLayer->GetLayerSelection() ) );
-                    }
-
-                    // A mode was explicitly chosen: propagate the edited backdrill to every selected
-                    // via whose backdrill differs from the target. Compare against this via's own
-                    // padstack (not a snapshot of the shared m_viaStack, which persists and
-                    // accumulates across the multi-selection loop).
-                    if( m_viaStack->SecondaryDrill() != via->Padstack().SecondaryDrill()
-                            || m_viaStack->TertiaryDrill() != via->Padstack().TertiaryDrill() )
-                    {
-                        updatePadstack = true;
-                    }
-                }
-                else
-                {
-                    // Mode is indeterminate across the selection (the vias disagree on which sides
-                    // are backdrilled): leave each via's set of sides alone and only push an explicit
-                    // size change. A size field left blank/indeterminate must NOT drag the shared
-                    // m_viaStack's backdrill onto vias the user did not touch.
-                    if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull()
-                            && m_viaStack->GetBackdrillSize( true ).has_value()
-                            && m_viaStack->GetBackdrillSize( true ) != m_backdrillFrontSize.GetIntValue() )
-                    {
-                        m_viaStack->SetBackdrillSize( true, m_backdrillFrontSize.GetIntValue() );
-                        updatePadstack = true;
-                    }
-
-                    if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull()
-                            && m_viaStack->GetBackdrillSize( false ).has_value()
-                            && m_viaStack->GetBackdrillSize( false ) != m_backdrillBackSize.GetIntValue() )
-                    {
-                        m_viaStack->SetBackdrillSize( false, m_backdrillBackSize.GetIntValue() );
-                        updatePadstack = true;
-                    }
+                    updatePadstack = true;
                 }
 
                 // Post Machining
