@@ -264,18 +264,22 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
             if( pad->GetAttribute() == PAD_ATTRIB::NPTH )
                 testClearance = testShorting = false;
 
-            otherShape_shared_ptr = pad->GetEffectiveHoleShape();
+            // Substitute the hole shape when the pad does not flash this layer.  Use the per-layer
+            // bore so a backdrilled/post-machined layer is represented at its enlarged hole, matching
+            // what GetEffectiveShape( layer ) yields for the same pad when it is the reference item.
+            otherShape_shared_ptr = pad->GetEffectiveHoleShape( layer );
         }
     }
     else if( other->Type() == PCB_VIA_T )
     {
         PCB_VIA* via = static_cast<PCB_VIA*>( other );
 
-        // Substitute shape for the copper-clearance test when the via does not flash this layer.
-        // This stays at the primary drill (not the enlarged backdrill bore); the dedicated hole
-        // test below models the bore per-layer via GetEffectiveHoleShape( layer ).
+        // Substitute the hole shape when the via does not flash this layer.  Use the per-layer bore
+        // so a backdrilled layer is represented at its enlarged hole (barrel removed), matching what
+        // GetEffectiveShape( layer ) yields for the same via when it is the reference item -- the
+        // primary drill was inconsistent with that and with the dedicated hole test.
         if( !via->FlashLayer( layer ) )
-            otherShape_shared_ptr = via->GetEffectiveHoleShape();
+            otherShape_shared_ptr = via->GetEffectiveHoleShape( layer );
     }
 
     if( !otherShape_shared_ptr )
