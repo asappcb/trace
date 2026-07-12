@@ -1270,39 +1270,53 @@ std::shared_ptr<SHAPE_SEGMENT> PAD::GetEffectiveHoleShape( PCB_LAYER_ID aLayer )
     if( aLayer != UNDEFINED_LAYER && !IsBackdrilledOrPostMachined( aLayer ) )
         return primary;
 
-    // Largest round bore drilled/machined into the hole.  Mirrors the set PAD::GetEffectiveShape()
-    // folds in on a backdrilled/post-machined layer, plus the tertiary drill.  The per-mechanism
-    // attribution to individual layers is not resolved further: on an affected layer a pad carrying
-    // differently-sized top and bottom bores is modelled at the larger of them -- conservative, and
-    // consistent with GetEffectiveShape().
-    int bore = 0;
+    // Largest round bore drilled/machined into the hole, resolved per layer exactly as the via does
+    // (mirrors the per-layer tests in IsBackdrilledOrPostMachined()): fold in each backdrill only on
+    // the layers its span reaches, and take the depth/taper-accurate post-machining knockout at this
+    // layer.  UNDEFINED_LAYER asks for the worst case, so fold in every span and the full (surface)
+    // post-machining size.
+    const bool anyLayer = ( aLayer == UNDEFINED_LAYER );
+    int        bore = 0;
 
     const PADSTACK::DRILL_PROPS& secDrill = m_padStack.SecondaryDrill();
 
-    if( secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER )
+    if( secDrill.size.x > 0 && secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER
+            && ( anyLayer || LAYER_RANGE::Contains( secDrill.start, secDrill.end, aLayer ) ) )
+    {
         bore = std::max( bore, secDrill.size.x );
+    }
 
     const PADSTACK::DRILL_PROPS& terDrill = m_padStack.TertiaryDrill();
 
-    if( terDrill.start != UNDEFINED_LAYER && terDrill.end != UNDEFINED_LAYER )
-        bore = std::max( bore, terDrill.size.x );
-
-    const PADSTACK::POST_MACHINING_PROPS& frontPM = m_padStack.FrontPostMachining();
-
-    if( frontPM.mode.has_value()
-            && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
-            && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+    if( terDrill.size.x > 0 && terDrill.start != UNDEFINED_LAYER && terDrill.end != UNDEFINED_LAYER
+            && ( anyLayer || LAYER_RANGE::Contains( terDrill.start, terDrill.end, aLayer ) ) )
     {
-        bore = std::max( bore, frontPM.size );
+        bore = std::max( bore, terDrill.size.x );
     }
 
-    const PADSTACK::POST_MACHINING_PROPS& backPM = m_padStack.BackPostMachining();
-
-    if( backPM.mode.has_value()
-            && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
-            && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+    if( anyLayer )
     {
-        bore = std::max( bore, backPM.size );
+        const PADSTACK::POST_MACHINING_PROPS& frontPM = m_padStack.FrontPostMachining();
+
+        if( frontPM.mode.has_value()
+                && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+                && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+        {
+            bore = std::max( bore, frontPM.size );
+        }
+
+        const PADSTACK::POST_MACHINING_PROPS& backPM = m_padStack.BackPostMachining();
+
+        if( backPM.mode.has_value()
+                && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+                && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+        {
+            bore = std::max( bore, backPM.size );
+        }
+    }
+    else
+    {
+        bore = std::max( bore, GetPostMachiningKnockout( aLayer ) );
     }
 
     // Keep the primary hole's axis and widen it to the bore, so a round hole becomes a wider round
