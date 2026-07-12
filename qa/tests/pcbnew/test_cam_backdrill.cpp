@@ -920,6 +920,7 @@ BOOST_AUTO_TEST_CASE( GerberBackdrillStubToleranceWarning )
         BOOST_REQUIRE( gerber.CreateDrillandMapFilesSet( tempDir.GetFullPath(), true, false, false,
                                                          &reporter ) );
 
+        BOOST_CHECK( !reporter.HasMessageOfSeverity( RPT_SEVERITY_WARNING ) );
         BOOST_CHECK( !reporter.GetMessages().Contains( wxT( "stub" ) ) );
 
         wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );

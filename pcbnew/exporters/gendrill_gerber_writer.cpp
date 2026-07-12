@@ -165,7 +165,7 @@ bool GERBER_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory, b
     if( aGenMap )
         success &= CreateMapFilesSet( aPlotDirectory, aReporter );
 
-    if( backdrillExported && aReporter )
+    if( backdrillExported && aGenDrill && aReporter )
     {
         aReporter->Report( _( "Backdrill holes were written as NonPlated Blind spans. The Gerber "
                               "drill format cannot describe backdrill stub-length tolerance; use "
