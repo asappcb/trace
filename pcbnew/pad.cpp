@@ -1192,33 +1192,18 @@ std::shared_ptr<SHAPE> PAD::GetEffectiveShape( PCB_LAYER_ID aLayer, FLASHING fla
     {
         std::shared_ptr<SHAPE_COMPOUND> effective_compound = std::make_shared<SHAPE_COMPOUND>();
 
-        // Return the larger of the backdrill or post-machining hole
-        int holeSize = 0;
+        // The removed copper on this layer is the enlarged drilled/machined bore; take its diameter
+        // from GetEffectiveHoleShape( aLayer ) so rendering and DRC agree.  That accessor folds in
+        // the tertiary drill and guards the post-machining mode with has_value(), both of which the
+        // old inline computation here omitted.  As before, the removed region is modelled as a
+        // centred circle: for a milled (slotted) hole the slot length is not represented here (the
+        // hole clearance path keeps the slot via GetEffectiveHoleShape( aLayer ) directly).
+        std::shared_ptr<SHAPE_SEGMENT> bore = GetEffectiveHoleShape( aLayer );
 
-        const PADSTACK::POST_MACHINING_PROPS& frontPM = Padstack().FrontPostMachining();
-        const PADSTACK::POST_MACHINING_PROPS& backPM = Padstack().BackPostMachining();
-
-        if( frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
-            && frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
-        {
-            holeSize = std::max( holeSize, frontPM.size );
-        }
-
-        if( backPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
-            && backPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
-        {
-            holeSize = std::max( holeSize, backPM.size );
-        }
-
-        const PADSTACK::DRILL_PROPS& secDrill = Padstack().SecondaryDrill();
-
-        if( secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER )
-            holeSize = std::max( holeSize, secDrill.size.x );
-
-        if( holeSize > 0 )
+        if( bore )
         {
             effective_compound->AddShape(
-                    std::make_shared<SHAPE_CIRCLE>( GetPosition(), holeSize / 2 ) );
+                    std::make_shared<SHAPE_CIRCLE>( GetPosition(), bore->GetWidth() / 2 ) );
         }
         else
         {
