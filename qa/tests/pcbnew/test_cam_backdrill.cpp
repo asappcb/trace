@@ -534,6 +534,12 @@ BOOST_AUTO_TEST_CASE( DrillReportBackdrillSection )
     BOOST_CHECK_MESSAGE( reportContents.Contains( wxT( "Total backdrilled holes count 1" ) ),
                          "Drill report backdrilled-holes total should count the backdrill hole" );
 
+    // The backdrill must not cannibalize the plated-through section: the via's own 0.30mm
+    // through-drill is still reported as a plated hole.
+    BOOST_CHECK_MESSAGE( reportContents.Contains( wxT( "plated through holes:" ) )
+                                 && reportContents.Contains( wxT( "0.300mm" ) ),
+                         "Drill report should still list the 0.300mm plated through-drill" );
+
     wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
 }
 
