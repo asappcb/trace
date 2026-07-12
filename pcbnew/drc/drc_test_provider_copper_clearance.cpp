@@ -256,6 +256,9 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
     {
         PCB_VIA* via = static_cast<PCB_VIA*>( other );
 
+        // Substitute shape for the copper-clearance test when the via does not flash this layer.
+        // This stays at the primary drill (not the enlarged backdrill bore); the dedicated hole
+        // test below models the bore per-layer via GetEffectiveHoleShape( layer ).
         if( !via->FlashLayer( layer ) )
             otherShape_shared_ptr = via->GetEffectiveHoleShape();
     }
