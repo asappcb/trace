@@ -389,8 +389,8 @@ BOOST_FIXTURE_TEST_CASE( PadBackdrillLayerDetection, BACKDRILL_TEST_FIXTURE )
 
 /**
  * Regression for the pad ordinal layer math: an F_Cu -> In3_Cu backdrill on a 6-layer board maps
- * In3_Cu to the same ordinal as B_Cu, so the old code wrongly reported In4_Cu/B_Cu as backdrilled.
- * With LAYER_RANGE::Contains the span covers exactly F_Cu..In3_Cu.  Mirrors the via behaviour.
+ * In3_Cu to the same ordinal as B_Cu, so the old code wrongly reported B_Cu as backdrilled.  With
+ * LAYER_RANGE::Contains the span covers exactly F_Cu..In3_Cu.  Mirrors the via behaviour.
  */
 BOOST_FIXTURE_TEST_CASE( PadBackdrillIn3LayerDetection, BACKDRILL_TEST_FIXTURE )
 {
