@@ -1192,23 +1192,14 @@ std::shared_ptr<SHAPE> PAD::GetEffectiveShape( PCB_LAYER_ID aLayer, FLASHING fla
     {
         std::shared_ptr<SHAPE_COMPOUND> effective_compound = std::make_shared<SHAPE_COMPOUND>();
 
-        // The removed copper on this layer is the enlarged drilled/machined bore; take its diameter
-        // from GetEffectiveHoleShape( aLayer ) so rendering and DRC agree.  That accessor folds in
-        // the tertiary drill and guards the post-machining mode with has_value(), both of which the
-        // old inline computation here omitted.  As before, the removed region is modelled as a
-        // centred circle: for a milled (slotted) hole the slot length is not represented here (the
-        // hole clearance path keeps the slot via GetEffectiveHoleShape( aLayer ) directly).
+        // The removed copper on this layer is the enlarged drilled/machined bore.  Add the per-layer
+        // bore segment from GetEffectiveHoleShape( aLayer ) directly, so a milled (slotted) hole
+        // keeps its slot axis; for a round hole the segment is zero-length (a circle of the bore
+        // diameter).  That accessor folds in the tertiary drill and guards the post-machining mode
+        // with has_value(), both of which the old inline computation here omitted.
         std::shared_ptr<SHAPE_SEGMENT> bore = GetEffectiveHoleShape( aLayer );
 
-        if( bore )
-        {
-            effective_compound->AddShape(
-                    std::make_shared<SHAPE_CIRCLE>( GetPosition(), bore->GetWidth() / 2 ) );
-        }
-        else
-        {
-            effective_compound->AddShape( GetEffectiveHoleShape() );
-        }
+        effective_compound->AddShape( bore ? bore : GetEffectiveHoleShape() );
 
         return effective_compound;
     }
