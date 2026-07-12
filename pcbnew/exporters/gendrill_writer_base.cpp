@@ -1216,7 +1216,9 @@ bool GENDRILL_WRITER_BASE::GenDrillReportFile( const wxString& aFullFileName, RE
                             TO_UTF8( m_pcb->GetLayerName( ToLAYER_ID( span.DrillEndLayer() ) ) ) );
 
                 fmt::print( outFp, "{}", separator );
-                totalHoleCount = printToolSummary( outFp, false );
+                // Backdrill holes are non-plated, so summarize the NPTH tool list (the plated
+                // summary would skip every backdrill tool and report a count of zero).
+                totalHoleCount = printToolSummary( outFp, true );
                 fmt::print( outFp, "    Total backdrilled holes count {}\n", totalHoleCount );
             }
             else
