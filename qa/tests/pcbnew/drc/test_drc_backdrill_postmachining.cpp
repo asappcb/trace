@@ -1607,6 +1607,38 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillClearanceToCopper, BACKDRILL_TEST_FIXTURE )
 
 
 /**
+ * backdrill_clearance is an independent check: setting Hole Clearance severity to Ignore must not
+ * suppress it (they are distinct violation codes with their own severities).
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillClearanceWithHoleClearanceIgnored, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCSeverities[DRCE_HOLE_CLEARANCE] = SEVERITY::RPT_SEVERITY_IGNORE;
+
+    int viaNet = GetNetCode( "ViaNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I viaPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+    CreateBackdrilledVia( viaPos, viaNet, F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.8 ) );
+
+    int x = pcbIUScale.mmToIU( 10.8 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 F_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::filesystem::path dir =
+            WriteBackdrillClearanceRule( m_board.get(), wxT( "hcignored" ), wxT( "0.5mm" ) );
+
+    std::vector<DRC_ITEM> backdrill = RunDRCForErrorCode( DRCE_BACKDRILL_TO_COPPER_CLEARANCE );
+    BOOST_CHECK_GE( backdrill.size(), 1u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
  * The dedicated backdrill-clearance item must be registered so its severity shows in Board Setup
  * and its exclusions round-trip through the settings key.
  */

@@ -103,15 +103,8 @@ private:
         return std::max( 0, aClearance - m_drcEpsilon );
     };
 
-    // When the board has backdrill_clearance rules and aItem's hole is an enlarged backdrill/
-    // post-machining bore on aLayer, the hole clearance is governed by the dedicated
-    // backdrill_clearance constraint (reported as DRCE_BACKDRILL_TO_COPPER_CLEARANCE) rather than
-    // the ordinary hole_clearance.  Returns true and yields that constraint type + error code.
-    bool useBackdrillClearance( const BOARD_ITEM* aItem, PCB_LAYER_ID aLayer ) const
+    static bool isBackdrilled( const BOARD_ITEM* aItem, PCB_LAYER_ID aLayer )
     {
-        if( !m_hasBackdrillClearanceRules )
-            return false;
-
         if( aItem->Type() == PCB_VIA_T )
             return static_cast<const PCB_VIA*>( aItem )->IsBackdrilledOrPostMachined( aLayer );
 
@@ -119,6 +112,31 @@ private:
             return static_cast<const PAD*>( aItem )->IsBackdrilledOrPostMachined( aLayer );
 
         return false;
+    }
+
+    // Resolve the hole clearance constraint (evaluated for the aA/aB pair) governing aHole's hole on
+    // aLayer, and the error code to report.  When aHole's hole is an enlarged backdrill/
+    // post-machining bore and a matching backdrill_clearance rule applies, the dedicated
+    // backdrill_clearance constraint (DRCE_BACKDRILL_TO_COPPER_CLEARANCE) is used; otherwise it
+    // falls back to the ordinary hole_clearance (DRCE_HOLE_CLEARANCE) -- including when a
+    // backdrill_clearance rule exists but does not match this item.
+    DRC_CONSTRAINT resolveHoleConstraint( const BOARD_ITEM* aHole, BOARD_ITEM* aA, BOARD_ITEM* aB,
+                                          PCB_LAYER_ID aLayer, int& aErrorCode )
+    {
+        if( m_hasBackdrillClearanceRules && isBackdrilled( aHole, aLayer ) )
+        {
+            DRC_CONSTRAINT c =
+                    m_drcEngine->EvalRules( BACKDRILL_CLEARANCE_CONSTRAINT, aA, aB, aLayer );
+
+            if( !c.IsNull() )
+            {
+                aErrorCode = DRCE_BACKDRILL_TO_COPPER_CLEARANCE;
+                return c;
+            }
+        }
+
+        aErrorCode = DRCE_HOLE_CLEARANCE;
+        return m_drcEngine->EvalRules( HOLE_CLEARANCE_CONSTRAINT, aA, aB, aLayer );
     }
 
 private:
@@ -260,7 +278,9 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
 {
     bool           testClearance = !m_drcEngine->IsErrorLimitExceeded( DRCE_CLEARANCE );
     bool           testShorting = !m_drcEngine->IsErrorLimitExceeded( DRCE_SHORTING_ITEMS );
-    bool           testHoles = !m_drcEngine->IsErrorLimitExceeded( DRCE_HOLE_CLEARANCE );
+    bool           testHoles = !m_drcEngine->IsErrorLimitExceeded( DRCE_HOLE_CLEARANCE )
+                               || ( m_hasBackdrillClearanceRules
+                                    && !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_TO_COPPER_CLEARANCE ) );
     DRC_CONSTRAINT constraint;
     int            clearance = -1;
     int            actual;
@@ -426,13 +446,8 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
             if( netcode && m_drcEngine->IsNetTieExclusion( netcode, layer, holeShape->Centre(), a[ii] ) )
                 continue;
 
-            bool             backdrill = useBackdrillClearance( b[ii], layer );
-            DRC_CONSTRAINT_T constraintType = backdrill ? BACKDRILL_CLEARANCE_CONSTRAINT
-                                                        : HOLE_CLEARANCE_CONSTRAINT;
-            int              errorCode = backdrill ? DRCE_BACKDRILL_TO_COPPER_CLEARANCE
-                                                   : DRCE_HOLE_CLEARANCE;
-
-            constraint = m_drcEngine->EvalRules( constraintType, b[ii], a[ii], layer );
+            int errorCode;
+            constraint = resolveHoleConstraint( b[ii], b[ii], a[ii], layer, errorCode );
             clearance = constraint.GetValue().Min();
 
             // Test for hole to item clearance even if clearance is 0, because the item cannot be
@@ -520,7 +535,9 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testItemAgainstZone( BOARD_ITEM* aItem,
     }
 
     bool testClearance = !m_drcEngine->IsErrorLimitExceeded( DRCE_CLEARANCE );
-    bool testHoles = !m_drcEngine->IsErrorLimitExceeded( DRCE_HOLE_CLEARANCE );
+    bool testHoles = !m_drcEngine->IsErrorLimitExceeded( DRCE_HOLE_CLEARANCE )
+                     || ( m_hasBackdrillClearanceRules
+                          && !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_TO_COPPER_CLEARANCE ) );
 
     if( !testClearance && !testHoles )
         return;
@@ -588,13 +605,8 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testItemAgainstZone( BOARD_ITEM* aItem,
 
         if( holeShape )
         {
-            bool             backdrill = useBackdrillClearance( aItem, aLayer );
-            DRC_CONSTRAINT_T constraintType = backdrill ? BACKDRILL_CLEARANCE_CONSTRAINT
-                                                        : HOLE_CLEARANCE_CONSTRAINT;
-            int              errorCode = backdrill ? DRCE_BACKDRILL_TO_COPPER_CLEARANCE
-                                                   : DRCE_HOLE_CLEARANCE;
-
-            constraint = m_drcEngine->EvalRules( constraintType, aItem, aZone, aLayer );
+            int errorCode;
+            constraint = resolveHoleConstraint( aItem, aItem, aZone, aLayer, errorCode );
             clearance = constraint.GetValue().Min();
 
             if( constraint.GetSeverity() != RPT_SEVERITY_IGNORE && clearance > 0 )
@@ -826,7 +838,9 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testPadAgainstItem( PAD* pad, SHAPE* pa
 {
     bool testClearance = !m_drcEngine->IsErrorLimitExceeded( DRCE_CLEARANCE );
     bool testShorting = !m_drcEngine->IsErrorLimitExceeded( DRCE_SHORTING_ITEMS );
-    bool testHoles = !m_drcEngine->IsErrorLimitExceeded( DRCE_HOLE_CLEARANCE );
+    bool testHoles = !m_drcEngine->IsErrorLimitExceeded( DRCE_HOLE_CLEARANCE )
+                     || ( m_hasBackdrillClearanceRules
+                          && !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_TO_COPPER_CLEARANCE ) );
 
     // Disable some tests for net-tie objects in a footprint
     if( other->GetParent() == pad->GetParent() )
@@ -984,14 +998,9 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testPadAgainstItem( PAD* pad, SHAPE* pa
     auto doTestHole =
             [&]( BOARD_ITEM* item, SHAPE* shape, BOARD_ITEM* otherItem, SHAPE* aOtherShape )
             {
-                bool             backdrill = useBackdrillClearance( otherItem, aLayer );
-                DRC_CONSTRAINT_T constraintType = backdrill ? BACKDRILL_CLEARANCE_CONSTRAINT
-                                                            : HOLE_CLEARANCE_CONSTRAINT;
-                int              errorCode = backdrill ? DRCE_BACKDRILL_TO_COPPER_CLEARANCE
-                                                       : DRCE_HOLE_CLEARANCE;
-
+                int            errorCode;
                 DRC_CONSTRAINT holeConstraint =
-                        m_drcEngine->EvalRules( constraintType, pad, other, aLayer );
+                        resolveHoleConstraint( otherItem, pad, other, aLayer, errorCode );
 
                 if( holeConstraint.GetSeverity() == RPT_SEVERITY_IGNORE )
                     return;
