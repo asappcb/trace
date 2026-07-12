@@ -17,6 +17,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <cmath>
 #include <limits>
 #include <optional>
 
@@ -71,14 +72,15 @@ public:
 private:
     void checkBackdrills( BOARD_ITEM* aItem, const PADSTACK& aPadstack, int aPrimaryDrill,
                           const LSET& aCopper, const BOARD_STACKUP& aStackup,
-                          CONNECTIVITY_DATA* aConnectivity, bool aCheckStub );
+                          CONNECTIVITY_DATA* aConnectivity, bool aCheckStub, bool aCheckDepth );
 };
 
 
 void DRC_TEST_PROVIDER_BACKDRILL::checkBackdrills( BOARD_ITEM* aItem, const PADSTACK& aPadstack,
                                                    int aPrimaryDrill, const LSET& aCopper,
                                                    const BOARD_STACKUP& aStackup,
-                                                   CONNECTIVITY_DATA* aConnectivity, bool aCheckStub )
+                                                   CONNECTIVITY_DATA* aConnectivity, bool aCheckStub,
+                                                   bool aCheckDepth )
 {
     auto reportInvalidSpan =
             [&]( const PADSTACK::DRILL_PROPS& aDrill ) -> bool
@@ -226,6 +228,80 @@ void DRC_TEST_PROVIDER_BACKDRILL::checkBackdrills( BOARD_ITEM* aItem, const PADS
 
     checkDrill( aPadstack.SecondaryDrill() );
     checkDrill( aPadstack.TertiaryDrill() );
+
+    // Post-machining (counterbore/countersink) is a partial-depth machining from an outer surface;
+    // its depth must be positive and must not reach or pass through the opposite copper, and a
+    // front and a back machining must not meet through the board.
+    if( aCheckDepth )
+    {
+        auto isPostMachined =
+                []( const PADSTACK::POST_MACHINING_PROPS& aPM ) -> bool
+                {
+                    return aPM.mode.has_value()
+                           && *aPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+                           && *aPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN;
+                };
+
+        auto resolveDepth =
+                []( const PADSTACK::POST_MACHINING_PROPS& aPM ) -> int
+                {
+                    // A countersink with no explicit depth derives it from its diameter and angle.
+                    if( aPM.depth <= 0
+                        && *aPM.mode == PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK && aPM.angle > 0 )
+                    {
+                        double halfAngleRad = ( aPM.angle / 10.0 ) * M_PI / 180.0 / 2.0;
+                        return static_cast<int>( ( aPM.size / 2.0 ) / tan( halfAngleRad ) );
+                    }
+
+                    return aPM.depth;
+                };
+
+        auto reportBadDepth =
+                [&]( const wxString& aMsg, PCB_LAYER_ID aMarker )
+                {
+                    if( m_drcEngine->IsErrorLimitExceeded( DRCE_POST_MACHINING_DEPTH_INVALID ) )
+                        return;
+
+                    std::shared_ptr<DRC_ITEM> drcItem =
+                            DRC_ITEM::Create( DRCE_POST_MACHINING_DEPTH_INVALID );
+                    drcItem->SetErrorDetail( aMsg );
+                    drcItem->SetItems( aItem );
+                    reportViolation( drcItem, aItem->GetPosition(), aMarker );
+                };
+
+        const PADSTACK::POST_MACHINING_PROPS& frontPM = aPadstack.FrontPostMachining();
+        const PADSTACK::POST_MACHINING_PROPS& backPM = aPadstack.BackPostMachining();
+
+        bool frontActive = isPostMachined( frontPM );
+        bool backActive = isPostMachined( backPM );
+        int  frontDepth = frontActive ? resolveDepth( frontPM ) : 0;
+        int  backDepth = backActive ? resolveDepth( backPM ) : 0;
+        int  boardThickness = aStackup.GetLayerDistance( F_Cu, B_Cu );
+
+        if( frontActive )
+        {
+            if( frontDepth <= 0 )
+                reportBadDepth( _( "front post-machining depth must be positive" ), F_Cu );
+            else if( boardThickness > 0 && frontDepth >= boardThickness )
+                reportBadDepth( _( "front post-machining depth reaches or passes through the board" ),
+                                F_Cu );
+        }
+
+        if( backActive )
+        {
+            if( backDepth <= 0 )
+                reportBadDepth( _( "back post-machining depth must be positive" ), B_Cu );
+            else if( boardThickness > 0 && backDepth >= boardThickness )
+                reportBadDepth( _( "back post-machining depth reaches or passes through the board" ),
+                                B_Cu );
+        }
+
+        if( frontActive && backActive && frontDepth > 0 && backDepth > 0
+            && boardThickness > 0 && frontDepth + backDepth >= boardThickness )
+        {
+            reportBadDepth( _( "front and back post-machining depths meet through the board" ), F_Cu );
+        }
+    }
 }
 
 
@@ -234,8 +310,9 @@ bool DRC_TEST_PROVIDER_BACKDRILL::Run()
     bool checkInvalid = !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_INVALID_SPAN );
     bool checkStub = !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_STUB_TOO_LONG )
                      && m_drcEngine->HasRulesForConstraintType( BACKDRILL_STUB_LENGTH_CONSTRAINT );
+    bool checkDepth = !m_drcEngine->IsErrorLimitExceeded( DRCE_POST_MACHINING_DEPTH_INVALID );
 
-    if( !checkInvalid && !checkStub )
+    if( !checkInvalid && !checkStub && !checkDepth )
     {
         REPORT_AUX( wxT( "Backdrill violations ignored. Tests not run." ) );
         return true; // continue with other tests
@@ -259,7 +336,7 @@ bool DRC_TEST_PROVIDER_BACKDRILL::Run()
 
         PCB_VIA* via = static_cast<PCB_VIA*>( track );
         checkBackdrills( via, via->Padstack(), via->GetDrillValue(), copper, stackup, connectivity,
-                         checkStub );
+                         checkStub, checkDepth );
     }
 
     for( FOOTPRINT* footprint : board->Footprints() )
@@ -270,7 +347,7 @@ bool DRC_TEST_PROVIDER_BACKDRILL::Run()
                 break;
 
             checkBackdrills( pad, pad->Padstack(), pad->GetDrillSizeX(), copper, stackup,
-                             connectivity, checkStub );
+                             connectivity, checkStub, checkDepth );
         }
     }
 

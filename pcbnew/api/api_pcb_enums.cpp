@@ -2119,6 +2119,7 @@ DrcErrorType ToProtoEnum( PCB_DRC_CODE aValue )
     case DRCE_TRACK_NOT_CENTERED_ON_VIA:        return DrcErrorType::DRCET_TRACK_NOT_CENTERED_ON_VIA;
     case DRCE_BACKDRILL_INVALID_SPAN:           return DrcErrorType::DRCET_BACKDRILL_INVALID_SPAN;
     case DRCE_BACKDRILL_STUB_TOO_LONG:          return DrcErrorType::DRCET_BACKDRILL_STUB_TOO_LONG;
+    case DRCE_POST_MACHINING_DEPTH_INVALID:     return DrcErrorType::DRCET_POST_MACHINING_DEPTH_INVALID;
     default:
         wxCHECK_MSG( false, DrcErrorType::DRCET_UNKNOWN,
                      "Unhandled case in ToProtoEnum<PCB_DRC_CODE>" );
@@ -2200,6 +2201,7 @@ PCB_DRC_CODE FromProtoEnum( DrcErrorType aValue )
     case DrcErrorType::DRCET_TRACK_NOT_CENTERED_ON_VIA:      return DRCE_TRACK_NOT_CENTERED_ON_VIA;
     case DrcErrorType::DRCET_BACKDRILL_INVALID_SPAN:         return DRCE_BACKDRILL_INVALID_SPAN;
     case DrcErrorType::DRCET_BACKDRILL_STUB_TOO_LONG:        return DRCE_BACKDRILL_STUB_TOO_LONG;
+    case DrcErrorType::DRCET_POST_MACHINING_DEPTH_INVALID:   return DRCE_POST_MACHINING_DEPTH_INVALID;
 
     case DrcErrorType::DRCET_UNKNOWN:
     default:

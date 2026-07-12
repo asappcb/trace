@@ -329,6 +329,10 @@ DRC_ITEM DRC_ITEM::backdrillStubTooLong( DRCE_BACKDRILL_STUB_TOO_LONG,
         _HKI( "Backdrill residual stub too long" ),
         wxT( "backdrill_stub_too_long" ) );
 
+DRC_ITEM DRC_ITEM::postMachiningDepthInvalid( DRCE_POST_MACHINING_DEPTH_INVALID,
+        _HKI( "Invalid post-machining depth" ),
+        wxT( "post_machining_depth_invalid" ) );
+
 DRC_ITEM DRC_ITEM::trackNotCenteredOnVia( DRCE_TRACK_NOT_CENTERED_ON_VIA,
         _HKI( "Track endpoint not centered on via" ),
         wxT( "track_not_centered_on_via" ) );
@@ -499,6 +503,7 @@ std::shared_ptr<DRC_ITEM> DRC_ITEM::Create( int aErrorCode )
     case DRCE_TRACK_ON_POST_MACHINED_LAYER: return std::make_shared<DRC_ITEM>( trackOnPostMachinedLayer );
     case DRCE_BACKDRILL_INVALID_SPAN:       return std::make_shared<DRC_ITEM>( backdrillInvalidSpan );
     case DRCE_BACKDRILL_STUB_TOO_LONG:      return std::make_shared<DRC_ITEM>( backdrillStubTooLong );
+    case DRCE_POST_MACHINING_DEPTH_INVALID: return std::make_shared<DRC_ITEM>( postMachiningDepthInvalid );
     case DRCE_TRACK_NOT_CENTERED_ON_VIA:    return std::make_shared<DRC_ITEM>( trackNotCenteredOnVia );
 
     default:
