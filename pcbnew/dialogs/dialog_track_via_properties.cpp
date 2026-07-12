@@ -1328,31 +1328,38 @@ bool DIALOG_TRACK_VIA_PROPERTIES::TransferDataFromWindow()
                             m_viaStack->SetBackdrillEndLayer(
                                     false, ToLAYER_ID( m_backdrillBackLayer->GetLayerSelection() ) );
                     }
+
+                    // A mode was explicitly chosen: propagate the edited backdrill to every selected
+                    // via whose backdrill differs from the target. Compare against this via's own
+                    // padstack (not a snapshot of the shared m_viaStack, which persists and
+                    // accumulates across the multi-selection loop).
+                    if( m_viaStack->SecondaryDrill() != via->Padstack().SecondaryDrill()
+                            || m_viaStack->TertiaryDrill() != via->Padstack().TertiaryDrill() )
+                    {
+                        updatePadstack = true;
+                    }
                 }
                 else
                 {
-                    // Mode is indeterminate across the selection: resize existing backdrills only,
-                    // never adding or removing a side.
+                    // Mode is indeterminate across the selection (the vias disagree on which sides
+                    // are backdrilled): leave each via's set of sides alone and only push an explicit
+                    // size change. A size field left blank/indeterminate must NOT drag the shared
+                    // m_viaStack's backdrill onto vias the user did not touch.
                     if( !m_backdrillFrontSize.IsIndeterminate() && !m_backdrillFrontSize.IsNull()
-                            && m_viaStack->GetBackdrillSize( true ).has_value() )
+                            && m_viaStack->GetBackdrillSize( true ).has_value()
+                            && m_viaStack->GetBackdrillSize( true ) != m_backdrillFrontSize.GetIntValue() )
                     {
                         m_viaStack->SetBackdrillSize( true, m_backdrillFrontSize.GetIntValue() );
+                        updatePadstack = true;
                     }
 
                     if( !m_backdrillBackSize.IsIndeterminate() && !m_backdrillBackSize.IsNull()
-                            && m_viaStack->GetBackdrillSize( false ).has_value() )
+                            && m_viaStack->GetBackdrillSize( false ).has_value()
+                            && m_viaStack->GetBackdrillSize( false ) != m_backdrillBackSize.GetIntValue() )
                     {
                         m_viaStack->SetBackdrillSize( false, m_backdrillBackSize.GetIntValue() );
+                        updatePadstack = true;
                     }
-                }
-
-                // Compare against this via's own padstack (not a snapshot of the shared m_viaStack,
-                // which persists across the multi-selection loop) so every via that differs from the
-                // edited target is flagged for update.
-                if( m_viaStack->SecondaryDrill() != via->Padstack().SecondaryDrill()
-                        || m_viaStack->TertiaryDrill() != via->Padstack().TertiaryDrill() )
-                {
-                    updatePadstack = true;
                 }
 
                 // Post Machining

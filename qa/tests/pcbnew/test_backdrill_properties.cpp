@@ -261,6 +261,30 @@ BOOST_AUTO_TEST_CASE( ViaDialogEditPreservesLegacyLayout )
 }
 
 
+// Selecting NO_BACKDRILL in the via dialog now calls SetBackdrillMode(NO_BACKDRILL). Against a
+// KiCad 10.0 layout (top backdrill in the tertiary slot) it must clear the drill that actually
+// carries the backdrill (keyed on its start layer), leaving no stale sized slot behind.
+BOOST_AUTO_TEST_CASE( ViaDialogNoBackdrillClearsLegacyLayout )
+{
+    PADSTACK stack( nullptr );
+    stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+
+    PADSTACK::DRILL_PROPS& tertiary = stack.TertiaryDrill();
+    tertiary.size = { pcbIUScale.mmToIU( 0.6 ), pcbIUScale.mmToIU( 0.6 ) };
+    tertiary.start = F_Cu;
+    tertiary.end = In1_Cu;
+    tertiary.shape = PAD_DRILL_SHAPE::CIRCLE;
+
+    BOOST_REQUIRE( stack.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_TOP );
+
+    stack.SetBackdrillMode( BACKDRILL_MODE::NO_BACKDRILL );
+
+    BOOST_CHECK( stack.GetBackdrillMode() == BACKDRILL_MODE::NO_BACKDRILL );
+    BOOST_CHECK_EQUAL( stack.TertiaryDrill().size.x, 0 );
+    BOOST_CHECK_EQUAL( stack.SecondaryDrill().size.x, 0 );
+}
+
+
 // Clearing the must-cut layer removes the backdrill: a sized drill with no must-cut does not
 // exist (the via layer sanitizer enforces the same rule).
 BOOST_AUTO_TEST_CASE( ClearingMustCutRemovesBackdrill )
