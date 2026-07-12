@@ -377,6 +377,16 @@ enum ViaDrillPostMachiningMode
   VDPM_COUNTERSINK = 3;
 }
 
+// Which side(s) of a via or pad carry a backdrill operation.
+enum BackdrillMode
+{
+  BM_UNKNOWN = 0;
+  BM_NO_BACKDRILL = 1;
+  BM_BACKDRILL_BOTTOM = 2;
+  BM_BACKDRILL_TOP = 3;
+  BM_BACKDRILL_BOTH = 4;
+}
+
 message DrillProperties
 {
   // Lowest (closest to F_Cu) layer this drill exists on.

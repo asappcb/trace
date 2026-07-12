@@ -120,6 +120,73 @@ PAD_DRILL_SHAPE FromProtoEnum( types::DrillShape aValue )
 }
 
 template<>
+types::ViaDrillPostMachiningMode ToProtoEnum( PAD_DRILL_POST_MACHINING_MODE aValue )
+{
+    switch( aValue )
+    {
+    case PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED:
+        return types::ViaDrillPostMachiningMode::VDPM_NOT_POST_MACHINED;
+    case PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE:
+        return types::ViaDrillPostMachiningMode::VDPM_COUNTERBORE;
+    case PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK:
+        return types::ViaDrillPostMachiningMode::VDPM_COUNTERSINK;
+    default:
+        wxCHECK_MSG( false, types::ViaDrillPostMachiningMode::VDPM_UNKNOWN,
+                     "Unhandled case in ToProtoEnum<PAD_DRILL_POST_MACHINING_MODE>" );
+    }
+}
+
+template<>
+PAD_DRILL_POST_MACHINING_MODE FromProtoEnum( types::ViaDrillPostMachiningMode aValue )
+{
+    switch( aValue )
+    {
+    case types::ViaDrillPostMachiningMode::VDPM_NOT_POST_MACHINED:
+        return PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED;
+    case types::ViaDrillPostMachiningMode::VDPM_COUNTERBORE:
+        return PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE;
+    case types::ViaDrillPostMachiningMode::VDPM_COUNTERSINK:
+        return PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK;
+    case types::ViaDrillPostMachiningMode::VDPM_UNKNOWN:
+        return PAD_DRILL_POST_MACHINING_MODE::UNKNOWN;
+    default:
+        wxCHECK_MSG( false, PAD_DRILL_POST_MACHINING_MODE::UNKNOWN,
+                     "Unhandled case in FromProtoEnum<types::ViaDrillPostMachiningMode>" );
+    }
+}
+
+template<>
+types::BackdrillMode ToProtoEnum( BACKDRILL_MODE aValue )
+{
+    switch( aValue )
+    {
+    case BACKDRILL_MODE::NO_BACKDRILL:     return types::BackdrillMode::BM_NO_BACKDRILL;
+    case BACKDRILL_MODE::BACKDRILL_BOTTOM: return types::BackdrillMode::BM_BACKDRILL_BOTTOM;
+    case BACKDRILL_MODE::BACKDRILL_TOP:    return types::BackdrillMode::BM_BACKDRILL_TOP;
+    case BACKDRILL_MODE::BACKDRILL_BOTH:   return types::BackdrillMode::BM_BACKDRILL_BOTH;
+    default:
+        wxCHECK_MSG( false, types::BackdrillMode::BM_UNKNOWN,
+                     "Unhandled case in ToProtoEnum<BACKDRILL_MODE>" );
+    }
+}
+
+template<>
+BACKDRILL_MODE FromProtoEnum( types::BackdrillMode aValue )
+{
+    switch( aValue )
+    {
+    case types::BackdrillMode::BM_NO_BACKDRILL:     return BACKDRILL_MODE::NO_BACKDRILL;
+    case types::BackdrillMode::BM_BACKDRILL_BOTTOM: return BACKDRILL_MODE::BACKDRILL_BOTTOM;
+    case types::BackdrillMode::BM_BACKDRILL_TOP:    return BACKDRILL_MODE::BACKDRILL_TOP;
+    case types::BackdrillMode::BM_BACKDRILL_BOTH:   return BACKDRILL_MODE::BACKDRILL_BOTH;
+    case types::BackdrillMode::BM_UNKNOWN:
+    default:
+        wxCHECK_MSG( false, BACKDRILL_MODE::NO_BACKDRILL,
+                     "Unhandled case in FromProtoEnum<types::BackdrillMode>" );
+    }
+}
+
+template<>
 types::PadStackShape ToProtoEnum( PAD_SHAPE aValue )
 {
     switch( aValue )

@@ -128,6 +128,18 @@ BOOST_AUTO_TEST_CASE( DrillShape )
     testEnums<PAD_DRILL_SHAPE, kiapi::board::types::DrillShape>();
 }
 
+BOOST_AUTO_TEST_CASE( ViaDrillPostMachiningMode )
+{
+    // PAD_DRILL_POST_MACHINING_MODE::UNKNOWN is a sentinel with no proto counterpart, so it is
+    // intentionally not mapped (like VIATYPE::NOT_DEFINED above).
+    testEnums<PAD_DRILL_POST_MACHINING_MODE, kiapi::board::types::ViaDrillPostMachiningMode>( true );
+}
+
+BOOST_AUTO_TEST_CASE( BackdrillMode )
+{
+    testEnums<BACKDRILL_MODE, kiapi::board::types::BackdrillMode>();
+}
+
 BOOST_AUTO_TEST_CASE( UnconnectedLayerRemoval )
 {
     testEnums<UNCONNECTED_LAYER_MODE, kiapi::board::types::UnconnectedLayerRemoval>();
