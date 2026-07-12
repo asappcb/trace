@@ -1210,9 +1210,11 @@ std::shared_ptr<SHAPE_SEGMENT> PCB_VIA::GetEffectiveHoleShape() const
 
 int PCB_VIA::GetLargestHoleDiameter() const
 {
-    // Mirrors the set of enlargements PCB_VIA::GetEffectiveShape() applies on a backdrilled or
-    // post-machined layer, but takes the worst case across the whole barrel (no layer filter) so
-    // callers that treat the hole as piercing all layers see the widest bore.
+    // Worst-case bore across the whole barrel (no layer filter), so callers that treat the hole as
+    // piercing all layers see the widest drilled/machined diameter.  Folds the same enlargements
+    // PCB_VIA::GetEffectiveShape() considers on a backdrilled/post-machined layer -- front/back
+    // post-machining and the secondary drill -- plus the tertiary (bottom) backdrill, which
+    // GetEffectiveShape() does not currently account for.
     int diameter = GetDrillValue();
 
     const PADSTACK::DRILL_PROPS& secDrill = m_padStack.SecondaryDrill();
