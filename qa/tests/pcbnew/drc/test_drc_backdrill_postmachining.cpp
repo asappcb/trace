@@ -1249,3 +1249,51 @@ BOOST_FIXTURE_TEST_CASE( DRCPadBackdrillHoleToCopperUnaffectedLayer, BACKDRILL_T
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
     BOOST_CHECK_EQUAL( violations.size(), 0u );
 }
+
+
+/**
+ * When a via does not flash a layer, the copper-clearance test substitutes the hole shape for the
+ * via.  On a layer that is both unconnected (barrel copper removed by the unconnected-layer mode)
+ * and backdrilled, that substitute must be the enlarged bore -- matching what GetEffectiveShape()
+ * yields for the same via as the reference item -- not the primary drill.
+ *
+ * A track/via pair is deduplicated by pointer order and tested in one direction only; the bug is
+ * therefore direction-sensitive (like GitLab #24355).  The track is created first so it tends to
+ * get the lower heap address and thus be the reference (via as the substitute "other"), the
+ * direction the fix affects; a warning fires if the allocator defeats that, in which case the pass
+ * is via the via-as-reference direction rather than the substitute.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillUnflashedViaClearanceProxy, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.4 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int viaNet = GetNetCode( "ViaNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I viaPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+
+    // Different-net track on In1_Cu, 0.9mm out: 0.275mm from the 0.5mm bore radius (< 0.4mm min
+    // clearance -> violation) but 0.625mm from the 0.15mm primary radius (clear under primary-only).
+    int x = pcbIUScale.mmToIU( 10.9 );
+    PCB_TRACK* track = CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ),
+                                    VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ), In1_Cu, trackNet );
+
+    // Through via (0.3mm drill, 0.6mm copper), inner unconnected copper removed, backdrilled
+    // F_Cu -> In2_Cu with a 1.0mm bore.  In1_Cu is inner+unconnected (so the via does not flash it)
+    // and inside the backdrill span (so its barrel is bored to 1.0mm).
+    PCB_VIA* via = CreateBackdrilledVia( viaPos, viaNet, F_Cu, B_Cu, F_Cu, In2_Cu,
+                                         pcbIUScale.mmToIU( 1.0 ) );
+    via->Padstack().SetUnconnectedLayerMode( UNCONNECTED_LAYER_MODE::REMOVE_EXCEPT_START_AND_END );
+    RebuildConnectivity();
+
+    BOOST_REQUIRE( !via->FlashLayer( In1_Cu ) );
+    BOOST_REQUIRE( via->IsBackdrilledOrPostMachined( In1_Cu ) );
+    BOOST_WARN_MESSAGE( static_cast<void*>( track ) < static_cast<void*>( via ),
+                        "Heap put the via below the track; the substitute direction may not be "
+                        "exercised in this run." );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_CLEARANCE );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
