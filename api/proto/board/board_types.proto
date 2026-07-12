@@ -452,6 +452,11 @@ message PadStack
 
   PostMachiningProperties front_post_machining = 12;
   PostMachiningProperties back_post_machining = 13;
+
+  // Which side(s) carry a backdrill, derived from the secondary/tertiary drill slots above.
+  // Set on serialization as a convenience so clients need not infer it; ignored on
+  // deserialization (the drill slots are authoritative).
+  BackdrillMode backdrill_mode = 14;
 }
 
 enum ViaType

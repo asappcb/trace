@@ -660,6 +660,10 @@ void PADSTACK::Serialize( google::protobuf::Any& aContainer ) const
             tertiary->set_filled( m_tertiaryDrill.is_filled.value() ? VDFM_FILLED : VDFM_UNFILLED );
     }
 
+    // Explicit backdrill mode (derived from the drill slots) so API clients need not infer it.
+    padstack.set_backdrill_mode(
+            ToProtoEnum<BACKDRILL_MODE, kiapi::board::types::BackdrillMode>( GetBackdrillMode() ) );
+
     auto packPostMachining = []( const PADSTACK::POST_MACHINING_PROPS& aProps,
                                  PostMachiningProperties* aProto )
     {

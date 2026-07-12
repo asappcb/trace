@@ -27,6 +27,9 @@
 #include <layer_ids.h>
 #include <base_units.h>
 
+#include <google/protobuf/any.pb.h>
+#include <api/board/board_types.pb.h>
+
 // Regression tests for GitLab #23901. A backdrill's side is identified by its start layer
 // (F_Cu = top, B_Cu = bottom), not by which drill slot it occupies. The accessors must read both
 // the current layout and the one written by KiCad 10.0 (top backdrill in the tertiary slot), and
@@ -254,6 +257,39 @@ BOOST_AUTO_TEST_CASE( ClearingCollapsesDuplicateSideSlots )
     BOOST_CHECK_EQUAL( stack.SecondaryDrill().size.x, 0 );
     BOOST_CHECK_EQUAL( stack.TertiaryDrill().size.x, 0 );
     BOOST_CHECK( stack.GetBackdrillMode() == BACKDRILL_MODE::NO_BACKDRILL );
+}
+
+
+// The proto carries an explicit backdrill_mode convenience field, populated from the drill slots on
+// serialization. Clients need not infer the side from the slots, but the slots remain authoritative:
+// deserialization ignores the field and re-derives the mode from the round-tripped drills.
+BOOST_AUTO_TEST_CASE( BackdrillModeProtoRoundTrip )
+{
+    PADSTACK stack( nullptr );
+    stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+
+    stack.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_BOTH );
+    stack.SetBackdrillSize( true, pcbIUScale.mmToIU( 0.7 ) );
+    stack.SetBackdrillEndLayer( true, In1_Cu );
+    stack.SetBackdrillSize( false, pcbIUScale.mmToIU( 0.7 ) );
+    stack.SetBackdrillEndLayer( false, In3_Cu );
+
+    BOOST_REQUIRE( stack.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_BOTH );
+
+    google::protobuf::Any any;
+    stack.Serialize( any );
+
+    kiapi::board::types::PadStack proto;
+    BOOST_REQUIRE( any.UnpackTo( &proto ) );
+
+    // The convenience field mirrors the drill-derived mode.
+    BOOST_CHECK( proto.backdrill_mode() == kiapi::board::types::BM_BACKDRILL_BOTH );
+
+    // Round-trip through Deserialize: the drill slots reconstruct the same mode even though the
+    // explicit field is ignored on the way in.
+    PADSTACK restored( nullptr );
+    BOOST_REQUIRE( restored.Deserialize( any ) );
+    BOOST_CHECK( restored.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_BOTH );
 }
 
 
