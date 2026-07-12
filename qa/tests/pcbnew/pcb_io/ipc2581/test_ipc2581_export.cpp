@@ -762,6 +762,111 @@ BOOST_AUTO_TEST_CASE( BackdrillSpecEncoding )
 
 
 /**
+ * Schema-validate a backdrilled board. Unlike BackdrillSpecEncoding (which string-matches a minimal
+ * synthetic board), this bases the export on a known schema-valid multilayer fixture and then adds a
+ * backdrilled via in memory, so the whole document is validated against the real IPC-2581 XSD -- the
+ * backdrill spec must be present AND must not break schema conformance.
+ */
+BOOST_AUTO_TEST_CASE( BackdrillSchemaValidation )
+{
+    std::unique_ptr<BOARD> board = LoadBoard( "padstacks_complex.kicad_pcb" );
+    BOOST_REQUIRE( board );
+
+    // Front backdrill from F_Cu, must cut through In1_Cu; the must-not-cut layer resolves to In2_Cu.
+    auto* via = new PCB_VIA( board.get() );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 20 ), pcbIUScale.mmToIU( 20 ) ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+    via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+    via->SetSecondaryDrillSize( pcbIUScale.mmToIU( 0.40 ) );
+    via->SetSecondaryDrillStartLayer( F_Cu );
+    via->SetSecondaryDrillEndLayer( In1_Cu );
+    board->Add( via );
+
+    wxString tempPath = CreateTempFile();
+    std::map<std::string, UTF8> props;
+    props["units"] = "mm";
+    props["version"] = "C";
+    props["sigfig"] = "4";
+    BOOST_REQUIRE_NO_THROW( m_ipc2581Plugin.SaveBoard( tempPath, board.get(), &props ) );
+    BOOST_REQUIRE( wxFileExists( tempPath ) );
+
+    BOOST_CHECK_MESSAGE( FileContainsPattern( tempPath, wxT( "<Backdrill type=\"START_LAYER\"" ) ),
+                         "Backdrilled board should emit a START_LAYER spec" );
+    BOOST_CHECK_MESSAGE(
+            FileContainsPattern( tempPath, wxT( "<Backdrill type=\"MUST_NOT_CUT_LAYER\"" ) ),
+            "A backdrill with a deeper signal layer should emit MUST_NOT_CUT_LAYER" );
+
+    if( m_xmllintAvailable )
+    {
+        wxString xsdPath = GetXsdPath( 'C' );
+        BOOST_REQUIRE( wxFileExists( xsdPath ) );
+
+        wxString err = ValidateXmlWithXsd( tempPath, xsdPath );
+        BOOST_CHECK_MESSAGE( err.IsEmpty(),
+                             "Backdrilled board failed IPC-2581C schema validation: " << err );
+    }
+}
+
+
+/**
+ * A backdrill whose start layer is neither outer copper layer (a buried-via backdrill) has no
+ * "deeper signal layer" to resolve, so computeMustNotCutLayer (pcb_io_ipc2581.cpp) returns
+ * UNDEFINED.  The exporter must then omit the MUST_NOT_CUT_LAYER child (which would reference the
+ * missing layer) while still emitting START_LAYER and a MAX_STUB_LENGTH that falls back to a zero
+ * length, and the document must remain schema-valid with no dangling / empty layer reference.
+ */
+BOOST_AUTO_TEST_CASE( BackdrillMustNotCutUndefined )
+{
+    std::unique_ptr<BOARD> board = LoadBoard( "padstacks_complex.kicad_pcb" );
+    BOOST_REQUIRE( board );
+
+    // Buried via In1_Cu..In2_Cu with a backdrill starting at the inner layer In1_Cu: the start is
+    // neither F_Cu nor B_Cu, so the must-not-cut layer is UNDEFINED.
+    auto* via = new PCB_VIA( board.get() );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 25 ), pcbIUScale.mmToIU( 25 ) ) );
+    via->SetViaType( VIATYPE::BURIED );
+    via->SetLayerPair( In1_Cu, In2_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+    via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+    via->SetSecondaryDrillSize( pcbIUScale.mmToIU( 0.40 ) );
+    via->SetSecondaryDrillStartLayer( In1_Cu );
+    via->SetSecondaryDrillEndLayer( In2_Cu );
+    board->Add( via );
+
+    wxString tempPath = CreateTempFile();
+    std::map<std::string, UTF8> props;
+    props["units"] = "mm";
+    props["version"] = "C";
+    props["sigfig"] = "4";
+    BOOST_REQUIRE_NO_THROW( m_ipc2581Plugin.SaveBoard( tempPath, board.get(), &props ) );
+    BOOST_REQUIRE( wxFileExists( tempPath ) );
+
+    // START_LAYER is still emitted; MUST_NOT_CUT_LAYER is omitted because there is no deeper signal
+    // layer to reference; MAX_STUB_LENGTH is still emitted but with a zero-length fallback.
+    BOOST_CHECK_MESSAGE( FileContainsPattern( tempPath, wxT( "<Backdrill type=\"START_LAYER\"" ) ),
+                         "A buried-via backdrill should still emit its START_LAYER" );
+    BOOST_CHECK_MESSAGE(
+            !FileContainsPattern( tempPath, wxT( "<Backdrill type=\"MUST_NOT_CUT_LAYER\"" ) ),
+            "No MUST_NOT_CUT_LAYER child when the must-not-cut layer is UNDEFINED" );
+    BOOST_CHECK_MESSAGE(
+            FileContainsPattern( tempPath, wxT( "<Backdrill type=\"MAX_STUB_LENGTH\"" ) ),
+            "MAX_STUB_LENGTH is still emitted (with a zero-length fallback) when must-not-cut is "
+            "UNDEFINED" );
+
+    if( m_xmllintAvailable )
+    {
+        wxString xsdPath = GetXsdPath( 'C' );
+        BOOST_REQUIRE( wxFileExists( xsdPath ) );
+
+        wxString err = ValidateXmlWithXsd( tempPath, xsdPath );
+        BOOST_CHECK_MESSAGE( err.IsEmpty(),
+                             "UNDEFINED-must-not-cut board failed IPC-2581C schema: " << err );
+    }
+}
+
+
+/**
  * Test that SMD pads without F.Paste in their layer set are not added to the
  * solder paste layer (Issue #24318).
  *
