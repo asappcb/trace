@@ -1208,7 +1208,9 @@ std::shared_ptr<SHAPE_SEGMENT> PCB_VIA::GetEffectiveHoleShape() const
     // Drill().size.x, which is UNDEFINED_DRILL_DIAMETER (-1) for a via that inherits its drill
     // from its netclass.  This matches the diameter GetEffectiveShape() uses for the barrel, so
     // hole-based checks (clearance, creepage, annular width, ...) see the via's true hole rather
-    // than a degenerate near-zero one.
+    // than a degenerate near-zero one.  The s-expr writer emits a resolved drill, so a loaded
+    // board never carries the sentinel; it arises for in-memory / not-yet-saved / API-constructed
+    // vias, where the old raw access made the hole vanish.
     return std::make_shared<SHAPE_SEGMENT>( SEG( m_Start, m_Start ), GetDrillValue() );
 }
 
