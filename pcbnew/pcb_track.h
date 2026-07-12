@@ -498,12 +498,8 @@ public:
      * (and for a via with no backdrill/post-machining) it is the primary drill.  Passing
      * UNDEFINED_LAYER returns the layer-agnostic worst case (GetLargestHoleDiameter()).  Used by
      * per-layer hole clearance DRC so a bore that has been widened on a layer is checked against
-     * that layer's copper at its true size.
-     *
-     * Unlike the no-argument GetEffectiveHoleShape(), the diameter is based on GetDrillValue()
-     * (which resolves a netclass-default drill) rather than the raw stored drill, matching the
-     * value the via's copper barrel uses; the two therefore differ for a via whose drill is
-     * inherited from its netclass (where the raw stored size is UNDEFINED_DRILL_DIAMETER).
+     * that layer's copper at its true size.  On a layer with no enlargement it reduces to the
+     * no-argument GetEffectiveHoleShape() (both use GetDrillValue()).
      */
     std::shared_ptr<SHAPE_SEGMENT> GetEffectiveHoleShape( PCB_LAYER_ID aLayer ) const;
 

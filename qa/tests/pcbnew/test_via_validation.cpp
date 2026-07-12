@@ -19,7 +19,9 @@
 
 #include <qa_utils/wx_utils/unit_test_utils.h>
 #include <base_units.h>
+#include <board.h>
 #include <pcb_track.h>
+#include <geometry/shape_segment.h>
 
 using FIELD = PCB_VIA::VIA_PARAMETER_ERROR::FIELD;
 
@@ -169,6 +171,38 @@ BOOST_AUTO_TEST_CASE( BackdrillLayersAreValidated )
 
     BOOST_REQUIRE( tertiaryEnd.has_value() );
     BOOST_CHECK( tertiaryEnd->m_Field == FIELD::TERTIARY_END_LAYER );
+}
+
+
+// A via that inherits its drill from the netclass stores UNDEFINED_DRILL_DIAMETER (-1) as its raw
+// drill, but its effective hole must be the resolved netclass drill, not that sentinel.  Regression
+// for the no-arg GetEffectiveHoleShape() using the raw stored drill (a degenerate near-zero hole
+// for default-drill vias) instead of GetDrillValue().
+BOOST_AUTO_TEST_CASE( EffectiveHoleShapeResolvesNetclassDrill )
+{
+    BOARD board;
+
+    PCB_VIA via( &board );
+    via.SetWidth( PADSTACK::ALL_LAYERS, pcbIUScale.mmToIU( 0.8 ) );
+
+    // Deliberately do NOT call SetDrill(): the via inherits its drill from the netclass, so the
+    // raw stored drill stays the UNDEFINED_DRILL_DIAMETER sentinel while GetDrillValue() resolves
+    // it to the (positive) netclass via drill.
+    BOOST_REQUIRE_EQUAL( via.Padstack().Drill().size.x, UNDEFINED_DRILL_DIAMETER );
+    int resolvedDrill = via.GetDrillValue();
+    BOOST_REQUIRE_GT( resolvedDrill, 0 );
+
+    std::shared_ptr<SHAPE_SEGMENT> hole = via.GetEffectiveHoleShape();
+    BOOST_REQUIRE( hole );
+
+    // The hole must be the resolved drill, not the -1 sentinel (the pre-fix behaviour).
+    BOOST_CHECK_EQUAL( hole->GetWidth(), resolvedDrill );
+    BOOST_CHECK_NE( hole->GetWidth(), UNDEFINED_DRILL_DIAMETER );
+
+    // An explicit drill is returned verbatim (and still matches GetDrillValue()).
+    via.SetDrill( pcbIUScale.mmToIU( 0.3 ) );
+    BOOST_CHECK_EQUAL( via.GetEffectiveHoleShape()->GetWidth(), pcbIUScale.mmToIU( 0.3 ) );
+    BOOST_CHECK_EQUAL( via.GetEffectiveHoleShape()->GetWidth(), via.GetDrillValue() );
 }
 
 
