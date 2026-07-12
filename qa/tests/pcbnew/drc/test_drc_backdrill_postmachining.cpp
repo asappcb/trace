@@ -742,3 +742,52 @@ BOOST_FIXTURE_TEST_CASE( CountersinkAngleDecidegrees, BACKDRILL_TEST_FIXTURE )
     const PADSTACK::POST_MACHINING_PROPS& backPM = via->Padstack().BackPostMachining();
     BOOST_CHECK_EQUAL( backPM.angle, 600 );
 }
+
+
+/**
+ * A backdrill whose diameter is smaller than the primary via drill can never remove the barrel
+ * and must be flagged as an invalid span.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillInvalidDiameter, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    // Primary drill is 0.3mm; a 0.2mm backdrill is smaller than the hole it should clear.
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 20 ), pcbIUScale.mmToIU( 20 ) ), netCode,
+                          F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.2 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_INVALID_SPAN );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * A backdrill must enter from an outer copper layer; one whose start layer is an inner layer is
+ * not manufacturable and must be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillStartNotOuterLayer, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 30 ), pcbIUScale.mmToIU( 30 ) ), netCode,
+                          F_Cu, B_Cu, In2_Cu, In3_Cu, pcbIUScale.mmToIU( 0.5 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_INVALID_SPAN );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * A well-formed backdrill (enters at F_Cu, must-cut at an inner copper layer, diameter larger
+ * than the primary drill) must not raise an invalid-span violation.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillValidNoViolation, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 40 ), pcbIUScale.mmToIU( 40 ) ), netCode,
+                          F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.5 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_INVALID_SPAN );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}

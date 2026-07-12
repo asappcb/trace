@@ -321,6 +321,10 @@ DRC_ITEM DRC_ITEM::trackOnPostMachinedLayer( DRCE_TRACK_ON_POST_MACHINED_LAYER,
         _HKI( "Track connected to post-machined or backdrilled layer" ),
         wxT( "track_on_post_machined_layer" ) );
 
+DRC_ITEM DRC_ITEM::backdrillInvalidSpan( DRCE_BACKDRILL_INVALID_SPAN,
+        _HKI( "Invalid backdrill span" ),
+        wxT( "backdrill_invalid_span" ) );
+
 DRC_ITEM DRC_ITEM::trackNotCenteredOnVia( DRCE_TRACK_NOT_CENTERED_ON_VIA,
         _HKI( "Track endpoint not centered on via" ),
         wxT( "track_not_centered_on_via" ) );
@@ -355,6 +359,7 @@ std::vector<std::reference_wrapper<RC_ITEM>> DRC_ITEM::allItemTypes( {
         DRC_ITEM::solderMaskBridge,
         DRC_ITEM::connectionWidth,
         DRC_ITEM::trackOnPostMachinedLayer,
+        DRC_ITEM::backdrillInvalidSpan,
         DRC_ITEM::trackNotCenteredOnVia,
         DRC_ITEM::tuningProfileImplicitRules,
 
@@ -487,6 +492,7 @@ std::shared_ptr<DRC_ITEM> DRC_ITEM::Create( int aErrorCode )
     case DRCE_NONMIRRORED_TEXT_ON_BACK_LAYER:      return std::make_shared<DRC_ITEM>( nonMirroredTextOnBackLayer );
     case DRCE_MISSING_TUNING_PROFILE:   return std::make_shared<DRC_ITEM>( missingTuningProfile );
     case DRCE_TRACK_ON_POST_MACHINED_LAYER: return std::make_shared<DRC_ITEM>( trackOnPostMachinedLayer );
+    case DRCE_BACKDRILL_INVALID_SPAN:       return std::make_shared<DRC_ITEM>( backdrillInvalidSpan );
     case DRCE_TRACK_NOT_CENTERED_ON_VIA:    return std::make_shared<DRC_ITEM>( trackNotCenteredOnVia );
 
     default:

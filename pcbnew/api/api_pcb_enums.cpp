@@ -2047,6 +2047,7 @@ DrcErrorType ToProtoEnum( PCB_DRC_CODE aValue )
     case DRCE_TUNING_PROFILE_IMPLICIT_RULES:    return DrcErrorType::DRCET_TUNING_PROFILE_IMPLICIT_RULES;
     case DRCE_TRACK_ON_POST_MACHINED_LAYER:     return DrcErrorType::DRCET_TRACK_ON_POST_MACHINED_LAYER;
     case DRCE_TRACK_NOT_CENTERED_ON_VIA:        return DrcErrorType::DRCET_TRACK_NOT_CENTERED_ON_VIA;
+    case DRCE_BACKDRILL_INVALID_SPAN:           return DrcErrorType::DRCET_BACKDRILL_INVALID_SPAN;
     default:
         wxCHECK_MSG( false, DrcErrorType::DRCET_UNKNOWN,
                      "Unhandled case in ToProtoEnum<PCB_DRC_CODE>" );
@@ -2126,6 +2127,7 @@ PCB_DRC_CODE FromProtoEnum( DrcErrorType aValue )
     case DrcErrorType::DRCET_TUNING_PROFILE_IMPLICIT_RULES:  return DRCE_TUNING_PROFILE_IMPLICIT_RULES;
     case DrcErrorType::DRCET_TRACK_ON_POST_MACHINED_LAYER:   return DRCE_TRACK_ON_POST_MACHINED_LAYER;
     case DrcErrorType::DRCET_TRACK_NOT_CENTERED_ON_VIA:      return DRCE_TRACK_NOT_CENTERED_ON_VIA;
+    case DrcErrorType::DRCET_BACKDRILL_INVALID_SPAN:         return DRCE_BACKDRILL_INVALID_SPAN;
 
     case DrcErrorType::DRCET_UNKNOWN:
     default:
