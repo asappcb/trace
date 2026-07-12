@@ -67,6 +67,12 @@ bool GERBER_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory, b
 
     hole_sets.emplace_back( F_Cu, B_Cu, false, true );
 
+    // Gerber drill files (and the Gerber Job File) mark a backdrill only as a NonPlated Blind
+    // span; the stub-length / must-not-cut tolerance carried in the board is not expressible in
+    // the Gerber X2 drill format. Warn once if any backdrill span is exported so the user knows to
+    // reach for ODB++ or IPC-2581 when a machine-readable stub spec is required.
+    bool backdrillExported = false;
+
     for( std::vector<DRILL_SPAN>::const_iterator it = hole_sets.begin();
          it != hole_sets.end();  ++it )
     {
@@ -77,6 +83,9 @@ bool GERBER_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory, b
 
         if( getHolesCount() == 0 )
             continue;
+
+        if( span.m_IsBackdrill )
+            backdrillExported = true;
 
         fn = getDrillFileName( span, doing_npth, m_merge_PTH_NPTH );
         fn.SetPath( aPlotDirectory );
@@ -155,6 +164,14 @@ bool GERBER_WRITER::CreateDrillandMapFilesSet( const wxString& aPlotDirectory, b
 
     if( aGenMap )
         success &= CreateMapFilesSet( aPlotDirectory, aReporter );
+
+    if( backdrillExported && aGenDrill && aReporter )
+    {
+        aReporter->Report( _( "Backdrill holes were written as NonPlated Blind spans. The Gerber "
+                              "drill format cannot describe backdrill stub-length tolerance; use "
+                              "ODB++ or IPC-2581 for a machine-readable stub specification." ),
+                           RPT_SEVERITY_WARNING );
+    }
 
     if( aReporter )
         aReporter->ReportTail( _( "Done." ), RPT_SEVERITY_INFO );

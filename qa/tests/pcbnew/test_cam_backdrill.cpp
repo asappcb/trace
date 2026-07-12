@@ -29,6 +29,7 @@
 #include <pcbnew/pcb_io/kicad_sexpr/pcb_io_kicad_sexpr.h>
 #include <pcbnew/pcb_track.h>
 #include <base_units.h>
+#include <reporter.h>
 
 #include <map>
 
@@ -853,4 +854,75 @@ BOOST_AUTO_TEST_CASE( BackdrillLegacyV10SlotLayoutRead )
     BOOST_CHECK( !loadedVia->GetBottomBackdrillSize().has_value() );
 
     wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+}
+
+
+// The Gerber drill format encodes a backdrill only as a NonPlated Blind span and carries no
+// stub-length tolerance. GERBER_WRITER must warn the user (steering them to ODB++/IPC-2581) when a
+// board with backdrills is exported, and must stay silent for a board without backdrills.
+BOOST_AUTO_TEST_CASE( GerberBackdrillStubToleranceWarning )
+{
+    // Board with a backdrilled via -> the warning must fire.
+    {
+        wxFileName tempDir = MakeTempDir();
+        wxFileName boardFile( tempDir.GetFullPath(), wxT( "warn_board.kicad_pcb" ) );
+
+        BOARD board;
+        board.SetCopperLayerCount( 6 );
+        board.SetFileName( boardFile.GetFullPath() );
+
+        auto via = new PCB_VIA( &board );
+        via->SetPosition( VECTOR2I( 0, 0 ) );
+        via->SetLayerPair( F_Cu, B_Cu );
+        via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+        via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+        via->SetSecondaryDrillSize( pcbIUScale.mmToIU( 0.20 ) );
+        via->SetSecondaryDrillStartLayer( F_Cu );
+        via->SetSecondaryDrillEndLayer( In3_Cu );
+        board.Add( via );
+
+        WX_STRING_REPORTER reporter;
+
+        GERBER_WRITER gerber( &board );
+        gerber.SetOptions( VECTOR2I( 0, 0 ) );
+        gerber.SetFormat( 6 );
+        BOOST_REQUIRE( gerber.CreateDrillandMapFilesSet( tempDir.GetFullPath(), true, false, false,
+                                                         &reporter ) );
+
+        BOOST_CHECK( reporter.HasMessageOfSeverity( RPT_SEVERITY_WARNING ) );
+        BOOST_CHECK( reporter.GetMessages().Contains( wxT( "IPC-2581" ) ) );
+        BOOST_CHECK( reporter.GetMessages().Contains( wxT( "stub" ) ) );
+
+        wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+    }
+
+    // Board with an ordinary (non-backdrilled) via -> no warning.
+    {
+        wxFileName tempDir = MakeTempDir();
+        wxFileName boardFile( tempDir.GetFullPath(), wxT( "plain_board.kicad_pcb" ) );
+
+        BOARD board;
+        board.SetCopperLayerCount( 6 );
+        board.SetFileName( boardFile.GetFullPath() );
+
+        auto via = new PCB_VIA( &board );
+        via->SetPosition( VECTOR2I( 0, 0 ) );
+        via->SetLayerPair( F_Cu, B_Cu );
+        via->SetDrill( pcbIUScale.mmToIU( 0.30 ) );
+        via->SetWidth( pcbIUScale.mmToIU( 0.60 ) );
+        board.Add( via );
+
+        WX_STRING_REPORTER reporter;
+
+        GERBER_WRITER gerber( &board );
+        gerber.SetOptions( VECTOR2I( 0, 0 ) );
+        gerber.SetFormat( 6 );
+        BOOST_REQUIRE( gerber.CreateDrillandMapFilesSet( tempDir.GetFullPath(), true, false, false,
+                                                         &reporter ) );
+
+        BOOST_CHECK( !reporter.HasMessageOfSeverity( RPT_SEVERITY_WARNING ) );
+        BOOST_CHECK( !reporter.GetMessages().Contains( wxT( "stub" ) ) );
+
+        wxFileName::Rmdir( tempDir.GetFullPath(), wxPATH_RMDIR_RECURSIVE );
+    }
 }

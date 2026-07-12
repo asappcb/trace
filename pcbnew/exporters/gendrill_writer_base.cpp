@@ -692,6 +692,10 @@ const wxString GENDRILL_WRITER_BASE::BuildFileFunctionAttributeString( const DRI
     int bottomlayer = m_pcb->GetCopperLayerCount();
 
     if( aSpan.m_IsBackdrill )
+        // A backdrill is emitted as a NonPlated Blind span. The Gerber X2 FileFunction has no
+        // token for stub-length / must-not-cut depth, so that tolerance is not conveyed here (it
+        // survives only as free-text Excellon comments and in ODB++/IPC-2581). See the reporter
+        // warning in GERBER_WRITER::CreateDrillandMapFilesSet.
         text << wxT( ",Blind" );
     else if( aHoleType == NPTH_FILE )
         text << wxT( ",NPTH" );
