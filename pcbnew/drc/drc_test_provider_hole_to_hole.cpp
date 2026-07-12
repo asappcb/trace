@@ -24,7 +24,6 @@
 #include <footprint.h>
 #include <pad.h>
 #include <pcb_track.h>
-#include <padstack.h>
 #include <geometry/shape_segment.h>
 #include <drc/drc_engine.h>
 #include <drc/drc_item.h>
@@ -69,13 +68,10 @@ static std::shared_ptr<SHAPE_SEGMENT> getHoleShape( BOARD_ITEM* aItem )
     {
         PCB_VIA* via = static_cast<PCB_VIA*>( aItem );
 
-        // A backdrill enlarges the mechanically-drilled bore on the layers it spans; model the
-        // hole at the largest drilled diameter so hole-to-hole clearance accounts for the
-        // backdrill bore, not just the primary via drill.
-        const PADSTACK& padstack = via->Padstack();
-        int             diameter = std::max( { via->GetDrillValue(),
-                                               padstack.SecondaryDrill().size.x,
-                                               padstack.TertiaryDrill().size.x } );
+        // A backdrill or post-machining counterbore enlarges the mechanically-drilled bore on the
+        // layers it spans; model the hole at the largest drilled/machined diameter so hole-to-hole
+        // clearance accounts for that bore, not just the primary via drill.
+        int diameter = via->GetLargestHoleDiameter();
 
         return std::make_shared<SHAPE_SEGMENT>( via->GetCenter(), via->GetCenter(), diameter );
     }
@@ -107,26 +103,22 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
     {
         m_largestHoleToHoleClearance = worstClearanceConstraint.GetValue().Min();
 
-        // Backdrills enlarge the drilled bore beyond the primary via drill.  The r-tree indexes
-        // holes by their primary GetEffectiveHoleShape(), so widen the search margin by the
-        // largest backdrill enlargement to be sure pairs whose backdrill bores (not just primary
-        // drills) are within clearance are still visited; the precise per-pair test uses the
-        // actual largest hole diameter.
+        // Backdrills and post-machining counterbores enlarge the drilled bore beyond the primary
+        // via drill.  The r-tree indexes holes by their primary GetEffectiveHoleShape(), so widen
+        // the search margin by the largest such enlargement to be sure pairs whose enlarged bores
+        // (not just primary drills) are within clearance are still visited; the precise per-pair
+        // test uses the actual largest hole diameter.
         int maxBackdrillEnlargement = 0;
 
-        for( PCB_TRACK* track : m_drcEngine->GetBoard()->Tracks() )
+        for( PCB_TRACK* track : m_board->Tracks() )
         {
             if( track->Type() != PCB_VIA_T )
                 continue;
 
-            PCB_VIA*        via = static_cast<PCB_VIA*>( track );
-            const PADSTACK& padstack = via->Padstack();
-            int             largest = std::max( { via->GetDrillValue(),
-                                                  padstack.SecondaryDrill().size.x,
-                                                  padstack.TertiaryDrill().size.x } );
+            PCB_VIA* via = static_cast<PCB_VIA*>( track );
 
             maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
-                                                largest - via->GetDrillValue() );
+                                                via->GetLargestHoleDiameter() - via->GetDrillValue() );
         }
 
         m_largestHoleToHoleClearance += maxBackdrillEnlargement;

@@ -481,6 +481,16 @@ public:
 
     std::shared_ptr<SHAPE_SEGMENT> GetEffectiveHoleShape() const override;
 
+    /**
+     * Return the largest mechanically-drilled/machined bore diameter of this via, taking the
+     * maximum over the primary drill, any backdrill (secondary/tertiary drill) and any
+     * counterbore/countersink post-machining.  This is the worst-case footprint of the physical
+     * hole anywhere along the barrel, used by layer-agnostic hole DRC (hole-to-hole) so the
+     * clearance accounts for the widest bore, not just the primary via drill.  For a via with no
+     * backdrill or post-machining this is simply GetDrillValue().
+     */
+    int GetLargestHoleDiameter() const;
+
     MINOPTMAX<int> GetWidthConstraint( wxString* aSource = nullptr ) const override;
     MINOPTMAX<int> GetDrillConstraint( wxString* aSource = nullptr ) const;
 
