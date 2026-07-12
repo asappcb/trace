@@ -376,6 +376,8 @@ CustomRuleConstraintType ToProtoEnum( DRC_CONSTRAINT_T aValue )
     case BRIDGED_MASK_CONSTRAINT:         return CustomRuleConstraintType::CRCT_BRIDGED_MASK;
     case SOLDER_MASK_SLIVER_CONSTRAINT:   return CustomRuleConstraintType::CRCT_SOLDER_MASK_SLIVER;
     case NET_CHAIN_LENGTH_CONSTRAINT:        return CustomRuleConstraintType::CRCT_NET_CHAIN_LENGTH;
+    case BACKDRILL_STUB_LENGTH_CONSTRAINT:
+        return CustomRuleConstraintType::CRCT_BACKDRILL_STUB_LENGTH;
     case NET_CHAIN_STUB_LENGTH_CONSTRAINT:
         return CustomRuleConstraintType::CRCT_NET_CHAIN_STUB_LENGTH;
     case NET_CHAIN_RETURN_PATH_CONSTRAINT:
@@ -432,6 +434,7 @@ DRC_CONSTRAINT_T FromProtoEnum( CustomRuleConstraintType aValue )
     case CustomRuleConstraintType::CRCT_SOLDER_MASK_SLIVER:    return SOLDER_MASK_SLIVER_CONSTRAINT;
     case CustomRuleConstraintType::CRCT_NET_CHAIN_LENGTH:         return NET_CHAIN_LENGTH_CONSTRAINT;
     case CustomRuleConstraintType::CRCT_NET_CHAIN_STUB_LENGTH: return NET_CHAIN_STUB_LENGTH_CONSTRAINT;
+    case CustomRuleConstraintType::CRCT_BACKDRILL_STUB_LENGTH: return BACKDRILL_STUB_LENGTH_CONSTRAINT;
     case CustomRuleConstraintType::CRCT_NET_CHAIN_RETURN_PATH: return NET_CHAIN_RETURN_PATH_CONSTRAINT;
 
     default:
@@ -2115,6 +2118,7 @@ DrcErrorType ToProtoEnum( PCB_DRC_CODE aValue )
     case DRCE_TRACK_ON_POST_MACHINED_LAYER:     return DrcErrorType::DRCET_TRACK_ON_POST_MACHINED_LAYER;
     case DRCE_TRACK_NOT_CENTERED_ON_VIA:        return DrcErrorType::DRCET_TRACK_NOT_CENTERED_ON_VIA;
     case DRCE_BACKDRILL_INVALID_SPAN:           return DrcErrorType::DRCET_BACKDRILL_INVALID_SPAN;
+    case DRCE_BACKDRILL_STUB_TOO_LONG:          return DrcErrorType::DRCET_BACKDRILL_STUB_TOO_LONG;
     default:
         wxCHECK_MSG( false, DrcErrorType::DRCET_UNKNOWN,
                      "Unhandled case in ToProtoEnum<PCB_DRC_CODE>" );
@@ -2195,6 +2199,7 @@ PCB_DRC_CODE FromProtoEnum( DrcErrorType aValue )
     case DrcErrorType::DRCET_TRACK_ON_POST_MACHINED_LAYER:   return DRCE_TRACK_ON_POST_MACHINED_LAYER;
     case DrcErrorType::DRCET_TRACK_NOT_CENTERED_ON_VIA:      return DRCE_TRACK_NOT_CENTERED_ON_VIA;
     case DrcErrorType::DRCET_BACKDRILL_INVALID_SPAN:         return DRCE_BACKDRILL_INVALID_SPAN;
+    case DrcErrorType::DRCET_BACKDRILL_STUB_TOO_LONG:        return DRCE_BACKDRILL_STUB_TOO_LONG;
 
     case DrcErrorType::DRCET_UNKNOWN:
     default:

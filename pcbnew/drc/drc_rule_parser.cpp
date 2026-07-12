@@ -536,6 +536,7 @@ void DRC_RULES_PARSER::parseConstraint( DRC_RULE* aRule )
     case T_length:                    c.m_Type = LENGTH_CONSTRAINT;                    break;
     case T_net_chain_length:          c.m_Type = NET_CHAIN_LENGTH_CONSTRAINT;          break;
     case T_stub_length:               c.m_Type = NET_CHAIN_STUB_LENGTH_CONSTRAINT;     break;
+    case T_backdrill_stub_length:     c.m_Type = BACKDRILL_STUB_LENGTH_CONSTRAINT;     break;
     case T_return_path:               c.m_Type = NET_CHAIN_RETURN_PATH_CONSTRAINT;     break;
     case T_skew:                      c.m_Type = SKEW_CONSTRAINT;                      break;
     case T_via_count:                 c.m_Type = VIA_COUNT_CONSTRAINT;                 break;
@@ -551,8 +552,8 @@ void DRC_RULES_PARSER::parseConstraint( DRC_RULE* aRule )
                        "disallow, zone_connection, thermal_relief_gap, thermal_spoke_width, "
                        "min_resolved_spokes, solder_mask_expansion, solder_mask_sliver, "
                        "solder_paste_abs_margin, solder_paste_rel_margin, length, net_chain_length, "
-                       "skew, via_count, via_dangling, via_diameter, diff_pair_gap, "
-                       "diff_pair_uncoupled or bridged_mask" ) );
+                       "backdrill_stub_length, skew, via_count, via_dangling, via_diameter, "
+                       "diff_pair_gap, diff_pair_uncoupled or bridged_mask" ) );
         return;
     }
 

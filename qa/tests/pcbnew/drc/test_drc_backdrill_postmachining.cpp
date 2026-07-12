@@ -39,6 +39,9 @@
 #include <zone.h>
 #include <zone_filler.h>
 
+#include <filesystem>
+#include <fstream>
+
 
 struct BACKDRILL_TEST_FIXTURE
 {
@@ -790,4 +793,140 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillValidNoViolation, BACKDRILL_TEST_FIXTURE )
 
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_INVALID_SPAN );
     BOOST_CHECK_EQUAL( violations.size(), 0u );
+}
+
+
+namespace
+{
+// Write a .kicad_dru with a single backdrill_stub_length max rule (into a per-tag temp dir) and
+// point the fixture's DRC engine at it. Returns the temp dir so the caller can remove it.
+std::filesystem::path WriteBackdrillStubRule( BOARD* aBoard, const wxString& aTag,
+                                              const wxString& aMaxLength )
+{
+    namespace fs = std::filesystem;
+    fs::path tmpDir = fs::temp_directory_path()
+                      / ( "kicad_drc_backdrill_stub_" + aTag.ToStdString() );
+    fs::create_directories( tmpDir );
+    fs::path druPath = tmpDir / "backdrill_stub.kicad_dru";
+
+    {
+        std::ofstream out( druPath );
+        out << "(version 1)\n"
+            << "(rule \"BackdrillStub\"\n"
+            << "    (constraint backdrill_stub_length (max " << aMaxLength.ToStdString() << "))\n"
+            << ")\n";
+    }
+
+    aBoard->GetDesignSettings().m_DRCEngine->InitEngine( wxFileName( druPath.string() ) );
+    return tmpDir;
+}
+} // namespace
+
+
+/**
+ * A via whose signal exits deep (In4_Cu) but whose top backdrill only reaches In1_Cu leaves a
+ * long residual barrel (In1_Cu -> In4_Cu) that must violate a tight stub budget.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillStubTooLong, BACKDRILL_TEST_FIXTURE )
+{
+    int      netCode = GetNetCode( "TestNet" );
+    VECTOR2I pos( pcbIUScale.mmToIU( 50 ), pcbIUScale.mmToIU( 50 ) );
+
+    CreateBackdrilledVia( pos, netCode, F_Cu, B_Cu, F_Cu, In1_Cu, pcbIUScale.mmToIU( 0.5 ) );
+    CreateTrack( pos, VECTOR2I( pcbIUScale.mmToIU( 60 ), pcbIUScale.mmToIU( 50 ) ), In4_Cu, netCode );
+    RebuildConnectivity();
+
+    std::filesystem::path dir =
+            WriteBackdrillStubRule( m_board.get(), wxT( "toolong" ), wxT( "0.2mm" ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_STUB_TOO_LONG );
+    BOOST_CHECK_GE( violations.size(), 1u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
+ * A backdrill that reaches In3_Cu, just above the In4_Cu signal exit, leaves only a short
+ * residual and must not violate a generous stub budget.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillStubWithinBudget, BACKDRILL_TEST_FIXTURE )
+{
+    int      netCode = GetNetCode( "TestNet" );
+    VECTOR2I pos( pcbIUScale.mmToIU( 60 ), pcbIUScale.mmToIU( 60 ) );
+
+    CreateBackdrilledVia( pos, netCode, F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.5 ) );
+    CreateTrack( pos, VECTOR2I( pcbIUScale.mmToIU( 70 ), pcbIUScale.mmToIU( 60 ) ), In4_Cu, netCode );
+    RebuildConnectivity();
+
+    std::filesystem::path dir =
+            WriteBackdrillStubRule( m_board.get(), wxT( "budget" ), wxT( "1mm" ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_STUB_TOO_LONG );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
+ * The residual stub is measured against the via's actual connections, not the board's outer
+ * layers. A via that connects only shallow (In1_Cu), with no same-net copper beyond the In2_Cu
+ * must-cut layer, has no stub - so even a very tight budget must not fire. (The naive
+ * "must-cut -> opposite outer layer" definition would false-positive here.)
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillStubNoConnectionBeyondMustCut, BACKDRILL_TEST_FIXTURE )
+{
+    int      netCode = GetNetCode( "TestNet" );
+    VECTOR2I pos( pcbIUScale.mmToIU( 70 ), pcbIUScale.mmToIU( 70 ) );
+
+    CreateBackdrilledVia( pos, netCode, F_Cu, B_Cu, F_Cu, In2_Cu, pcbIUScale.mmToIU( 0.5 ) );
+    CreateTrack( pos, VECTOR2I( pcbIUScale.mmToIU( 80 ), pcbIUScale.mmToIU( 70 ) ), In1_Cu, netCode );
+    RebuildConnectivity();
+
+    std::filesystem::path dir =
+            WriteBackdrillStubRule( m_board.get(), wxT( "noconn" ), wxT( "0.1mm" ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_STUB_TOO_LONG );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
+ * The residual must be derived from the via's own routing landings, not the whole net cluster.
+ * A backdrilled via routed only shallow (In1_Cu) but sharing a net with a plain full-span through
+ * via must report no stub: a whole-cluster query would wrongly treat the other via's full-copper
+ * span as connections beyond the must-cut and false-positive under a tight budget.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillStubMultiConductorNet, BACKDRILL_TEST_FIXTURE )
+{
+    int      netCode = GetNetCode( "TestNet" );
+    VECTOR2I posA( pcbIUScale.mmToIU( 50 ), pcbIUScale.mmToIU( 50 ) );
+    VECTOR2I posB( pcbIUScale.mmToIU( 70 ), pcbIUScale.mmToIU( 50 ) );
+
+    // Backdrilled via A, routed only shallow (In1_Cu) -> no signal beyond the In2_Cu must-cut.
+    CreateBackdrilledVia( posA, netCode, F_Cu, B_Cu, F_Cu, In2_Cu, pcbIUScale.mmToIU( 0.5 ) );
+
+    // A plain full-span through via B on the same net.
+    PCB_VIA* viaB = new PCB_VIA( m_board.get() );
+    viaB->SetPosition( posB );
+    viaB->SetLayerPair( F_Cu, B_Cu );
+    viaB->SetDrill( pcbIUScale.mmToIU( 0.3 ) );
+    viaB->SetWidth( PADSTACK::ALL_LAYERS, pcbIUScale.mmToIU( 0.6 ) );
+    viaB->SetNetCode( netCode );
+    m_board->Add( viaB );
+
+    // Connect A and B (same cluster) with a shallow In1_Cu track.
+    CreateTrack( posA, posB, In1_Cu, netCode );
+    RebuildConnectivity();
+
+    std::filesystem::path dir =
+            WriteBackdrillStubRule( m_board.get(), wxT( "multi" ), wxT( "0.1mm" ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_BACKDRILL_STUB_TOO_LONG );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+
+    std::filesystem::remove_all( dir );
 }
