@@ -333,6 +333,10 @@ DRC_ITEM DRC_ITEM::postMachiningDepthInvalid( DRCE_POST_MACHINING_DEPTH_INVALID,
         _HKI( "Invalid post-machining depth" ),
         wxT( "post_machining_depth_invalid" ) );
 
+DRC_ITEM DRC_ITEM::backdrillToCopperClearance( DRCE_BACKDRILL_TO_COPPER_CLEARANCE,
+        _HKI( "Backdrill clearance violation" ),
+        wxT( "backdrill_to_copper_clearance" ) );
+
 DRC_ITEM DRC_ITEM::trackNotCenteredOnVia( DRCE_TRACK_NOT_CENTERED_ON_VIA,
         _HKI( "Track endpoint not centered on via" ),
         wxT( "track_not_centered_on_via" ) );
@@ -370,6 +374,7 @@ std::vector<std::reference_wrapper<RC_ITEM>> DRC_ITEM::allItemTypes( {
         DRC_ITEM::backdrillInvalidSpan,
         DRC_ITEM::backdrillStubTooLong,
         DRC_ITEM::postMachiningDepthInvalid,
+        DRC_ITEM::backdrillToCopperClearance,
         DRC_ITEM::trackNotCenteredOnVia,
         DRC_ITEM::tuningProfileImplicitRules,
 
@@ -505,6 +510,7 @@ std::shared_ptr<DRC_ITEM> DRC_ITEM::Create( int aErrorCode )
     case DRCE_BACKDRILL_INVALID_SPAN:       return std::make_shared<DRC_ITEM>( backdrillInvalidSpan );
     case DRCE_BACKDRILL_STUB_TOO_LONG:      return std::make_shared<DRC_ITEM>( backdrillStubTooLong );
     case DRCE_POST_MACHINING_DEPTH_INVALID: return std::make_shared<DRC_ITEM>( postMachiningDepthInvalid );
+    case DRCE_BACKDRILL_TO_COPPER_CLEARANCE: return std::make_shared<DRC_ITEM>( backdrillToCopperClearance );
     case DRCE_TRACK_NOT_CENTERED_ON_VIA:    return std::make_shared<DRC_ITEM>( trackNotCenteredOnVia );
 
     default:

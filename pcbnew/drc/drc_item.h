@@ -124,7 +124,9 @@ enum PCB_DRC_CODE
 
     DRCE_POST_MACHINING_DEPTH_INVALID, // Counterbore/countersink depth reaches through the board
 
-    DRCE_LAST = DRCE_POST_MACHINING_DEPTH_INVALID
+    DRCE_BACKDRILL_TO_COPPER_CLEARANCE, // Backdrill bore too close to copper (backdrill_clearance)
+
+    DRCE_LAST = DRCE_BACKDRILL_TO_COPPER_CLEARANCE
 };
 
 
@@ -266,6 +268,7 @@ private:
     static DRC_ITEM backdrillInvalidSpan;
     static DRC_ITEM backdrillStubTooLong;
     static DRC_ITEM postMachiningDepthInvalid;
+    static DRC_ITEM backdrillToCopperClearance;
     static DRC_ITEM trackNotCenteredOnVia;
     static DRC_ITEM schematicFieldsParity;
 
