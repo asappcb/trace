@@ -114,8 +114,18 @@ static std::shared_ptr<SHAPE_SEGMENT> getHoleShape( BOARD_ITEM* aItem )
 
 bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
 {
+    // A dedicated backdrill_hole_to_hole rule governs spacing for pairs involving an enlarged
+    // backdrill bore; the provider must run (and report DRCE_BACKDRILL_HOLE_TO_HOLE) even when the
+    // ordinary hole-to-hole codes are ignored.
+    m_hasBackdrillHoleToHoleRules =
+            m_drcEngine->HasRulesForConstraintType( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT );
+
+    bool checkBackdrill = m_hasBackdrillHoleToHoleRules
+                          && !m_drcEngine->IsErrorLimitExceeded( DRCE_BACKDRILL_HOLE_TO_HOLE );
+
     if( m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_TOO_CLOSE )
-            && m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_COLOCATED ) )
+            && m_drcEngine->IsErrorLimitExceeded( DRCE_DRILLED_HOLES_COLOCATED )
+            && !checkBackdrill )
     {
         REPORT_AUX( wxT( "Hole to hole violations ignored. Tests not run." ) );
         return true;        // continue with other tests
@@ -128,12 +138,8 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
     bool hasHoleToHole = m_drcEngine->QueryWorstConstraint( HOLE_TO_HOLE_CONSTRAINT, worstConstraint );
     m_largestHoleToHoleClearance = hasHoleToHole ? worstConstraint.GetValue().Min() : 0;
 
-    // A dedicated backdrill_hole_to_hole rule governs spacing for pairs involving an enlarged
-    // backdrill bore; fold its worst value into the search margin too, and let the provider run
-    // even when there is no ordinary hole_to_hole constraint.
-    m_hasBackdrillHoleToHoleRules =
-            m_drcEngine->HasRulesForConstraintType( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT );
-
+    // Fold the worst backdrill_hole_to_hole value into the search margin too, and let the provider
+    // run even when there is no ordinary hole_to_hole constraint.
     if( m_hasBackdrillHoleToHoleRules
             && m_drcEngine->QueryWorstConstraint( BACKDRILL_HOLE_TO_HOLE_CONSTRAINT, worstConstraint ) )
     {

@@ -1762,7 +1762,8 @@ DRC_CONSTRAINT DRC_ENGINE::EvalRules( DRC_CONSTRAINT_T aConstraintType, const BO
                         REPORT( _( "Rule layer not matched; rule ignored." ) )
                     }
                 }
-                else if( c->constraint.m_Type == HOLE_TO_HOLE_CONSTRAINT
+                else if( ( c->constraint.m_Type == HOLE_TO_HOLE_CONSTRAINT
+                           || c->constraint.m_Type == BACKDRILL_HOLE_TO_HOLE_CONSTRAINT )
                         && ( !a->HasHole() || !b->HasHole() ) )
                 {
                     // Hole-to-hole only applies between two mechanical holes; this covers both

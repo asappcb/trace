@@ -1708,6 +1708,34 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToHoleDedicated, BACKDRILL_TEST_FIXTURE
 
 
 /**
+ * backdrill_hole_to_hole is independent of the ordinary hole codes: setting both
+ * DRCE_DRILLED_HOLES_TOO_CLOSE and DRCE_DRILLED_HOLES_COLOCATED to Ignore must not suppress it
+ * (guards the top-of-Run() early-out).
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToHoleWithOrdinaryIgnored, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCSeverities[DRCE_DRILLED_HOLES_TOO_CLOSE] = SEVERITY::RPT_SEVERITY_IGNORE;
+    bds.m_DRCSeverities[DRCE_DRILLED_HOLES_COLOCATED] = SEVERITY::RPT_SEVERITY_IGNORE;
+
+    int netCode = GetNetCode( "TestNet" );
+    CreateBackdrilledVia( VECTOR2I( 0, 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.8 ) );
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 1.0 ), 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.8 ) );
+
+    std::filesystem::path dir =
+            WriteBackdrillHoleToHoleRule( m_board.get(), wxT( "ordignored" ), wxT( "0.5mm" ) );
+
+    std::vector<DRC_ITEM> backdrill = RunDRCForErrorCode( DRCE_BACKDRILL_HOLE_TO_HOLE );
+    BOOST_CHECK_GE( backdrill.size(), 1u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
  * The dedicated backdrill hole-to-hole item must be registered so its severity shows in Board Setup
  * and its exclusions round-trip through the settings key.
  */
