@@ -293,4 +293,50 @@ BOOST_AUTO_TEST_CASE( BackdrillModeProtoRoundTrip )
 }
 
 
+// The no-backdrill case must serialize BM_NO_BACKDRILL, which is deliberately distinct from the
+// proto3 default BM_UNKNOWN (0): a client can tell "explicitly no backdrill" from "field absent".
+// A single-sided mode must also round-trip through the slot-derived accessor.
+BOOST_AUTO_TEST_CASE( BackdrillModeProtoNoBackdrillAndOneSided )
+{
+    // No backdrill -> BM_NO_BACKDRILL (not the unset default).
+    {
+        PADSTACK stack( nullptr );
+        stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+        BOOST_REQUIRE( stack.GetBackdrillMode() == BACKDRILL_MODE::NO_BACKDRILL );
+
+        google::protobuf::Any any;
+        stack.Serialize( any );
+
+        kiapi::board::types::PadStack proto;
+        BOOST_REQUIRE( any.UnpackTo( &proto ) );
+        BOOST_CHECK( proto.backdrill_mode() == kiapi::board::types::BM_NO_BACKDRILL );
+
+        PADSTACK restored( nullptr );
+        BOOST_REQUIRE( restored.Deserialize( any ) );
+        BOOST_CHECK( restored.GetBackdrillMode() == BACKDRILL_MODE::NO_BACKDRILL );
+    }
+
+    // Bottom-only backdrill -> BM_BACKDRILL_BOTTOM.
+    {
+        PADSTACK stack( nullptr );
+        stack.Drill().size = { pcbIUScale.mmToIU( 0.4 ), pcbIUScale.mmToIU( 0.4 ) };
+        stack.SetBackdrillMode( BACKDRILL_MODE::BACKDRILL_BOTTOM );
+        stack.SetBackdrillSize( false, pcbIUScale.mmToIU( 0.7 ) );
+        stack.SetBackdrillEndLayer( false, In3_Cu );
+        BOOST_REQUIRE( stack.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_BOTTOM );
+
+        google::protobuf::Any any;
+        stack.Serialize( any );
+
+        kiapi::board::types::PadStack proto;
+        BOOST_REQUIRE( any.UnpackTo( &proto ) );
+        BOOST_CHECK( proto.backdrill_mode() == kiapi::board::types::BM_BACKDRILL_BOTTOM );
+
+        PADSTACK restored( nullptr );
+        BOOST_REQUIRE( restored.Deserialize( any ) );
+        BOOST_CHECK( restored.GetBackdrillMode() == BACKDRILL_MODE::BACKDRILL_BOTTOM );
+    }
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
