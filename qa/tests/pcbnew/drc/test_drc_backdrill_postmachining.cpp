@@ -978,3 +978,56 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToHoleClear, BACKDRILL_TEST_FIXTURE )
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
     BOOST_CHECK_EQUAL( violations.size(), 0u );
 }
+
+
+/**
+ * A counterbore/countersink post-machining enlarges the drilled bore just like a backdrill, so
+ * hole-to-hole clearance must account for it too.  Two vias whose 0.3mm primary drills clear the
+ * minimum but whose 0.5mm front counterbores do not must be flagged.  (Under the backdrill-only
+ * model the primary drills are 0.4mm apart and this raised no violation.)
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPostMachiningHoleToHoleTooClose, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.3 );
+    bds.m_DRCEngine->InitEngine( wxFileName() ); // rebuild implicit board-setup rules
+
+    int netCode = GetNetCode( "TestNet" );
+
+    // Centres 0.7mm apart: 0.3mm primary drills are 0.4mm apart (clear) but the 0.5mm front
+    // counterbores are only 0.2mm apart, under the 0.3mm hole-to-hole minimum.
+    CreatePostMachinedVia( VECTOR2I( 0, 0 ), netCode,
+                           PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE,
+                           pcbIUScale.mmToIU( 0.5 ), pcbIUScale.mmToIU( 0.2 ) );
+    CreatePostMachinedVia( VECTOR2I( pcbIUScale.mmToIU( 0.7 ), 0 ), netCode,
+                           PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE,
+                           pcbIUScale.mmToIU( 0.5 ), pcbIUScale.mmToIU( 0.2 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * The same two post-machined vias, spaced so even the counterbores clear the minimum, must not be
+ * flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPostMachiningHoleToHoleClear, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.3 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int netCode = GetNetCode( "TestNet" );
+
+    // Centres 1.2mm apart: the 0.5mm counterbores are 0.7mm apart, well over the 0.3mm minimum.
+    CreatePostMachinedVia( VECTOR2I( 0, 0 ), netCode,
+                           PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE,
+                           pcbIUScale.mmToIU( 0.5 ), pcbIUScale.mmToIU( 0.2 ) );
+    CreatePostMachinedVia( VECTOR2I( pcbIUScale.mmToIU( 1.2 ), 0 ), netCode,
+                           PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE,
+                           pcbIUScale.mmToIU( 0.5 ), pcbIUScale.mmToIU( 0.2 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}

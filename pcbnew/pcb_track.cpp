@@ -1207,6 +1207,47 @@ std::shared_ptr<SHAPE_SEGMENT> PCB_VIA::GetEffectiveHoleShape() const
     return std::make_shared<SHAPE_SEGMENT>( SEG( m_Start, m_Start ), Padstack().Drill().size.x );
 }
 
+
+int PCB_VIA::GetLargestHoleDiameter() const
+{
+    // Worst-case bore across the whole barrel (no layer filter), so callers that treat the hole as
+    // piercing all layers see the widest drilled/machined diameter.  Folds the same enlargements
+    // PCB_VIA::GetEffectiveShape() considers on a backdrilled/post-machined layer -- front/back
+    // post-machining and the secondary drill -- plus the tertiary (bottom) backdrill, which
+    // GetEffectiveShape() does not currently account for.
+    int diameter = GetDrillValue();
+
+    const PADSTACK::DRILL_PROPS& secDrill = m_padStack.SecondaryDrill();
+
+    if( secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER )
+        diameter = std::max( diameter, secDrill.size.x );
+
+    const PADSTACK::DRILL_PROPS& terDrill = m_padStack.TertiaryDrill();
+
+    if( terDrill.start != UNDEFINED_LAYER && terDrill.end != UNDEFINED_LAYER )
+        diameter = std::max( diameter, terDrill.size.x );
+
+    const PADSTACK::POST_MACHINING_PROPS& frontPM = m_padStack.FrontPostMachining();
+
+    if( frontPM.mode.has_value()
+            && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+            && *frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+    {
+        diameter = std::max( diameter, frontPM.size );
+    }
+
+    const PADSTACK::POST_MACHINING_PROPS& backPM = m_padStack.BackPostMachining();
+
+    if( backPM.mode.has_value()
+            && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
+            && *backPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
+    {
+        diameter = std::max( diameter, backPM.size );
+    }
+
+    return diameter;
+}
+
 // clang-format off: the suggestion is slightly less readable
 void PCB_VIA::SetFrontTentingMode( TENTING_MODE aMode )
 {
