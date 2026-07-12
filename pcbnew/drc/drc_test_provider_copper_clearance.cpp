@@ -265,8 +265,10 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
                 testClearance = testShorting = false;
 
             // Substitute the hole shape when the pad does not flash this layer.  Use the per-layer
-            // bore so a backdrilled/post-machined layer is represented at its enlarged hole, matching
-            // what GetEffectiveShape( layer ) yields for the same pad when it is the reference item.
+            // bore so a backdrilled/post-machined layer is represented at its enlarged hole rather
+            // than the primary drill, aligning with the enlarged-bore model the reference-side
+            // GetEffectiveShape( layer ) already uses (which otherwise makes the result depend on
+            // which side of the pair the pad lands on).
             otherShape_shared_ptr = pad->GetEffectiveHoleShape( layer );
         }
     }
@@ -275,9 +277,12 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
         PCB_VIA* via = static_cast<PCB_VIA*>( other );
 
         // Substitute the hole shape when the via does not flash this layer.  Use the per-layer bore
-        // so a backdrilled layer is represented at its enlarged hole (barrel removed), matching what
-        // GetEffectiveShape( layer ) yields for the same via when it is the reference item -- the
-        // primary drill was inconsistent with that and with the dedicated hole test.
+        // so a backdrilled layer is represented at its enlarged hole (barrel removed) rather than
+        // the primary drill, aligning with the enlarged-bore model the reference-side
+        // GetEffectiveShape( layer ) already uses.  (The two are not byte-identical -- this overload
+        // also folds in the tertiary drill and tapered post-machining that GetEffectiveShape omits
+        // -- but both cover the common secondary-drill backdrill, which is what made the result
+        // depend on which side of the pair the via landed on.)
         if( !via->FlashLayer( layer ) )
             otherShape_shared_ptr = via->GetEffectiveHoleShape( layer );
     }
