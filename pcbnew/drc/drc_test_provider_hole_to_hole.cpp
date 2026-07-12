@@ -17,11 +17,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <algorithm>
+
 #include <common.h>
 #include <board_design_settings.h>
 #include <footprint.h>
 #include <pad.h>
 #include <pcb_track.h>
+#include <padstack.h>
 #include <geometry/shape_segment.h>
 #include <drc/drc_engine.h>
 #include <drc/drc_item.h>
@@ -65,8 +68,16 @@ static std::shared_ptr<SHAPE_SEGMENT> getHoleShape( BOARD_ITEM* aItem )
     if( aItem->Type() == PCB_VIA_T )
     {
         PCB_VIA* via = static_cast<PCB_VIA*>( aItem );
-        return std::make_shared<SHAPE_SEGMENT>( via->GetCenter(), via->GetCenter(),
-                                                via->GetDrillValue() );
+
+        // A backdrill enlarges the mechanically-drilled bore on the layers it spans; model the
+        // hole at the largest drilled diameter so hole-to-hole clearance accounts for the
+        // backdrill bore, not just the primary via drill.
+        const PADSTACK& padstack = via->Padstack();
+        int             diameter = std::max( { via->GetDrillValue(),
+                                               padstack.SecondaryDrill().size.x,
+                                               padstack.TertiaryDrill().size.x } );
+
+        return std::make_shared<SHAPE_SEGMENT>( via->GetCenter(), via->GetCenter(), diameter );
     }
     else if( aItem->Type() == PCB_PAD_T )
     {
@@ -95,6 +106,30 @@ bool DRC_TEST_PROVIDER_HOLE_TO_HOLE::Run()
     if( m_drcEngine->QueryWorstConstraint( HOLE_TO_HOLE_CONSTRAINT, worstClearanceConstraint ) )
     {
         m_largestHoleToHoleClearance = worstClearanceConstraint.GetValue().Min();
+
+        // Backdrills enlarge the drilled bore beyond the primary via drill.  The r-tree indexes
+        // holes by their primary GetEffectiveHoleShape(), so widen the search margin by the
+        // largest backdrill enlargement to be sure pairs whose backdrill bores (not just primary
+        // drills) are within clearance are still visited; the precise per-pair test uses the
+        // actual largest hole diameter.
+        int maxBackdrillEnlargement = 0;
+
+        for( PCB_TRACK* track : m_drcEngine->GetBoard()->Tracks() )
+        {
+            if( track->Type() != PCB_VIA_T )
+                continue;
+
+            PCB_VIA*        via = static_cast<PCB_VIA*>( track );
+            const PADSTACK& padstack = via->Padstack();
+            int             largest = std::max( { via->GetDrillValue(),
+                                                  padstack.SecondaryDrill().size.x,
+                                                  padstack.TertiaryDrill().size.x } );
+
+            maxBackdrillEnlargement = std::max( maxBackdrillEnlargement,
+                                                largest - via->GetDrillValue() );
+        }
+
+        m_largestHoleToHoleClearance += maxBackdrillEnlargement;
     }
     else
     {
