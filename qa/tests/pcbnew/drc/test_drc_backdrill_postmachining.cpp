@@ -930,3 +930,51 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillStubMultiConductorNet, BACKDRILL_TEST_FIXTU
 
     std::filesystem::remove_all( dir );
 }
+
+
+/**
+ * Two backdrilled vias whose primary drills clear the hole-to-hole minimum but whose enlarged
+ * backdrill bores do not must be flagged: the hole-to-hole check now models the via hole at the
+ * largest drilled diameter.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToHoleTooClose, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.3 );
+    bds.m_DRCEngine->InitEngine( wxFileName() ); // rebuild implicit board-setup rules
+
+    int netCode = GetNetCode( "TestNet" );
+
+    // Centres 0.7mm apart: 0.3mm primary drills are 0.4mm apart (clear) but the 0.5mm backdrill
+    // bores are only 0.2mm apart, under the 0.3mm hole-to-hole minimum.
+    CreateBackdrilledVia( VECTOR2I( 0, 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.5 ) );
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 0.7 ), 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.5 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * The same two backdrilled vias, spaced so even the backdrill bores clear the minimum, must not
+ * be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToHoleClear, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleToHoleMin = pcbIUScale.mmToIU( 0.3 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int netCode = GetNetCode( "TestNet" );
+
+    // Centres 1.2mm apart: the 0.5mm backdrill bores are 0.7mm apart, well over the 0.3mm minimum.
+    CreateBackdrilledVia( VECTOR2I( 0, 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.5 ) );
+    CreateBackdrilledVia( VECTOR2I( pcbIUScale.mmToIU( 1.2 ), 0 ), netCode, F_Cu, B_Cu, F_Cu, In3_Cu,
+                          pcbIUScale.mmToIU( 0.5 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}
