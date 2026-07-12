@@ -984,6 +984,30 @@ std::filesystem::path WriteBackdrillStubRule( BOARD* aBoard, const wxString& aTa
     aBoard->GetDesignSettings().m_DRCEngine->InitEngine( wxFileName( druPath.string() ) );
     return tmpDir;
 }
+
+
+// Write a .kicad_dru with a single backdrill_clearance min rule and point the fixture's DRC engine
+// at it.  Returns the temp dir so the caller can remove it.
+std::filesystem::path WriteBackdrillClearanceRule( BOARD* aBoard, const wxString& aTag,
+                                                   const wxString& aMinClearance )
+{
+    namespace fs = std::filesystem;
+    fs::path tmpDir = fs::temp_directory_path()
+                      / ( "kicad_drc_backdrill_clr_" + aTag.ToStdString() );
+    fs::create_directories( tmpDir );
+    fs::path druPath = tmpDir / "backdrill_clearance.kicad_dru";
+
+    {
+        std::ofstream out( druPath );
+        out << "(version 1)\n"
+            << "(rule \"BackdrillClr\"\n"
+            << "    (constraint backdrill_clearance (min " << aMinClearance.ToStdString() << "))\n"
+            << ")\n";
+    }
+
+    aBoard->GetDesignSettings().m_DRCEngine->InitEngine( wxFileName( druPath.string() ) );
+    return tmpDir;
+}
 } // namespace
 
 
@@ -1536,4 +1560,59 @@ BOOST_AUTO_TEST_CASE( PostMachiningDepthItemRoundTrips )
     std::shared_ptr<DRC_ITEM> byKey = DRC_ITEM::Create( wxT( "post_machining_depth_invalid" ) );
     BOOST_REQUIRE( byKey );
     BOOST_CHECK_EQUAL( byKey->GetErrorCode(), DRCE_POST_MACHINING_DEPTH_INVALID );
+}
+
+
+/**
+ * A backdrill_clearance custom rule governs the clearance of an enlarged backdrill bore to
+ * neighbouring-net copper, distinct from ordinary hole clearance.  A bore that clears the lenient
+ * hole_clearance but not a stricter backdrill_clearance rule must be reported as
+ * DRCE_BACKDRILL_TO_COPPER_CLEARANCE (and not DRCE_HOLE_CLEARANCE, since the backdrilled layer uses
+ * the dedicated constraint).
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillClearanceToCopper, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+
+    int viaNet = GetNetCode( "ViaNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I viaPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+    // 0.3mm drill, 0.8mm backdrill F_Cu -> In3_Cu (bore radius 0.4mm).
+    CreateBackdrilledVia( viaPos, viaNet, F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.8 ) );
+
+    // Track (0.25mm wide) on backdrilled F_Cu, 0.8mm from the via centre: 0.275mm from the 0.4mm
+    // bore radius.  Clears the 0.1mm hole_clearance and the 0.1mm copper clearance, but not the
+    // 0.5mm backdrill_clearance rule below.
+    int x = pcbIUScale.mmToIU( 10.8 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 F_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::filesystem::path dir =
+            WriteBackdrillClearanceRule( m_board.get(), wxT( "tocopper" ), wxT( "0.5mm" ) );
+
+    // The dedicated backdrill clearance fires...
+    std::vector<DRC_ITEM> backdrill = RunDRCForErrorCode( DRCE_BACKDRILL_TO_COPPER_CLEARANCE );
+    BOOST_CHECK_GE( backdrill.size(), 1u );
+
+    // ...and the ordinary hole clearance does not (the backdrilled layer uses backdrill_clearance).
+    std::vector<DRC_ITEM> hole = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
+    BOOST_CHECK_EQUAL( hole.size(), 0u );
+
+    std::filesystem::remove_all( dir );
+}
+
+
+/**
+ * The dedicated backdrill-clearance item must be registered so its severity shows in Board Setup
+ * and its exclusions round-trip through the settings key.
+ */
+BOOST_AUTO_TEST_CASE( BackdrillToCopperClearanceItemRoundTrips )
+{
+    std::shared_ptr<DRC_ITEM> byKey = DRC_ITEM::Create( wxT( "backdrill_to_copper_clearance" ) );
+    BOOST_REQUIRE( byKey );
+    BOOST_CHECK_EQUAL( byKey->GetErrorCode(), DRCE_BACKDRILL_TO_COPPER_CLEARANCE );
 }
