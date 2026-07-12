@@ -59,7 +59,8 @@ class DRC_TEST_PROVIDER_COPPER_CLEARANCE : public DRC_TEST_PROVIDER
 public:
     DRC_TEST_PROVIDER_COPPER_CLEARANCE () :
             DRC_TEST_PROVIDER(),
-            m_drcEpsilon( 0 )
+            m_drcEpsilon( 0 ),
+            m_largestBoreEnlargement( 0 )
     {}
 
     virtual ~DRC_TEST_PROVIDER_COPPER_CLEARANCE() = default;
@@ -103,6 +104,12 @@ private:
 
 private:
     int m_drcEpsilon;
+
+    // Largest amount (over all vias) by which a backdrill or post-machining bore exceeds the via's
+    // primary drill.  The copper r-tree indexes vias by their primary/copper geometry, so hole
+    // clearance queries are widened by this so copper that only clears the primary drill but not
+    // the enlarged bore is still visited.  Zero when no via is backdrilled/post-machined.
+    int m_largestBoreEnlargement;
 };
 
 
@@ -117,6 +124,24 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::Run()
     }
 
     m_drcEpsilon = m_board->GetDesignSettings().GetDRCEpsilon();
+
+    // A backdrill or post-machining bore can be wider than the via's primary drill (and its
+    // copper).  The copper item r-tree indexes vias by their copper geometry, so widen hole
+    // clearance search margins by the largest such enlargement to be sure copper that clears the
+    // primary drill but not the enlarged bore is still visited.  Stays 0 (no behaviour change)
+    // when nothing on the board is backdrilled or post-machined.
+    m_largestBoreEnlargement = 0;
+
+    for( PCB_TRACK* track : m_board->Tracks() )
+    {
+        if( track->Type() != PCB_VIA_T )
+            continue;
+
+        PCB_VIA* via = static_cast<PCB_VIA*>( track );
+
+        m_largestBoreEnlargement = std::max( m_largestBoreEnlargement,
+                                             via->GetLargestHoleDiameter() - via->GetDrillValue() );
+    }
 
     if( !m_drcEngine->IsErrorLimitExceeded( DRCE_CLEARANCE ) )
     {
@@ -231,6 +256,9 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
     {
         PCB_VIA* via = static_cast<PCB_VIA*>( other );
 
+        // Substitute shape for the copper-clearance test when the via does not flash this layer.
+        // This stays at the primary drill (not the enlarged backdrill bore); the dedicated hole
+        // test below models the bore per-layer via GetEffectiveHoleShape( layer ).
         if( !via->FlashLayer( layer ) )
             otherShape_shared_ptr = via->GetEffectiveHoleShape();
     }
@@ -328,7 +356,7 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
             if( b[ii]->Type() == PCB_VIA_T )
             {
                 if( b[ii]->GetLayerSet().Contains( layer ) )
-                    holeShape = b[ii]->GetEffectiveHoleShape();
+                    holeShape = static_cast<PCB_VIA*>( b[ii] )->GetEffectiveHoleShape( layer );
                 else
                     continue;
             }
@@ -388,7 +416,9 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testItemAgainstZone( BOARD_ITEM* aItem,
     BOX2I itemBBox = aItem->GetBoundingBox();
     BOX2I worstCaseBBox = itemBBox;
 
-    worstCaseBBox.Inflate( m_board->m_DRCMaxClearance );
+    // A backdrilled/post-machined via hole can extend past its copper bounding box, so include the
+    // largest bore enlargement (0 unless the board uses backdrills) in the coarse reject.
+    worstCaseBBox.Inflate( m_board->m_DRCMaxClearance + m_largestBoreEnlargement );
 
     if( !worstCaseBBox.Intersects( aZone->GetBoundingBox() ) )
         return;
@@ -486,7 +516,7 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testItemAgainstZone( BOARD_ITEM* aItem,
         if( aItem->Type() == PCB_VIA_T )
         {
             if( aItem->GetLayerSet().Contains( aLayer ) )
-                holeShape = aItem->GetEffectiveHoleShape();
+                holeShape = static_cast<PCB_VIA*>( aItem )->GetEffectiveHoleShape( aLayer );
         }
         else
         {
@@ -500,7 +530,11 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testItemAgainstZone( BOARD_ITEM* aItem,
 
             if( constraint.GetSeverity() != RPT_SEVERITY_IGNORE && clearance > 0 )
             {
-                if( zoneTree->QueryColliding( itemBBox, holeShape.get(), aLayer, sub_e( clearance ), &actual, &pos ) )
+                // Search from the hole's own bounding box: an enlarged backdrill bore can extend
+                // past the via's copper bounding box (itemBBox), which the copper-clearance query
+                // above uses.
+                if( zoneTree->QueryColliding( holeShape->BBox(), holeShape.get(), aLayer,
+                                              sub_e( clearance ), &actual, &pos ) )
                 {
                     std::shared_ptr<DRC_ITEM> drcItem = DRC_ITEM::Create( DRCE_HOLE_CLEARANCE );
                     drcItem->SetErrorDetail( formatMsg( _( "(%s clearance %s; actual %s)" ),
@@ -677,7 +711,7 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testTrackClearances()
 
                                 return !m_drcEngine->IsCancelled();
                             },
-                            m_board->m_DRCMaxClearance );
+                            m_board->m_DRCMaxClearance + m_largestBoreEnlargement );
 
                     auto zoneIt = m_board->m_DRCCopperZonesByLayer.find( layer );
 
@@ -926,7 +960,8 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testPadAgainstItem( PAD* pad, SHAPE* pa
             clearance = 0;
 
         if( clearance > 0 )
-            doTestHole( pad, padShape, otherVia, otherVia->GetEffectiveHoleShape().get(), clearance );
+            doTestHole( pad, padShape, otherVia,
+                        otherVia->GetEffectiveHoleShape( aLayer ).get(), clearance );
     }
 
     return !has_error;
@@ -978,7 +1013,7 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testPadClearances( )
                                     testPadAgainstItem( pad, padShape.get(), layer, other );
                                     return !m_drcEngine->IsCancelled();
                                 },
-                                m_board->m_DRCMaxClearance );
+                                m_board->m_DRCMaxClearance + m_largestBoreEnlargement );
 
                         auto zoneIt = m_board->m_DRCCopperZonesByLayer.find( layer );
 
@@ -1116,7 +1151,7 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testGraphicClearances()
 
                             return !m_drcEngine->IsCancelled();
                         },
-                        m_board->m_DRCMaxClearance );
+                        m_board->m_DRCMaxClearance + m_largestBoreEnlargement );
             };
 
     for( BOARD_ITEM* item : m_board->Drawings() )

@@ -1031,3 +1031,95 @@ BOOST_FIXTURE_TEST_CASE( DRCPostMachiningHoleToHoleClear, BACKDRILL_TEST_FIXTURE
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_DRILLED_HOLES_TOO_CLOSE );
     BOOST_CHECK_EQUAL( violations.size(), 0u );
 }
+
+
+/**
+ * Hole-to-copper clearance must account for the enlarged backdrill bore.  A different-net track on
+ * a backdrilled layer, clear of the 0.3mm primary drill but inside the 0.8mm backdrill bore's
+ * clearance, must raise a hole-clearance violation.  The track sits far enough out that the via is
+ * only reached once the copper r-tree search margin is widened by the bore enlargement AND the
+ * hole is modelled at the bore, so this exercises both halves of the fix.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToCopperTooClose, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.25 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int viaNet = GetNetCode( "ViaNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I viaPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+
+    // 0.3mm primary drill, 0.6mm copper, 0.8mm backdrill F_Cu -> In3_Cu.
+    CreateBackdrilledVia( viaPos, viaNet, F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.8 ) );
+
+    // Track (0.25mm wide) on the backdrilled F_Cu, 0.7mm from the via centre: 0.175mm from the
+    // 0.4mm bore radius (< 0.25mm -> violation) but 0.425mm from the 0.15mm primary radius.
+    int x = pcbIUScale.mmToIU( 10.7 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 F_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * The same via and track, but the track is on B_Cu - below the In3_Cu must-cut, so the backdrill
+ * bore never reaches it and only the 0.3mm primary drill is present there.  0.6mm out, it clears
+ * the primary drill and must NOT be flagged.  This pins the layer-awareness: a naive "largest bore
+ * on every layer" model would false-positive here.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToCopperUnaffectedLayer, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.25 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int viaNet = GetNetCode( "ViaNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I viaPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+    CreateBackdrilledVia( viaPos, viaNet, F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.8 ) );
+
+    // Track on B_Cu 0.6mm out: inside the 0.8mm bore's clearance, but the bore does not reach B_Cu;
+    // against the 0.15mm primary radius the gap is 0.325mm >= 0.25mm -> no violation.
+    int x = pcbIUScale.mmToIU( 10.6 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 B_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}
+
+
+/**
+ * A different-net track spaced clear of even the enlarged backdrill bore must not be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCBackdrillHoleToCopperClear, BACKDRILL_TEST_FIXTURE )
+{
+    BOARD_DESIGN_SETTINGS& bds = m_board->GetDesignSettings();
+    bds.m_HoleClearance = pcbIUScale.mmToIU( 0.25 );
+    bds.m_MinClearance = pcbIUScale.mmToIU( 0.1 );
+    bds.m_DRCEngine->InitEngine( wxFileName() );
+
+    int viaNet = GetNetCode( "ViaNet" );
+    int trackNet = GetNetCode( "TrackNet" );
+
+    VECTOR2I viaPos( pcbIUScale.mmToIU( 10 ), pcbIUScale.mmToIU( 10 ) );
+    CreateBackdrilledVia( viaPos, viaNet, F_Cu, B_Cu, F_Cu, In3_Cu, pcbIUScale.mmToIU( 0.8 ) );
+
+    // Track on F_Cu 1.2mm out: 0.675mm from the 0.4mm bore radius, well over the 0.25mm clearance.
+    int x = pcbIUScale.mmToIU( 11.2 );
+    CreateTrack( VECTOR2I( x, pcbIUScale.mmToIU( 9 ) ), VECTOR2I( x, pcbIUScale.mmToIU( 11 ) ),
+                 F_Cu, trackNet );
+    RebuildConnectivity();
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_HOLE_CLEARANCE );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}

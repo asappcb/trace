@@ -1248,6 +1248,38 @@ int PCB_VIA::GetLargestHoleDiameter() const
     return diameter;
 }
 
+
+std::shared_ptr<SHAPE_SEGMENT> PCB_VIA::GetEffectiveHoleShape( PCB_LAYER_ID aLayer ) const
+{
+    if( aLayer == UNDEFINED_LAYER )
+        return std::make_shared<SHAPE_SEGMENT>( SEG( m_Start, m_Start ), GetLargestHoleDiameter() );
+
+    int diameter = GetDrillValue();
+
+    // Fold in only the enlargements whose drilled span actually reaches aLayer, so the hole is
+    // reported at the primary drill on layers the backdrill/post-machining never touched.  Mirrors
+    // the per-layer tests in IsBackdrilledOrPostMachined().
+    const PADSTACK::DRILL_PROPS& secDrill = m_padStack.SecondaryDrill();
+
+    if( secDrill.size.x > 0 && secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER
+            && LAYER_RANGE::Contains( secDrill.start, secDrill.end, aLayer ) )
+    {
+        diameter = std::max( diameter, secDrill.size.x );
+    }
+
+    const PADSTACK::DRILL_PROPS& terDrill = m_padStack.TertiaryDrill();
+
+    if( terDrill.size.x > 0 && terDrill.start != UNDEFINED_LAYER && terDrill.end != UNDEFINED_LAYER
+            && LAYER_RANGE::Contains( terDrill.start, terDrill.end, aLayer ) )
+    {
+        diameter = std::max( diameter, terDrill.size.x );
+    }
+
+    diameter = std::max( diameter, GetPostMachiningKnockout( aLayer ) );
+
+    return std::make_shared<SHAPE_SEGMENT>( SEG( m_Start, m_Start ), diameter );
+}
+
 // clang-format off: the suggestion is slightly less readable
 void PCB_VIA::SetFrontTentingMode( TENTING_MODE aMode )
 {
