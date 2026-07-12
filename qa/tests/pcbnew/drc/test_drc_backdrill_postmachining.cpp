@@ -480,6 +480,45 @@ BOOST_FIXTURE_TEST_CASE( ViaEffectiveShapeOnBackdrilledLayer, BACKDRILL_TEST_FIX
 
 
 /**
+ * GetEffectiveShape( layer ) must reflect the same per-layer bore the hole clearance checks use.
+ * Regression: the inline computation in GetEffectiveShape omitted the tertiary (bottom) backdrill,
+ * so a tertiary-bored layer was rendered/checked at the primary drill.  It now delegates to
+ * GetEffectiveHoleShape( layer ) and agrees.
+ */
+BOOST_FIXTURE_TEST_CASE( ViaEffectiveShapeTertiaryBackdrill, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    PCB_VIA* via = new PCB_VIA( m_board.get() );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 40 ), pcbIUScale.mmToIU( 40 ) ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.3 ) );
+    via->SetWidth( PADSTACK::ALL_LAYERS, pcbIUScale.mmToIU( 0.6 ) );
+    via->SetNetCode( netCode );
+
+    // Bottom (tertiary) backdrill B_Cu -> In3_Cu, 1.0mm bore.
+    via->SetTertiaryDrillSize( pcbIUScale.mmToIU( 1.0 ) );
+    via->SetTertiaryDrillStartLayer( B_Cu );
+    via->SetTertiaryDrillEndLayer( In3_Cu );
+    m_board->Add( via );
+
+    // In4_Cu is inside the B_Cu -> In3_Cu tertiary span.
+    BOOST_REQUIRE( via->IsBackdrilledOrPostMachined( In4_Cu ) );
+
+    int bore = pcbIUScale.mmToIU( 1.0 );
+
+    // The hole accessor reports the tertiary bore, and GetEffectiveShape now agrees (it previously
+    // returned the 0.3mm primary drill because it ignored the tertiary drill).
+    BOOST_CHECK_EQUAL( via->GetEffectiveHoleShape( In4_Cu )->GetWidth(), bore );
+
+    std::shared_ptr<SHAPE> shape = via->GetEffectiveShape( In4_Cu );
+    BOOST_REQUIRE( shape );
+    BOOST_CHECK_EQUAL( shape->BBox().GetWidth(), bore );
+    BOOST_CHECK_GT( shape->BBox().GetWidth(), pcbIUScale.mmToIU( 0.3 ) );
+}
+
+
+/**
  * Test that connectivity correctly excludes backdrilled layers for zones
  */
 BOOST_FIXTURE_TEST_CASE( ZoneConnectivityWithBackdrill, BACKDRILL_TEST_FIXTURE )

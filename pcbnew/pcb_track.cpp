@@ -2833,37 +2833,13 @@ std::shared_ptr<SHAPE> PCB_TRACK::GetEffectiveShape( PCB_LAYER_ID aLayer, FLASHI
 
 std::shared_ptr<SHAPE> PCB_VIA::GetEffectiveShape( PCB_LAYER_ID aLayer, FLASHING aFlash ) const
 {
-    // Check if this layer has copper removed by backdrill or post-machining
+    // Check if this layer has copper removed by backdrill or post-machining.  The removed copper is
+    // the enlarged drilled/machined bore; reuse the per-layer bore the hole clearance checks see
+    // (GetEffectiveHoleShape( aLayer )) so rendering and DRC agree.  That accessor folds in the
+    // tertiary drill and the depth/taper-accurate post-machining knockout, and guards the
+    // post-machining mode with has_value() -- all of which the old inline computation here omitted.
     if( aLayer != UNDEFINED_LAYER && IsBackdrilledOrPostMachined( aLayer ) )
-    {
-        // Return the larger of the backdrill or post-machining hole
-        int holeSize = 0;
-
-        const PADSTACK::POST_MACHINING_PROPS& frontPM = Padstack().FrontPostMachining();
-        const PADSTACK::POST_MACHINING_PROPS& backPM = Padstack().BackPostMachining();
-
-        if( frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
-            && frontPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
-        {
-            holeSize = std::max( holeSize, frontPM.size );
-        }
-
-        if( backPM.mode != PAD_DRILL_POST_MACHINING_MODE::NOT_POST_MACHINED
-            && backPM.mode != PAD_DRILL_POST_MACHINING_MODE::UNKNOWN )
-        {
-            holeSize = std::max( holeSize, backPM.size );
-        }
-
-        const PADSTACK::DRILL_PROPS& secDrill = Padstack().SecondaryDrill();
-
-        if( secDrill.start != UNDEFINED_LAYER && secDrill.end != UNDEFINED_LAYER )
-            holeSize = std::max( holeSize, secDrill.size.x );
-
-        if( holeSize > 0 )
-            return std::make_shared<SHAPE_CIRCLE>( m_Start, holeSize / 2 );
-        else
-            return std::make_shared<SHAPE_CIRCLE>( m_Start, GetDrillValue() / 2 );
-    }
+        return std::make_shared<SHAPE_CIRCLE>( m_Start, GetEffectiveHoleShape( aLayer )->GetWidth() / 2 );
 
     if( aFlash == FLASHING::ALWAYS_FLASHED
             || ( aFlash == FLASHING::DEFAULT && FlashLayer( aLayer ) ) )
