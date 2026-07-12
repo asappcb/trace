@@ -103,6 +103,7 @@ set( QA_PCBNEW_SRCS
     test_idf_export.cpp
     test_d356_export.cpp
     test_step_model_color_transfer.cpp
+    test_step_backdrill_export.cpp
     test_board_netlist_updater_nested_groups.cpp
     test_step_export_modified_board.cpp
     test_pdf_output_path.cpp
