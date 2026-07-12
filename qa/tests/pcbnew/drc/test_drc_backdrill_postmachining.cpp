@@ -462,10 +462,10 @@ BOOST_FIXTURE_TEST_CASE( ZoneConnectivityWithBackdrill, BACKDRILL_TEST_FIXTURE )
             zoneConnected = true;
     }
 
-    // The connectivity algorithm should have been updated to exclude zone connections
-    // on backdrilled layers. This is the main test for connectivity changes.
-    // Note: Zone fill also creates knockouts, but connectivity should already be updated
-    BOOST_CHECK_MESSAGE( true, "Connectivity test completed - zone connection status verified" );
+    // The via is backdrilled on F_Cu, so its copper there is removed and it must NOT be
+    // reported as connected to the F_Cu zone on the same net.
+    BOOST_CHECK_MESSAGE( !zoneConnected,
+                         "Backdrilled via must not connect to the zone on the backdrilled layer" );
 }
 
 
@@ -685,10 +685,15 @@ BOOST_FIXTURE_TEST_CASE( ViaBothBackdrillAndPostMachining, BACKDRILL_TEST_FIXTUR
     // B_Cu affected by backdrill (start layer)
     BOOST_CHECK( via->IsBackdrilledOrPostMachined( B_Cu ) );
 
-    // In2_Cu is the end layer of backdrill - should NOT be affected
-    // (backdrill stops AT this layer, not through it)
-    // Note: The exact behavior depends on implementation - the drill goes TO In2_Cu
-    // Let's check that at least the layers between start and end are detected
+    // In3_Cu lies within the B_Cu -> In2_Cu backdrill path and must be detected as affected.
+    BOOST_CHECK( via->IsBackdrilledOrPostMachined( In3_Cu ) );
+
+    // In1_Cu is outside both the (front) post-machining and the (back-side) backdrill span,
+    // so it must be unaffected. This relies on the front post-machining depth (0.2mm) staying
+    // shallower than the F_Cu -> In1_Cu spacing: the fixture's default 6-layer stackup gives
+    // ~0.27mm dielectric per layer (1.6mm board, 6 x 0.035mm copper, 5 dielectrics), a
+    // comfortable ~0.09mm margin above the 0.2mm depth.
+    BOOST_CHECK( !via->IsBackdrilledOrPostMachined( In1_Cu ) );
 }
 
 
