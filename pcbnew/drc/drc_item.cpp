@@ -369,6 +369,7 @@ std::vector<std::reference_wrapper<RC_ITEM>> DRC_ITEM::allItemTypes( {
         DRC_ITEM::trackOnPostMachinedLayer,
         DRC_ITEM::backdrillInvalidSpan,
         DRC_ITEM::backdrillStubTooLong,
+        DRC_ITEM::postMachiningDepthInvalid,
         DRC_ITEM::trackNotCenteredOnVia,
         DRC_ITEM::tuningProfileImplicitRules,
 

@@ -1524,3 +1524,16 @@ BOOST_FIXTURE_TEST_CASE( DRCPostMachiningDepthFrontBackMeet, BACKDRILL_TEST_FIXT
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_POST_MACHINING_DEPTH_INVALID );
     BOOST_CHECK_GE( violations.size(), 1u );
 }
+
+
+/**
+ * The new item must be registered in DRC_ITEM::allItemTypes so it appears in the Violation Severity
+ * panel and, crucially, so its exclusions round-trip: DRC_ITEM::Create( settingsKey ) only knows
+ * items in that list, and an unknown key is silently dropped on reload.
+ */
+BOOST_AUTO_TEST_CASE( PostMachiningDepthItemRoundTrips )
+{
+    std::shared_ptr<DRC_ITEM> byKey = DRC_ITEM::Create( wxT( "post_machining_depth_invalid" ) );
+    BOOST_REQUIRE( byKey );
+    BOOST_CHECK_EQUAL( byKey->GetErrorCode(), DRCE_POST_MACHINING_DEPTH_INVALID );
+}

@@ -246,8 +246,11 @@ void DRC_TEST_PROVIDER_BACKDRILL::checkBackdrills( BOARD_ITEM* aItem, const PADS
                 []( const PADSTACK::POST_MACHINING_PROPS& aPM ) -> int
                 {
                     // A countersink with no explicit depth derives it from its diameter and angle.
+                    // The full cone angle (decidegrees) must stay below 180 deg so the half-angle is
+                    // under 90 deg and tan() stays finite (a 180+ deg "cone" has no finite depth).
                     if( aPM.depth <= 0
-                        && *aPM.mode == PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK && aPM.angle > 0 )
+                        && *aPM.mode == PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK
+                        && aPM.angle > 0 && aPM.angle < 1800 )
                     {
                         double halfAngleRad = ( aPM.angle / 10.0 ) * M_PI / 180.0 / 2.0;
                         return static_cast<int>( ( aPM.size / 2.0 ) / tan( halfAngleRad ) );
