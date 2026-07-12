@@ -125,8 +125,8 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::Run()
 
     m_drcEpsilon = m_board->GetDesignSettings().GetDRCEpsilon();
 
-    // A backdrill or post-machining bore can be wider than the via's primary drill (and its
-    // copper).  The copper item r-tree indexes vias by their copper geometry, so widen hole
+    // A backdrill or post-machining bore can be wider than a via/pad's primary drill (and its
+    // copper).  The copper item r-tree indexes them by their copper geometry, so widen hole
     // clearance search margins by the largest such enlargement to be sure copper that clears the
     // primary drill but not the enlarged bore is still visited.  Stays 0 (no behaviour change)
     // when nothing on the board is backdrilled or post-machined.
@@ -141,6 +141,21 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::Run()
 
         m_largestBoreEnlargement = std::max( m_largestBoreEnlargement,
                                              via->GetLargestHoleDiameter() - via->GetDrillValue() );
+    }
+
+    for( FOOTPRINT* footprint : m_board->Footprints() )
+    {
+        for( PAD* pad : footprint->Pads() )
+        {
+            if( !pad->HasHole() )
+                continue;
+
+            int primaryWidth = pad->GetEffectiveHoleShape()->GetWidth();
+            int enlargedWidth = pad->GetEffectiveHoleShape( UNDEFINED_LAYER )->GetWidth();
+
+            m_largestBoreEnlargement = std::max( m_largestBoreEnlargement,
+                                                 enlargedWidth - primaryWidth );
+        }
     }
 
     if( !m_drcEngine->IsErrorLimitExceeded( DRCE_CLEARANCE ) )
@@ -362,10 +377,14 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testSingleLayerItemAgainstItem( BOARD_I
             }
             else
             {
-                if( b[ii]->HasHole() )
-                    holeShape = b[ii]->GetEffectiveHoleShape();
-                else
+                if( !b[ii]->HasHole() )
                     continue;
+
+                // Pads model their backdrill/post-machining bore per layer too.
+                if( b[ii]->Type() == PCB_PAD_T )
+                    holeShape = static_cast<PAD*>( b[ii] )->GetEffectiveHoleShape( layer );
+                else
+                    holeShape = b[ii]->GetEffectiveHoleShape();
             }
 
             int netcode = b_net[ii] ? b_net[ii]->GetNetCode() : 0;
@@ -517,6 +536,10 @@ void DRC_TEST_PROVIDER_COPPER_CLEARANCE::testItemAgainstZone( BOARD_ITEM* aItem,
         {
             if( aItem->GetLayerSet().Contains( aLayer ) )
                 holeShape = static_cast<PCB_VIA*>( aItem )->GetEffectiveHoleShape( aLayer );
+        }
+        else if( aItem->Type() == PCB_PAD_T )
+        {
+            holeShape = static_cast<PAD*>( aItem )->GetEffectiveHoleShape( aLayer );
         }
         else
         {
@@ -939,7 +962,8 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testPadAgainstItem( PAD* pad, SHAPE* pa
         clearance = constraint.GetValue().Min();
 
         if( clearance > 0 )
-            doTestHole( pad, padShape, otherPad, otherPad->GetEffectiveHoleShape().get(), clearance );
+            doTestHole( pad, padShape, otherPad,
+                        otherPad->GetEffectiveHoleShape( aLayer ).get(), clearance );
     }
 
     // Pad pairs are deduplicated by pointer order in testPadClearances.
@@ -949,7 +973,8 @@ bool DRC_TEST_PROVIDER_COPPER_CLEARANCE::testPadAgainstItem( PAD* pad, SHAPE* pa
         clearance = constraint.GetValue().Min();
 
         if( clearance > 0 )
-            doTestHole( otherPad, otherShape.get(), pad, pad->GetEffectiveHoleShape().get(), clearance );
+            doTestHole( otherPad, otherShape.get(), pad,
+                        pad->GetEffectiveHoleShape( aLayer ).get(), clearance );
     }
 
     if( testHoles && otherVia && otherVia->HasHole() )

@@ -669,6 +669,18 @@ public:
     std::shared_ptr<SHAPE_SEGMENT> GetEffectiveHoleShape() const override;
 
     /**
+     * Return the pad's drilled/machined hole as seen on a specific copper layer.  On layers a
+     * backdrill or post-machining counterbore reaches, the removed bore is wider than the primary
+     * drill, so the primary hole segment's width is widened to that bore (its axis is kept, so a
+     * slotted hole stays a slot -- conservatively covering both the slot and a centred round bore);
+     * on every other layer it is the primary hole, identical to the no-argument overload.  Passing
+     * UNDEFINED_LAYER returns the layer-agnostic worst case (the widest bore anywhere).  Used by
+     * per-layer hole clearance DRC so a widened bore is checked against that layer's copper at its
+     * true size.
+     */
+    std::shared_ptr<SHAPE_SEGMENT> GetEffectiveHoleShape( PCB_LAYER_ID aLayer ) const;
+
+    /**
      * Return the radius of a minimum sized circle which fully encloses this pad.
      *
      * The center is the pad position NOT THE SHAPE POS!
