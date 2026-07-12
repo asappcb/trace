@@ -122,7 +122,9 @@ enum PCB_DRC_CODE
 
     DRCE_BACKDRILL_STUB_TOO_LONG, // Residual via barrel left by a backdrill exceeds the constraint
 
-    DRCE_LAST = DRCE_BACKDRILL_STUB_TOO_LONG
+    DRCE_POST_MACHINING_DEPTH_INVALID, // Counterbore/countersink depth reaches through the board
+
+    DRCE_LAST = DRCE_POST_MACHINING_DEPTH_INVALID
 };
 
 
@@ -263,6 +265,7 @@ private:
     static DRC_ITEM trackOnPostMachinedLayer;
     static DRC_ITEM backdrillInvalidSpan;
     static DRC_ITEM backdrillStubTooLong;
+    static DRC_ITEM postMachiningDepthInvalid;
     static DRC_ITEM trackNotCenteredOnVia;
     static DRC_ITEM schematicFieldsParity;
 

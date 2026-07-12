@@ -1461,3 +1461,79 @@ BOOST_FIXTURE_TEST_CASE( DRCBackdrillUnflashedViaClearanceProxy, BACKDRILL_TEST_
     std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_CLEARANCE );
     BOOST_CHECK_GE( violations.size(), 1u );
 }
+
+
+/**
+ * A counterbore/countersink is a partial-depth machining; a front post-machining whose depth
+ * reaches or passes through the board is not manufacturable and must be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPostMachiningDepthTooDeep, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    // Front counterbore 5mm deep on a ~1.6mm board -> straight through.
+    CreatePostMachinedVia( VECTOR2I( pcbIUScale.mmToIU( 20 ), pcbIUScale.mmToIU( 20 ) ), netCode,
+                           PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE,
+                           pcbIUScale.mmToIU( 1.0 ), pcbIUScale.mmToIU( 5.0 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_POST_MACHINING_DEPTH_INVALID );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * A shallow front counterbore that stays well inside the board must not be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPostMachiningDepthValid, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    CreatePostMachinedVia( VECTOR2I( pcbIUScale.mmToIU( 30 ), pcbIUScale.mmToIU( 20 ) ), netCode,
+                           PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE,
+                           pcbIUScale.mmToIU( 1.0 ), pcbIUScale.mmToIU( 0.3 ) );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_POST_MACHINING_DEPTH_INVALID );
+    BOOST_CHECK_EQUAL( violations.size(), 0u );
+}
+
+
+/**
+ * A front and a back counterbore that each stay inside the board but together span more than the
+ * board thickness would meet in the middle and must be flagged.
+ */
+BOOST_FIXTURE_TEST_CASE( DRCPostMachiningDepthFrontBackMeet, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    PCB_VIA* via = new PCB_VIA( m_board.get() );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( 40 ), pcbIUScale.mmToIU( 20 ) ) );
+    via->SetLayerPair( F_Cu, B_Cu );
+    via->SetDrill( pcbIUScale.mmToIU( 0.3 ) );
+    via->SetWidth( PADSTACK::ALL_LAYERS, pcbIUScale.mmToIU( 0.6 ) );
+    via->SetNetCode( netCode );
+
+    // Each 1.0mm counterbore is well inside the ~1.6mm board, but 1.0 + 1.0 > board thickness.
+    via->SetFrontPostMachiningMode( PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE );
+    via->SetFrontPostMachiningSize( pcbIUScale.mmToIU( 1.0 ) );
+    via->SetFrontPostMachiningDepth( pcbIUScale.mmToIU( 1.0 ) );
+    via->SetBackPostMachiningMode( PAD_DRILL_POST_MACHINING_MODE::COUNTERBORE );
+    via->SetBackPostMachiningSize( pcbIUScale.mmToIU( 1.0 ) );
+    via->SetBackPostMachiningDepth( pcbIUScale.mmToIU( 1.0 ) );
+    m_board->Add( via );
+
+    std::vector<DRC_ITEM> violations = RunDRCForErrorCode( DRCE_POST_MACHINING_DEPTH_INVALID );
+    BOOST_CHECK_GE( violations.size(), 1u );
+}
+
+
+/**
+ * The new item must be registered in DRC_ITEM::allItemTypes so it appears in the Violation Severity
+ * panel and, crucially, so its exclusions round-trip: DRC_ITEM::Create( settingsKey ) only knows
+ * items in that list, and an unknown key is silently dropped on reload.
+ */
+BOOST_AUTO_TEST_CASE( PostMachiningDepthItemRoundTrips )
+{
+    std::shared_ptr<DRC_ITEM> byKey = DRC_ITEM::Create( wxT( "post_machining_depth_invalid" ) );
+    BOOST_REQUIRE( byKey );
+    BOOST_CHECK_EQUAL( byKey->GetErrorCode(), DRCE_POST_MACHINING_DEPTH_INVALID );
+}
