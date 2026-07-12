@@ -789,6 +789,36 @@ BOOST_FIXTURE_TEST_CASE( PadBackPostMachiningLayerDetection, BACKDRILL_TEST_FIXT
 
 
 /**
+ * A pad's front countersink narrows with depth, so its per-layer hole must taper: wider near the
+ * surface (F_Cu) than deeper (In1_Cu).  Regression: the pad hole accessor used the raw counterbore
+ * size on every affected layer (like the via before it used GetPostMachiningKnockout), reporting
+ * the same width on both.
+ */
+BOOST_FIXTURE_TEST_CASE( PadPostMachiningHoleTapers, BACKDRILL_TEST_FIXTURE )
+{
+    int netCode = GetNetCode( "TestNet" );
+
+    FOOTPRINT* fp = CreateFootprintWithPad(
+            VECTOR2I( pcbIUScale.mmToIU( 120 ), pcbIUScale.mmToIU( 10 ) ), netCode );
+    PAD* pad = fp->Pads().front();
+
+    // Front countersink, 2.0mm at the surface, 90deg, 0.8mm deep (reaches F_Cu and In1_Cu).
+    SetPadPostMachining( pad, true, PAD_DRILL_POST_MACHINING_MODE::COUNTERSINK,
+                         pcbIUScale.mmToIU( 2.0 ), pcbIUScale.mmToIU( 0.8 ) );
+
+    int wF = pad->GetEffectiveHoleShape( F_Cu )->GetWidth();
+    int wIn1 = pad->GetEffectiveHoleShape( In1_Cu )->GetWidth();
+
+    // At the surface the hole is the full 2.0mm countersink; deeper it has tapered smaller.
+    BOOST_CHECK_EQUAL( wF, pcbIUScale.mmToIU( 2.0 ) );
+    BOOST_CHECK_GT( wF, wIn1 );
+
+    // In1_Cu is still inside the countersink, so wider than the 0.8mm primary drill.
+    BOOST_CHECK_GT( wIn1, pcbIUScale.mmToIU( 0.8 ) );
+}
+
+
+/**
  * Combined test: both backdrill and post-machining on same via
  */
 BOOST_FIXTURE_TEST_CASE( ViaBothBackdrillAndPostMachining, BACKDRILL_TEST_FIXTURE )
