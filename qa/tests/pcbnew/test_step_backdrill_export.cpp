@@ -51,16 +51,15 @@
 BOOST_AUTO_TEST_SUITE( StepBackdrillExport )
 
 
-// Build a STEP model whose stackup is a default 6-layer board, so copper Z placement is well
-// defined (F_Cu at the top surface, B_Cu at the bottom, In1..In4 between).
-static STEP_PCB_MODEL makeSixLayerModel( REPORTER& aReporter )
+// The default 6-layer stackup, so copper Z placement is well defined (F_Cu at the top surface,
+// B_Cu at the bottom, In1..In4 between). Returned by value: BOARD_STACKUP deep-copies safely.
+// STEP_PCB_MODEL owns an OCC document handle and is not safely movable, so it is constructed
+// in-place in each test rather than returned from a helper.
+static BOARD_STACKUP makeSixLayerStackup()
 {
     BOARD board;
     board.SetCopperLayerCount( 6 );
-
-    STEP_PCB_MODEL model( wxT( "backdrill_test" ), &aReporter );
-    model.SetStackup( board.GetStackupOrDefault() );
-    return model;
+    return board.GetStackupOrDefault();
 }
 
 
@@ -69,7 +68,8 @@ static STEP_PCB_MODEL makeSixLayerModel( REPORTER& aReporter )
 BOOST_AUTO_TEST_CASE( CounterboreKnockoutZExtent )
 {
     NULL_REPORTER reporter;
-    STEP_PCB_MODEL model = makeSixLayerModel( reporter );
+    STEP_PCB_MODEL model( wxT( "backdrill_test" ), &reporter );
+    model.SetStackup( makeSixLayerStackup() );
 
     const int diameter = pcbIUScale.mmToIU( 0.80 );
     const int shallow = pcbIUScale.mmToIU( 0.001 ); // reaches only the surface copper
@@ -104,7 +104,8 @@ BOOST_AUTO_TEST_CASE( CounterboreKnockoutZExtent )
 BOOST_AUTO_TEST_CASE( CountersinkKnockoutTapers )
 {
     NULL_REPORTER reporter;
-    STEP_PCB_MODEL model = makeSixLayerModel( reporter );
+    STEP_PCB_MODEL model( wxT( "backdrill_test" ), &reporter );
+    model.SetStackup( makeSixLayerStackup() );
 
     const int diameter = pcbIUScale.mmToIU( 8.0 );  // wide enough that the cone spans the board
     const int depth = pcbIUScale.mmToIU( 10.0 );    // reach every layer
@@ -141,7 +142,8 @@ BOOST_AUTO_TEST_CASE( CountersinkKnockoutTapers )
 BOOST_AUTO_TEST_CASE( BackdrillGeometryExportsToStep )
 {
     NULL_REPORTER reporter;
-    STEP_PCB_MODEL model = makeSixLayerModel( reporter );
+    STEP_PCB_MODEL model( wxT( "backdrill_test" ), &reporter );
+    model.SetStackup( makeSixLayerStackup() );
     model.SpecializeVariant( OUTPUT_FORMAT::FMT_OUT_STEP );
 
     // A 10 mm square board outline.
