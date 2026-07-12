@@ -491,6 +491,17 @@ public:
      */
     int GetLargestHoleDiameter() const;
 
+    /**
+     * Return the mechanically-drilled/machined hole shape as seen on a specific copper layer.  On
+     * layers a backdrill or post-machining counterbore reaches, the removed bore is wider than the
+     * primary drill, so the returned segment carries that enlarged diameter; on every other layer
+     * (and for a via with no backdrill/post-machining) it is the primary drill, identical to the
+     * no-argument GetEffectiveHoleShape().  Passing UNDEFINED_LAYER returns the layer-agnostic
+     * worst case (GetLargestHoleDiameter()).  Used by per-layer hole clearance DRC so a bore that
+     * has been widened on a layer is checked against that layer's copper at its true size.
+     */
+    std::shared_ptr<SHAPE_SEGMENT> GetEffectiveHoleShape( PCB_LAYER_ID aLayer ) const;
+
     MINOPTMAX<int> GetWidthConstraint( wxString* aSource = nullptr ) const override;
     MINOPTMAX<int> GetDrillConstraint( wxString* aSource = nullptr ) const;
 
