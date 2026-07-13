@@ -28,6 +28,7 @@
 
 #include <board.h>
 #include <board_swap_metrics.h>
+#include <gate_swap.h>
 #include <footprint.h>
 #include <netinfo.h>
 #include <pad.h>
@@ -358,6 +359,41 @@ BOOST_AUTO_TEST_CASE( PlannerConvergesAfterApplying )
     p4->SetNetCode( n1 );
 
     BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
+}
+
+
+// The headless applier (ApplyGateSwapPlan) must actually reassign the gate pads' net codes to the
+// planned optimal assignment -- the frame-independent path the CLI/batch optimizer uses.
+BOOST_AUTO_TEST_CASE( ApplyPlanReassignsGatePadNets )
+{
+    FOOTPRINT*             fp = nullptr;
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( true, &fp );
+    board->BuildConnectivity();
+
+    std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( board.get() );
+    BOOST_REQUIRE_EQUAL( plan.size(), 1u );
+
+    int applied = ApplyGateSwapPlan( board.get(), plan );
+    BOOST_CHECK_EQUAL( applied, 1 );
+
+    // Gate A (pads 1,2) regroups onto net1; gate B (pads 3,4) onto net2.
+    BOOST_CHECK_EQUAL( fp->FindPadByNumber( wxT( "1" ) )->GetNetCode(), 1 );
+    BOOST_CHECK_EQUAL( fp->FindPadByNumber( wxT( "2" ) )->GetNetCode(), 1 );
+    BOOST_CHECK_EQUAL( fp->FindPadByNumber( wxT( "3" ) )->GetNetCode(), 2 );
+    BOOST_CHECK_EQUAL( fp->FindPadByNumber( wxT( "4" ) )->GetNetCode(), 2 );
+
+    // The applied board is optimal: re-planning finds nothing further.
+    board->BuildConnectivity();
+    BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
+}
+
+
+// Applying an empty plan is a no-op; a null board is handled.
+BOOST_AUTO_TEST_CASE( ApplyPlanGuards )
+{
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+    BOOST_CHECK_EQUAL( ApplyGateSwapPlan( board.get(), {} ), 0 );
+    BOOST_CHECK_EQUAL( ApplyGateSwapPlan( nullptr, {} ), 0 );
 }
 
 

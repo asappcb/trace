@@ -26,6 +26,7 @@
 #include <kiplatform/ui.h>
 #include <board.h>
 #include <board_swap_metrics.h>
+#include <gate_swap.h>
 #include <base_units.h>
 #include <board_commit.h>
 #include <collectors.h>
@@ -529,175 +530,63 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
 bool EDIT_TOOL::rotateGateNets( FOOTPRINT* aFootprint, const std::vector<int>& aUnitIndices,
                                 BOARD_COMMIT* aCommit, bool aInteractive )
 {
-    const std::vector<FOOTPRINT::FP_UNIT_INFO>& units = aFootprint->GetUnitInfo();
-    const size_t                                unitCount = aUnitIndices.size();
+    GATE_SWAP_NET_CHANGES changes;
 
-    if( unitCount < 2 )
+    switch( ComputeGateSwapNetChanges( board(), aFootprint, aUnitIndices, changes ) )
+    {
+    case GATE_SWAP_RESULT::OK:
+        break;
+
+    case GATE_SWAP_RESULT::UNEQUAL_PINS:
+        if( aInteractive )
+            frame()->ShowInfoBarError(
+                    _( "Gate swapping must be performed on gates with equal pin counts." ) );
         return false;
 
-    // Verify equal pin counts across all active units.
-    const size_t pinCount = units[aUnitIndices.front()].m_pins.size();
+    case GATE_SWAP_RESULT::MISSING_PAD:
+        if( aInteractive )
+            frame()->ShowInfoBarError(
+                    _( "Gate swapping failed: pad in unit missing from footprint." ) );
+        return false;
 
-    for( int idx : aUnitIndices )
+    case GATE_SWAP_RESULT::NO_CHANGE:
+        if( aInteractive )
+            frame()->ShowInfoBarError(
+                    _( "Gate swapping has no effect: all selected gates have identical nets." ) );
+        return false;
+    }
+
+    // Interactively confirm reassigning non-selected connected pads; a batch swap includes them
+    // without prompting.
+    bool includeConnectedPads = true;
+
+    if( aInteractive && !changes.m_optional.empty() )
     {
-        if( units[idx].m_pins.size() != pinCount )
-        {
-            if( aInteractive )
-                frame()->ShowInfoBarError(
-                        _( "Gate swapping must be performed on gates with equal pin counts." ) );
+        std::vector<PAD*> connectedPads;
 
+        for( const auto& [pad, net] : changes.m_optional )
+            connectedPads.push_back( pad );
+
+        if( !PromptConnectedPadDecision( frame(), connectedPads, _( "Swap Gate Nets" ),
+                                         includeConnectedPads ) )
+        {
             return false;
         }
     }
 
-    // Build per-unit pad arrays and net vectors.
-    std::vector<std::vector<PAD*>> unitPads( unitCount );
-    std::vector<std::vector<int>>  unitNets( unitCount );
-
-    for( size_t ui = 0; ui < unitCount; ++ui )
+    for( const auto& [item, net] : changes.m_always )
     {
-        const std::vector<wxString>& pins = units[aUnitIndices[ui]].m_pins;
-
-        for( size_t pi = 0; pi < pinCount; ++pi )
-        {
-            PAD* p = aFootprint->FindPadByNumber( pins[pi] );
-
-            if( !p )
-            {
-                if( aInteractive )
-                    frame()->ShowInfoBarError(
-                            _( "Gate swapping failed: pad in unit missing from footprint." ) );
-
-                return false;
-            }
-
-            unitPads[ui].push_back( p );
-            unitNets[ui].push_back( p->GetNetCode() );
-        }
-    }
-
-    // If all unit nets match across positions, nothing to do.
-    bool allSame = true;
-
-    for( size_t pi = 0; pi < pinCount && allSame; ++pi )
-    {
-        int refNet = unitNets[0][pi];
-
-        for( size_t ui = 1; ui < unitCount; ++ui )
-        {
-            if( unitNets[ui][pi] != refNet )
-            {
-                allSame = false;
-                break;
-            }
-        }
-    }
-
-    if( allSame )
-    {
-        if( aInteractive )
-            frame()->ShowInfoBarError(
-                    _( "Gate swapping has no effect: all selected gates have identical nets." ) );
-
-        return false;
-    }
-
-    std::shared_ptr<CONNECTIVITY_DATA> connectivity = board()->GetConnectivity();
-
-    // Accumulate changes: item -> new net.
-    std::unordered_map<BOARD_CONNECTED_ITEM*, int> itemNewNets;
-    std::vector<PAD*>                              nonSelectedPadsToChange;
-
-    // Selected pads in the swap (for suppressing re-adding in connected pad handling).
-    std::unordered_set<PAD*> swapPads;
-
-    for( const auto& v : unitPads )
-        swapPads.insert( v.begin(), v.end() );
-
-    // Schedule net swaps for connectivity-attached items.
-    auto scheduleForPad = [&]( PAD* pad, int fromNet, int toNet )
-        {
-            for( BOARD_CONNECTED_ITEM* ci : connectivity->GetConnectedItems( pad, 0 ) )
-            {
-                switch( ci->Type() )
-                {
-                case PCB_TRACE_T:
-                case PCB_ARC_T:
-                case PCB_VIA_T:
-                case PCB_PAD_T:
-                    break;
-
-                default:
-                    continue;
-                }
-
-                if( ci->GetNetCode() != fromNet )
-                    continue;
-
-                itemNewNets[ ci ] = toNet;
-
-                if( ci->Type() == PCB_PAD_T )
-                {
-                    PAD* other = static_cast<PAD*>( ci );
-
-                    if( !swapPads.count( other ) )
-                        nonSelectedPadsToChange.push_back( other );
-                }
-            }
-        };
-
-    // For each position, rotate nets among units forward.
-    for( size_t pi = 0; pi < pinCount; ++pi )
-    {
-        for( size_t ui = 0; ui < unitCount; ++ui )
-        {
-            size_t toIdx = ( ui + 1 ) % unitCount;
-            scheduleForPad( unitPads[ui][pi], unitNets[ui][pi], unitNets[toIdx][pi] );
-        }
-    }
-
-    // Interactively confirm reassigning non-selected connected pads; a batch optimization includes
-    // them without prompting.
-    bool includeConnectedPads = true;
-
-    if( aInteractive
-        && !PromptConnectedPadDecision( frame(), nonSelectedPadsToChange, _( "Swap Gate Nets" ),
-                                        includeConnectedPads ) )
-    {
-        return false;
-    }
-
-    // Apply pad net swaps: rotate per position.
-    for( size_t pi = 0; pi < pinCount; ++pi )
-    {
-        for( size_t ui = 0; ui < unitCount; ++ui )
-        {
-            size_t toIdx = ( ui + 1 ) % unitCount;
-            PAD*   pad = unitPads[ui][pi];
-
-            aCommit->Modify( pad );
-            pad->SetNetCode( unitNets[toIdx][pi] );
-        }
-    }
-
-    // Apply connected items.
-    for( const auto& kv : itemNewNets )
-    {
-        BOARD_CONNECTED_ITEM* item = kv.first;
-
-        if( item->Type() == PCB_PAD_T )
-        {
-            PAD* p = static_cast<PAD*>( item );
-
-            if( swapPads.count( p ) )
-                continue;
-
-            if( !includeConnectedPads )
-                continue;
-        }
-
         aCommit->Modify( item );
-        item->SetNetCode( kv.second );
+        item->SetNetCode( net );
+    }
+
+    if( includeConnectedPads )
+    {
+        for( const auto& [pad, net] : changes.m_optional )
+        {
+            aCommit->Modify( pad );
+            pad->SetNetCode( net );
+        }
     }
 
     return true;
