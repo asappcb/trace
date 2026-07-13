@@ -47,5 +47,15 @@ int CLI::PCB_OPTIMIZE_SWAPS_COMMAND::doPerform( KIWAY& aKiway )
         return EXIT_CODES::ERR_INVALID_INPUT_FILE;
     }
 
+    // Require an explicit output: this rewrites net assignments (an optimization, not an idempotent
+    // format bump), and the swap is not routability-validated, so never silently overwrite the
+    // source. A caller who wants in-place can pass the same path.
+    if( job->m_outputFile.IsEmpty() )
+    {
+        wxFprintf( stderr, _( "An output file is required (--output); refusing to overwrite the "
+                              "input board in place.\n" ) );
+        return EXIT_CODES::ERR_ARGS;
+    }
+
     return aKiway.ProcessJob( KIWAY::FACE_PCB, job.get() );
 }
