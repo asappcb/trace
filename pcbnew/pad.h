@@ -160,6 +160,25 @@ public:
     const wxString& GetPinType() const { return m_pinType; }
 
     /**
+     * Gate/pin-swap equivalence, transported from the schematic symbol's interchangeable-unit
+     * structure (LIB_SYMBOL::GetUnitPinInfo / UnitsLocked) via the netlist. It lets a layout-side
+     * swap optimizer know which pads are legally interchangeable without a live eeschema.
+     *
+     * @p aUnit is the schematic unit (gate) this pad belongs to (1-based; 0 = unknown).
+     * @p aIndex is the position index within the unit, ordered consistently across interchangeable
+     * units, so pads sharing an index in different units of the same footprint are
+     * gate-swap-equivalent (-1 = not gate-swappable: a single-unit symbol or units locked).
+     */
+    void SetPinSwapGroup( int aUnit, int aIndex ) { m_pinSwapUnit = aUnit; m_pinSwapIndex = aIndex; }
+    void ClearPinSwapGroup() { m_pinSwapUnit = 0; m_pinSwapIndex = -1; }
+    int  GetPinSwapUnit() const { return m_pinSwapUnit; }
+    int  GetPinSwapIndex() const { return m_pinSwapIndex; }
+
+    // Requires a 1-based unit as well as a valid index so the s-expr and IPC round-trips agree on
+    // eligibility (both drop a nonsensical unit-0 group); the normal pipeline always sets both.
+    bool IsPinSwapEligible() const { return m_pinSwapUnit >= 1 && m_pinSwapIndex >= 0; }
+
+    /**
      * Before we had custom pad shapes it was common to have multiple overlapping pads to
      * represent a more complex shape.
      */
@@ -1114,6 +1133,8 @@ private:
     wxString          m_number;             // Pad name (pin number in schematic)
     wxString          m_pinFunction;        // Pin name in schematic
     wxString          m_pinType;            // Pin electrical type in schematic
+    int               m_pinSwapUnit;        // Schematic unit (gate) for swap equivalence (0 = none)
+    int               m_pinSwapIndex;       // Position within the unit for gate-swap correspondence (-1 = none)
 
     VECTOR2I  m_libPos;         // Pad position in parent footprint's library frame
     EDA_ANGLE m_libOrientation; // Pad orientation in parent footprint's library frame

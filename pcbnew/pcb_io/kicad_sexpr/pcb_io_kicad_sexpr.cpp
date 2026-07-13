@@ -2044,6 +2044,10 @@ void PCB_IO_KICAD_SEXPR::format( const PAD* aPad ) const
 
         if( !aPad->GetPinType().IsEmpty() )
             m_out->Print( "(pintype %s)", m_out->Quotew( aPad->GetPinType() ).c_str() );
+
+        // Gate/pin-swap equivalence transported from the schematic symbol (unit + position index).
+        if( aPad->IsPinSwapEligible() )
+            m_out->Print( "(pin_swap_group %d %d)", aPad->GetPinSwapUnit(), aPad->GetPinSwapIndex() );
     }
 
     if( aPad->GetPadToDieLength() != 0 )

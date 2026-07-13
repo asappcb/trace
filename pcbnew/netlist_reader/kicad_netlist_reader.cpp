@@ -239,6 +239,8 @@ void KICAD_NETLIST_PARSER::parseNet()
     wxString   pin_number;
     wxString   pin_function;
     wxString   pin_type;
+    int        pin_swap_unit = 0;
+    int        pin_swap_index = -1;
 
     // The token net was read, so the next data is (code <number>)
     while( (token = NextTok() ) != T_EOF )
@@ -263,9 +265,11 @@ void KICAD_NETLIST_PARSER::parseNet()
             break;
 
         case T_node:
-            // By default: no pin function or type.
+            // By default: no pin function or type, and no swap group.
             pin_function.Clear();
             pin_type.Clear();
+            pin_swap_unit = 0;
+            pin_swap_index = -1;
 
             while( (token = NextTok() ) != T_EOF )
             {
@@ -300,6 +304,25 @@ void KICAD_NETLIST_PARSER::parseNet()
                     NeedRIGHT();
                     break;
 
+                case T_pin_swap_group:
+                {
+                    // Encoded as a single "unit index" string (both integers).
+                    NeedSYMBOLorNUMBER();
+                    wxString group = From_UTF8( CurText() );
+                    long     parsedUnit = 0;
+                    long     parsedIndex = -1;
+
+                    if( group.BeforeFirst( ' ' ).ToLong( &parsedUnit )
+                        && group.AfterFirst( ' ' ).ToLong( &parsedIndex ) )
+                    {
+                        pin_swap_unit = static_cast<int>( parsedUnit );
+                        pin_swap_index = static_cast<int>( parsedIndex );
+                    }
+
+                    NeedRIGHT();
+                    break;
+                }
+
                 default:
                     skipCurrent();
                     break;
@@ -314,7 +337,8 @@ void KICAD_NETLIST_PARSER::parseNet()
                     if( name.IsEmpty() )      // Give a dummy net name like N-000009
                         name = wxT("N-00000") + code;
 
-                    component->AddNet( pin_number, name, pin_function, pin_type );
+                    component->AddNet( pin_number, name, pin_function, pin_type, pin_swap_unit,
+                                       pin_swap_index );
                 }
             }
 

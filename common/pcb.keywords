@@ -293,6 +293,7 @@ path
 pcb_text_size
 pcb_text_width
 pcbplotparams
+pin_swap_group
 pinfunction
 pintype
 placed

@@ -28,6 +28,8 @@
 #include <sch_base_frame.h>
 #include <sch_group.h>
 #include <sch_sheet.h>
+#include <sch_symbol.h>
+#include <lib_symbol.h>
 #include <string_utils.h>
 #include <connection_graph.h>
 #include <pgm_base.h>
@@ -1121,6 +1123,10 @@ XNODE* NETLIST_EXPORTER_XML::makeListOfNets( unsigned aCtl )
     XNODE*   xnets = node( wxT( "nets" ) ); // auto_ptr if exceptions ever get used.
     XNODE*   xnet = nullptr;
 
+    // GetUnitPinInfo() rebuilds (sorts, expands stacked pins) on every call, so cache it per
+    // LIB_SYMBOL for the gate/pin-swap derivation below instead of recomputing it per net node.
+    std::map<const LIB_SYMBOL*, std::vector<LIB_SYMBOL::UNIT_PIN_INFO>> unitPinInfoCache;
+
     /*  output:
         <net code="123" name="/cfcard.sch/WAIT#" class="signal">
             <node ref="R23" pin="1"/>
@@ -1293,6 +1299,63 @@ XNODE* NETLIST_EXPORTER_XML::makeListOfNets( unsigned aCtl )
             wxString baseName = netNode.m_Pin->GetShownName();
             wxString pinType = netNode.m_Pin->GetCanonicalElectricalTypeName();
 
+            // Gate/pin-swap equivalence: for a symbol with interchangeable (unlocked) multi-unit
+            // gates, pins at the same position index across units are swap-equivalent. Emit
+            // "unit index" so a layout-side optimizer can reassign gates without a live schematic.
+            // NB: the position index comes from GetUnitPinInfo()'s geometric pin ordering, so the
+            // correspondence is only valid when the library draws each interchangeable gate with
+            // pins in the same relative layout (true for standard multi-gate parts). A future
+            // optimizer must still validate a proposed swap rather than trust the index blindly.
+            wxString swapGroupAttr;
+
+            if( const SCH_SYMBOL* schSym =
+                        dynamic_cast<const SCH_SYMBOL*>( netNode.m_Pin->GetParentSymbol() ) )
+            {
+                const std::unique_ptr<LIB_SYMBOL>& lib = schSym->GetLibSymbolRef();
+
+                if( lib && lib->GetUnitCount() > 1 && !lib->UnitsLocked() )
+                {
+                    int unit = schSym->GetUnitSelection( &netNode.m_Sheet );
+
+                    auto cacheIt = unitPinInfoCache.find( lib.get() );
+
+                    if( cacheIt == unitPinInfoCache.end() )
+                        cacheIt = unitPinInfoCache.emplace( lib.get(), lib->GetUnitPinInfo() ).first;
+
+                    const std::vector<LIB_SYMBOL::UNIT_PIN_INFO>& unitInfo = cacheIt->second;
+
+                    if( unit >= 1 && unit <= static_cast<int>( unitInfo.size() ) )
+                    {
+                        // A unit is gate-swappable only if at least one other unit has the same pin
+                        // count (i.e. an identical gate structure). This keeps a mismatched unit --
+                        // e.g. an op-amp's 2-pin power unit alongside its 3-pin amp sections -- from
+                        // being falsely marked interchangeable with the sections by position.
+                        const size_t thisCount = unitInfo[unit - 1].m_pinNumbers.size();
+                        int          matchingUnits = 0;
+
+                        for( const LIB_SYMBOL::UNIT_PIN_INFO& u : unitInfo )
+                        {
+                            if( u.m_pinNumbers.size() == thisCount )
+                                ++matchingUnits;
+                        }
+
+                        if( matchingUnits >= 2 )
+                        {
+                            const std::vector<wxString>& pinNums = unitInfo[unit - 1].m_pinNumbers;
+                            auto it = std::find( pinNums.begin(), pinNums.end(),
+                                                 netNode.m_Pin->GetNumber() );
+
+                            if( it != pinNums.end() )
+                            {
+                                swapGroupAttr = wxString::Format(
+                                        wxT( "%d %d" ), unit,
+                                        static_cast<int>( std::distance( pinNums.begin(), it ) ) );
+                            }
+                        }
+                    }
+                }
+            }
+
             if( !added )
             {
                 netCodeTxt.Printf( wxT( "%d" ), i + 1 );
@@ -1325,6 +1388,9 @@ XNODE* NETLIST_EXPORTER_XML::makeListOfNets( unsigned aCtl )
                 }
 
                 xnode->AddAttribute( wxT( "pintype" ), typeAttr );
+
+                if( !swapGroupAttr.IsEmpty() )
+                    xnode->AddAttribute( wxT( "pin_swap_group" ), swapGroupAttr );
             }
         }
     }
