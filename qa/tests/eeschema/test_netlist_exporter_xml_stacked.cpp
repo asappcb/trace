@@ -239,3 +239,41 @@ BOOST_FIXTURE_TEST_CASE( NetlistExporterXML_UsesPerUnitResolvedLibraryMetadata, 
 
     wxRemoveFile( netFile.GetFullPath() );
 }
+
+
+// The netlist must carry the gate-interchangeability flag so the board can forbid gate swaps on
+// locked units. The fixture's TL072 is cached with its units locked, so its <units> node must carry
+// interchangeable="no". (Absence would mean interchangeable, the back-compatible default.)
+BOOST_FIXTURE_TEST_CASE( NetlistExporterXML_EmitsUnitsInterchangeableFlag, XML_STACKED_PIN_FIXTURE )
+{
+    KI_TEST::LoadSchematic( m_settingsManager, wxT( "netlist_exporter_unit_metadata_per_unit" ), m_schematic );
+
+    wxFileName netFile = m_schematic->Project().GetProjectFullName();
+    netFile.SetName( netFile.GetName() + wxT( "_xml_interchangeable_test" ) );
+    netFile.SetExt( wxT( "xml" ) );
+
+    if( wxFileExists( netFile.GetFullPath() ) )
+        wxRemoveFile( netFile.GetFullPath() );
+
+    WX_STRING_REPORTER                    reporter;
+    std::unique_ptr<NETLIST_EXPORTER_XML> exporter = std::make_unique<NETLIST_EXPORTER_XML>( m_schematic.get() );
+
+    BOOST_REQUIRE( exporter->WriteNetlist( netFile.GetFullPath(), 0, reporter )
+                   && reporter.GetMessages().IsEmpty() );
+
+    wxXmlDocument xdoc;
+    BOOST_REQUIRE( xdoc.Load( netFile.GetFullPath() ) );
+
+    wxXmlNode* components = find_child( xdoc.GetRoot(), wxT( "components" ) );
+    BOOST_REQUIRE( components );
+
+    wxXmlNode* u1 = find_component( components, wxT( "U1" ) );
+    BOOST_REQUIRE( u1 );
+
+    wxXmlNode* units = find_child( u1, wxT( "units" ) );
+    BOOST_REQUIRE( units );
+
+    BOOST_CHECK_EQUAL( units->GetAttribute( wxT( "interchangeable" ) ), wxT( "no" ) );
+
+    wxRemoveFile( netFile.GetFullPath() );
+}

@@ -137,4 +137,43 @@ BOOST_AUTO_TEST_CASE( NestedSchematicGroupNestsOnBoard )
 }
 
 
+// Update PCB from Schematic must transfer the source symbol's units-interchangeable flag onto the
+// footprint (alongside the per-unit pin lists), so gate swapping can honor a locked symbol.
+BOOST_AUTO_TEST_CASE( UnitsInterchangeableFlagTransfersToFootprint )
+{
+    SETTINGS_MANAGER settingsManager;
+    settingsManager.LoadProject( "" );
+
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+    board->SetProject( &settingsManager.Prj() );
+
+    LIB_ID fpid;
+    BOOST_REQUIRE_EQUAL( fpid.Parse( wxS( "TestLib:U" ) ), -1 );
+
+    FOOTPRINT* fp = addFootprint( board.get(), wxS( "U1" ), fpid );
+    BOOST_REQUIRE( fp->AreUnitsInterchangeable() ); // default before any sync
+
+    NETLIST    netlist;
+    KIID       kiid;
+    COMPONENT* comp = new COMPONENT( fpid, wxS( "U1" ), wxS( "U1" ), KIID_PATH(),
+                                     std::vector<KIID>{ kiid } );
+    comp->SetUnitInfo( { { wxS( "A" ), { wxS( "1" ), wxS( "2" ) } },
+                         { wxS( "B" ), { wxS( "3" ), wxS( "4" ) } } } );
+    comp->SetUnitsInterchangeable( false );
+    netlist.AddComponent( comp );
+
+    TOOL_MANAGER toolMgr;
+    toolMgr.SetEnvironment( board.get(), nullptr, nullptr, nullptr, nullptr );
+    toolMgr.RegisterTool( new KI_TEST::DUMMY_TOOL() );
+
+    BOARD_NETLIST_UPDATER updater( &toolMgr, board.get() );
+    updater.SetReplaceFootprints( false );
+    updater.SetDeleteUnusedFootprints( false );
+    BOOST_REQUIRE( updater.UpdateNetlist( netlist ) );
+
+    BOOST_CHECK_EQUAL( fp->GetUnitInfo().size(), 2u );
+    BOOST_CHECK( !fp->AreUnitsInterchangeable() );
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()

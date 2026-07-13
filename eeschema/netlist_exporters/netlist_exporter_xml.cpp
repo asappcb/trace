@@ -622,6 +622,11 @@ XNODE* NETLIST_EXPORTER_XML::makeSymbols( unsigned aCtl )
 
             if( libSym )
             {
+                // Carry gate interchangeability so the board can forbid gate swaps on locked units.
+                // Only the non-interchangeable case is written; absence means interchangeable.
+                if( libSym->UnitsLocked() )
+                    xunitInfo->AddAttribute( wxT( "interchangeable" ), wxT( "no" ) );
+
                 // A multi-unit symbol can resolve to a different lib symbol per placed unit
                 // after unit-specific edits. For instane, if you have units A B C in a multi-unit
                 // symbol, and you edit only unit B, unit B will point to new, modified lib symbol

@@ -223,6 +223,11 @@ public:
     void                          SetUnitInfo( const std::vector<UNIT_INFO>& aUnits ) { m_units = aUnits; }
     const std::vector<UNIT_INFO>& GetUnitInfo() const { return m_units; }
 
+    // Whether the source symbol's units are interchangeable (!UnitsLocked()); gates may only be
+    // swapped when true. Defaults to true (KiCad's unlocked default).
+    void SetUnitsInterchangeable( bool aInterchangeable ) { m_unitsInterchangeable = aInterchangeable; }
+    bool AreUnitsInterchangeable() const { return m_unitsInterchangeable; }
+
     const CASE_INSENSITIVE_MAP<COMPONENT_VARIANT>& GetVariants() const { return m_variants; }
     const COMPONENT_VARIANT* GetVariant( const wxString& aVariantName ) const;
     COMPONENT_VARIANT* GetVariant( const wxString& aVariantName );
@@ -285,6 +290,7 @@ private:
 
     // Unit information parsed from the netlist (optional)
     std::vector<UNIT_INFO> m_units;
+    bool                   m_unitsInterchangeable = true;
 
     CASE_INSENSITIVE_MAP<COMPONENT_VARIANT> m_variants;
 };

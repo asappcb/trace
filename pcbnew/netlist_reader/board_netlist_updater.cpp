@@ -1321,8 +1321,11 @@ bool BOARD_NETLIST_UPDATER::updateComponentUnits( FOOTPRINT* aFootprint, COMPONE
             return true;
         };
 
-    if( unitsEqual( curUnits, newUnits ) )
+    if( unitsEqual( curUnits, newUnits )
+        && aFootprint->AreUnitsInterchangeable() == aNewComponent->AreUnitsInterchangeable() )
+    {
         return false;
+    }
 
     wxString msg;
 
@@ -1343,6 +1346,7 @@ bool BOARD_NETLIST_UPDATER::updateComponentUnits( FOOTPRINT* aFootprint, COMPONE
     }
 
     aFootprint->SetUnitInfo( newUnits );
+    aFootprint->SetUnitsInterchangeable( aNewComponent->AreUnitsInterchangeable() );
 
     msg.Printf( _( "Updated %s unit metadata." ), aFootprint->GetReference() );
     m_reporter->Report( msg, RPT_SEVERITY_ACTION );

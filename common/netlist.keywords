@@ -18,6 +18,7 @@ footprints
 fp
 group
 groups
+interchangeable
 jumper_pin_groups
 lib
 lib_id

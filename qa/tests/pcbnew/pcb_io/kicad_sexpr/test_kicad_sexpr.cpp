@@ -786,4 +786,85 @@ BOOST_AUTO_TEST_CASE( CopperThievingZone_RejectsMalformedGeometry )
 }
 
 
+/**
+ * A footprint's gate-swap unit metadata — the per-unit pin lists and the units-interchangeable flag
+ * — must survive a board save/reload and a Clone(). The `(interchangeable no)` token is written only
+ * for the non-interchangeable case; its absence means interchangeable (back-compatible default).
+ */
+BOOST_AUTO_TEST_CASE( FootprintUnitInfoRoundTripsAndClones )
+{
+    std::filesystem::path tmpPath = std::filesystem::temp_directory_path() / "fp_unit_info.kicad_pcb";
+
+    const std::vector<FOOTPRINT::FP_UNIT_INFO> units = {
+        { wxT( "A" ), { wxT( "1" ), wxT( "2" ) } },
+        { wxT( "B" ), { wxT( "3" ), wxT( "4" ) } },
+    };
+
+    {
+        std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+
+        // Locked-units footprint: must emit (interchangeable no).
+        FOOTPRINT* locked = new FOOTPRINT( board.get() );
+        locked->SetReference( wxT( "U1" ) );
+        locked->SetFPID( LIB_ID( wxT( "scratch" ), wxT( "locked_fp" ) ) );
+        locked->SetUnitInfo( units );
+        locked->SetUnitsInterchangeable( false );
+        board->Add( locked );
+
+        // Clone must carry both the unit info (previously dropped) and the interchangeable flag.
+        std::unique_ptr<FOOTPRINT> clone( static_cast<FOOTPRINT*>( locked->Clone() ) );
+        BOOST_CHECK_EQUAL( clone->GetUnitInfo().size(), 2u );
+        BOOST_CHECK( !clone->AreUnitsInterchangeable() );
+
+        // Interchangeable footprint: must emit no token.
+        FOOTPRINT* freeFp = new FOOTPRINT( board.get() );
+        freeFp->SetReference( wxT( "U2" ) );
+        freeFp->SetFPID( LIB_ID( wxT( "scratch" ), wxT( "free_fp" ) ) );
+        freeFp->SetUnitInfo( units );
+        freeFp->SetUnitsInterchangeable( true );
+        board->Add( freeFp );
+
+        PCB_IO_KICAD_SEXPR writer;
+        writer.SaveBoard( tmpPath.string(), board.get() );
+    }
+
+    {
+        std::ifstream in( tmpPath );
+        std::stringstream ss;
+        ss << in.rdbuf();
+        const std::string contents = ss.str();
+
+        // Exactly one (interchangeable no) token — only the locked footprint writes it.
+        size_t count = 0;
+        for( size_t pos = contents.find( "(interchangeable no)" );
+             pos != std::string::npos;
+             pos = contents.find( "(interchangeable no)", pos + 1 ) )
+        {
+            ++count;
+        }
+
+        BOOST_CHECK_EQUAL( count, 1u );
+    }
+
+    {
+        std::unique_ptr<BOARD> readBoard = std::make_unique<BOARD>();
+        PCB_IO_KICAD_SEXPR     reader;
+        reader.LoadBoard( tmpPath.string(), readBoard.get() );
+
+        FOOTPRINT* locked = readBoard->FindFootprintByReference( wxT( "U1" ) );
+        FOOTPRINT* freeFp = readBoard->FindFootprintByReference( wxT( "U2" ) );
+
+        BOOST_REQUIRE( locked && freeFp );
+
+        BOOST_CHECK_EQUAL( locked->GetUnitInfo().size(), 2u );
+        BOOST_CHECK( !locked->AreUnitsInterchangeable() );
+
+        BOOST_CHECK_EQUAL( freeFp->GetUnitInfo().size(), 2u );
+        BOOST_CHECK( freeFp->AreUnitsInterchangeable() ); // absent token -> interchangeable
+    }
+
+    std::filesystem::remove( tmpPath );
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()

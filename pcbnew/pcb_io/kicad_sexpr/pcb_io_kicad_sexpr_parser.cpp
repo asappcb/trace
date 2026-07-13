@@ -5700,13 +5700,21 @@ FOOTPRINT* PCB_IO_KICAD_SEXPR_PARSER::parseFOOTPRINT_unchecked( wxArrayString* a
         {
             std::vector<FOOTPRINT::FP_UNIT_INFO> unitInfos;
 
-            // (units (unit (name "A") (pins "1" "2" ...)) ...)
+            // Absent = interchangeable (the default); only the non-interchangeable case is written.
+            bool unitsInterchangeable = true;
+
+            // (units [(interchangeable no)] (unit (name "A") (pins "1" "2" ...)) ...)
             for( token = NextTok(); token != T_RIGHT; token = NextTok() )
             {
                 if( token == T_LEFT )
                     token = NextTok();
 
-                if( token == T_unit )
+                if( token == T_interchangeable )
+                {
+                    unitsInterchangeable = parseBool();
+                    NeedRIGHT();
+                }
+                else if( token == T_unit )
                 {
                     FOOTPRINT::FP_UNIT_INFO info;
 
@@ -5754,6 +5762,8 @@ FOOTPRINT* PCB_IO_KICAD_SEXPR_PARSER::parseFOOTPRINT_unchecked( wxArrayString* a
 
             if( !unitInfos.empty() )
                 footprint->SetUnitInfo( unitInfos );
+
+            footprint->SetUnitsInterchangeable( unitsInterchangeable );
 
             break;
         }
