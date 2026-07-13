@@ -32,6 +32,8 @@
 #include <footprint.h>
 #include <netinfo.h>
 #include <pad.h>
+#include <pcb_track.h>
+#include <layer_ids.h>
 #include <base_units.h>
 
 #include <cmath>
@@ -385,6 +387,38 @@ BOOST_AUTO_TEST_CASE( ApplyPlanReassignsGatePadNets )
     // The applied board is optimal: re-planning finds nothing further.
     board->BuildConnectivity();
     BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
+}
+
+
+// The connected-copper propagation must follow the swap: a track sitting on a gate pad's net gets
+// reassigned along with the pad. This exercises ComputeGateSwapNetChanges' non-pad m_always path,
+// which the unrouted board above never hits.
+BOOST_AUTO_TEST_CASE( ApplyPlanPropagatesToConnectedTracks )
+{
+    FOOTPRINT*             fp = nullptr;
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( true, &fp );
+
+    PAD*      padA1 = fp->FindPadByNumber( wxT( "1" ) );
+    const int gateAnet = padA1->GetNetCode(); // net2, gate A's crossed net
+
+    // A track on gate A's net, starting on pad 1 so connectivity attaches it to the gate.
+    PCB_TRACK* track = new PCB_TRACK( board.get() );
+    track->SetStart( padA1->GetPosition() );
+    track->SetEnd( padA1->GetPosition() + VECTOR2I( 0, pcbIUScale.mmToIU( 5.0 ) ) );
+    track->SetLayer( F_Cu );
+    track->SetNetCode( gateAnet );
+    board->Add( track );
+
+    board->BuildConnectivity();
+
+    std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( board.get() );
+    BOOST_REQUIRE_EQUAL( plan.size(), 1u );
+
+    BOOST_CHECK_EQUAL( ApplyGateSwapPlan( board.get(), plan ), 1 );
+
+    // Gate A pad 1 regroups onto net1, and its connected track follows.
+    BOOST_CHECK_EQUAL( padA1->GetNetCode(), 1 );
+    BOOST_CHECK_EQUAL( track->GetNetCode(), 1 );
 }
 
 
