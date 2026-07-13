@@ -30,7 +30,10 @@ class PAD;
  * length, using the minimum-spanning-tree length of the affected nets' pads as a geometric proxy
  * for the ratsnest. This is a preview/scoring estimate: it uses straight-line pad-to-pad distance
  * and does not account for layers, obstacles, or the router, so a proposed swap must still be
- * validated for legality/routability before it is trusted.
+ * validated for legality/routability before it is trusted. It also scores only the pads named in
+ * @p aNewNetByPad; the connected-item net propagation that an actual swap performs on a routed board
+ * (tracks/vias/other pads sharing copper) is not modelled, so on a routed board the estimate can
+ * diverge from the post-swap ratsnest.
  *
  * @param aBoard        the board whose pads are measured.
  * @param aNewNetByPad  pads that would receive a new net code under the swap (pad -> new net code).

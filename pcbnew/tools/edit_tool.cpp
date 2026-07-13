@@ -576,8 +576,10 @@ protected:
 
                 double delta = EstimateSwapRatsnestDelta( fp->GetBoard(), swap );
 
+                // delta is a double sum of nm distances; divide in double (IUTomm takes an int and
+                // would narrow/overflow a large delta).
                 if( delta != 0.0 )
-                    label += wxString::Format( wxT( " (%+.2f mm)" ), pcbIUScale.IUTomm( delta ) );
+                    label += wxString::Format( wxT( " (%+.2f mm)" ), delta / pcbIUScale.IU_PER_MM );
             }
 
             Append( ID_POPUP_PCB_SWAP_UNIT_BASE + idx, label );

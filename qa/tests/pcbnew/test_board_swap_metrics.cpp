@@ -33,6 +33,7 @@
 #include <pad.h>
 #include <base_units.h>
 
+#include <cmath>
 #include <map>
 #include <memory>
 
@@ -121,6 +122,48 @@ BOOST_AUTO_TEST_CASE( SwapLengtheningRatsnestGivesPositiveDelta )
 
     BOOST_CHECK( delta > 0.0 );
     BOOST_CHECK_CLOSE( delta, static_cast<double>( pcbIUScale.mmToIU( 18.0 ) ), 0.1 );
+}
+
+
+// Exercises MST over 3+ points (the Prim relaxation loop) and a net whose pad count drops to 1
+// (length 0) as a result of the swap.
+BOOST_AUTO_TEST_CASE( ThreePadNetAndNetShrinkingToOnePad )
+{
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+
+    NETINFO_ITEM* net1 = new NETINFO_ITEM( board.get(), wxT( "N1" ), 1 );
+    NETINFO_ITEM* net2 = new NETINFO_ITEM( board.get(), wxT( "N2" ), 2 );
+    board->Add( net1 );
+    board->Add( net2 );
+
+    FOOTPRINT* fp = new FOOTPRINT( board.get() );
+    board->Add( fp );
+
+    // N1 = { (0,0), (3,0), (3,4) } -> MST = 3 + 4 = 7mm (the 5mm hypotenuse is never chosen).
+    // N2 = { (100,0) } -> a lone pad, MST length 0.
+    PAD* p0 = addPad( fp, net1, 0.0, 0.0 );
+    PAD* p1 = addPad( fp, net1, 3.0, 0.0 );
+    PAD* p2 = addPad( fp, net1, 3.0, 4.0 );
+    PAD* lone = addPad( fp, net2, 100.0, 0.0 );
+    (void) p0;
+    (void) p1;
+
+    // Move the far corner (3,4) from N1 to N2. N1 becomes {(0,0),(3,0)} = 3mm; N2 becomes
+    // {(100,0),(3,4)} = ~97.08mm. Delta = (3 + 97.08...) - (7 + 0).
+    std::map<const PAD*, int> swap;
+    swap[p2] = 2;
+
+    double n1Before = 7.0;
+    double n1After = 3.0;
+    double n2Before = 0.0;
+    double n2After = std::hypot( 100.0 - 3.0, 0.0 - 4.0 ); // ~97.0824mm
+    double expectedMm = ( n1After + n2After ) - ( n1Before + n2Before );
+
+    double delta = EstimateSwapRatsnestDelta( board.get(), swap );
+
+    BOOST_CHECK( delta > 0.0 ); // the far move lengthens overall
+    BOOST_CHECK_CLOSE( delta, expectedMm * pcbIUScale.IU_PER_MM, 0.1 );
+    (void) lone;
 }
 
 
