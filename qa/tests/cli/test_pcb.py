@@ -279,3 +279,34 @@ def test_pcb_export_drill( kitest: KiTestFixture,
 
     compare_filepath = kitest.get_data_file_path( "cli/basic_test/{}".format( golden_name ) )
     assert utils.textdiff_files( compare_filepath, output_drill_path, skip_line_count )
+
+
+def test_pcb_optimize_swaps(kitest: KiTestFixture):
+    """
+    Run the headless gate-swap optimizer and confirm it writes a valid board and reports.
+    """
+    input_file = kitest.get_data_file_path("cli/basic_test/basic_test.kicad_pcb")
+    output_path = kitest.get_output_path("cli/optimize_swaps/")
+    Path(output_path).mkdir(parents=True, exist_ok=True)
+    output_file = Path(output_path) / "optimized.kicad_pcb"
+
+    if output_file.exists():
+        output_file.unlink()
+
+    command = [
+        utils.kicad_cli(),
+        "pcb",
+        "optimize-swaps",
+        str(input_file),
+        "--output",
+        str(output_file),
+    ]
+
+    stdout, stderr, exitcode = utils.run_and_capture(command)
+
+    assert exitcode == 0
+    assert output_file.exists()
+    # A valid KiCad board was written.
+    assert output_file.read_text().lstrip().startswith("(kicad_pcb")
+    # The handler reports how many swaps it applied.
+    assert "gate swap" in stdout.lower()
