@@ -27,6 +27,7 @@
 #include <kiplatform/ui.h>
 #include <gal/graphics_abstraction_layer.h>
 #include <board.h>
+#include <board_swap_metrics.h>
 #include <board_design_settings.h>
 #include <collectors.h>
 #include <footprint.h>
@@ -546,10 +547,41 @@ protected:
         const int        sourceIdx = unitsHit.front();
         std::vector<int> targets = GetCompatibleTargets( fp, sourceIdx );
 
+        const std::vector<wxString>& srcPins = fp->GetUnitInfo()[static_cast<size_t>( sourceIdx )].m_pins;
+
         for( int idx : targets )
         {
             wxString label;
             label.Printf( _( "Swap with %s" ), fp->GetUnitInfo()[static_cast<size_t>( idx )].m_unitName );
+
+            // Annotate with the estimated ratsnest-length change of this gate swap so the user can
+            // see at a glance which swap shortens routing (negative = shorter). See #20.
+            const std::vector<wxString>& tgtPins = fp->GetUnitInfo()[static_cast<size_t>( idx )].m_pins;
+
+            if( srcPins.size() == tgtPins.size() )
+            {
+                std::map<const PAD*, int> swap;
+
+                for( size_t pi = 0; pi < srcPins.size(); ++pi )
+                {
+                    PAD* srcPad = fp->FindPadByNumber( srcPins[pi] );
+                    PAD* tgtPad = fp->FindPadByNumber( tgtPins[pi] );
+
+                    if( srcPad && tgtPad )
+                    {
+                        swap[srcPad] = tgtPad->GetNetCode();
+                        swap[tgtPad] = srcPad->GetNetCode();
+                    }
+                }
+
+                double delta = EstimateSwapRatsnestDelta( fp->GetBoard(), swap );
+
+                // delta is a double sum of nm distances; divide in double (IUTomm takes an int and
+                // would narrow/overflow a large delta).
+                if( delta != 0.0 )
+                    label += wxString::Format( wxT( " (%+.2f mm)" ), delta / pcbIUScale.IU_PER_MM );
+            }
+
             Append( ID_POPUP_PCB_SWAP_UNIT_BASE + idx, label );
         }
     }
