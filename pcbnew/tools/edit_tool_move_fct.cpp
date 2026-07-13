@@ -25,6 +25,8 @@
 #include <limits>
 #include <kiplatform/ui.h>
 #include <board.h>
+#include <board_swap_metrics.h>
+#include <base_units.h>
 #include <board_commit.h>
 #include <collectors.h>
 #include <footprint.h>
@@ -504,36 +506,69 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
         return 0;
     }
 
-    // Verify equal pin counts across all active units
-    const size_t pinCount = units[activeUnitIdx.front()].m_pins.size();
+    // TODO: someday support swapping while routing and take that commit
+    BOARD_COMMIT  localCommit( this );
+    BOARD_COMMIT* commit = dynamic_cast<BOARD_COMMIT*>( aEvent.Commit() );
 
-    for( int idx : activeUnitIdx )
+    if( !commit )
+        commit = &localCommit;
+
+    if( rotateGateNets( targetFp, activeUnitIdx, commit, /* aInteractive */ true ) )
+    {
+        if( !localCommit.Empty() )
+            localCommit.Push( _( "Swap Gate Nets" ) );
+
+        rebuildConnectivity();
+        m_toolMgr->ProcessEvent( EVENTS::SelectedItemsModified );
+    }
+
+    return 0;
+}
+
+
+bool EDIT_TOOL::rotateGateNets( FOOTPRINT* aFootprint, const std::vector<int>& aUnitIndices,
+                                BOARD_COMMIT* aCommit, bool aInteractive )
+{
+    const std::vector<FOOTPRINT::FP_UNIT_INFO>& units = aFootprint->GetUnitInfo();
+    const size_t                                unitCount = aUnitIndices.size();
+
+    if( unitCount < 2 )
+        return false;
+
+    // Verify equal pin counts across all active units.
+    const size_t pinCount = units[aUnitIndices.front()].m_pins.size();
+
+    for( int idx : aUnitIndices )
     {
         if( units[idx].m_pins.size() != pinCount )
         {
-            frame()->ShowInfoBarError( _( "Gate swapping must be performed on gates with equal pin counts." ) );
-            return 0;
+            if( aInteractive )
+                frame()->ShowInfoBarError(
+                        _( "Gate swapping must be performed on gates with equal pin counts." ) );
+
+            return false;
         }
     }
 
-    // Build per-unit pad arrays and net vectors
-    const size_t                   unitCount = activeUnitIdx.size();
+    // Build per-unit pad arrays and net vectors.
     std::vector<std::vector<PAD*>> unitPads( unitCount );
     std::vector<std::vector<int>>  unitNets( unitCount );
 
     for( size_t ui = 0; ui < unitCount; ++ui )
     {
-        int         uidx = activeUnitIdx[ui];
-        const auto& pins = units[uidx].m_pins;
+        const std::vector<wxString>& pins = units[aUnitIndices[ui]].m_pins;
 
         for( size_t pi = 0; pi < pinCount; ++pi )
         {
-            PAD* p = targetFp->FindPadByNumber( pins[pi] );
+            PAD* p = aFootprint->FindPadByNumber( pins[pi] );
 
             if( !p )
             {
-                frame()->ShowInfoBarError( _( "Gate swapping failed: pad in unit missing from footprint." ) );
-                return 0;
+                if( aInteractive )
+                    frame()->ShowInfoBarError(
+                            _( "Gate swapping failed: pad in unit missing from footprint." ) );
+
+                return false;
             }
 
             unitPads[ui].push_back( p );
@@ -541,7 +576,7 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
         }
     }
 
-    // If all unit nets match across positions, nothing to do
+    // If all unit nets match across positions, nothing to do.
     bool allSame = true;
 
     for( size_t pi = 0; pi < pinCount && allSame; ++pi )
@@ -560,30 +595,26 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
 
     if( allSame )
     {
-        frame()->ShowInfoBarError( _( "Gate swapping has no effect: all selected gates have identical nets." ) );
-        return 0;
+        if( aInteractive )
+            frame()->ShowInfoBarError(
+                    _( "Gate swapping has no effect: all selected gates have identical nets." ) );
+
+        return false;
     }
-
-    // TODO: someday support swapping while routing and take that commit
-    BOARD_COMMIT  localCommit( this );
-    BOARD_COMMIT* commit = dynamic_cast<BOARD_COMMIT*>( aEvent.Commit() );
-
-    if( !commit )
-        commit = &localCommit;
 
     std::shared_ptr<CONNECTIVITY_DATA> connectivity = board()->GetConnectivity();
 
-    // Accumulate changes: item -> new net
+    // Accumulate changes: item -> new net.
     std::unordered_map<BOARD_CONNECTED_ITEM*, int> itemNewNets;
     std::vector<PAD*>                              nonSelectedPadsToChange;
 
-    // Selected pads in the swap (for suppressing re-adding in connected pad handling)
+    // Selected pads in the swap (for suppressing re-adding in connected pad handling).
     std::unordered_set<PAD*> swapPads;
 
     for( const auto& v : unitPads )
         swapPads.insert( v.begin(), v.end() );
 
-    // Schedule net swaps for connectivity-attached items
+    // Schedule net swaps for connectivity-attached items.
     auto scheduleForPad = [&]( PAD* pad, int fromNet, int toNet )
         {
             for( BOARD_CONNECTED_ITEM* ci : connectivity->GetConnectedItems( pad, 0 ) )
@@ -615,49 +646,44 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
             }
         };
 
-    // For each position, rotate nets among units forward
+    // For each position, rotate nets among units forward.
     for( size_t pi = 0; pi < pinCount; ++pi )
     {
         for( size_t ui = 0; ui < unitCount; ++ui )
         {
-            size_t fromIdx = ui;
             size_t toIdx = ( ui + 1 ) % unitCount;
-
-            PAD* padFrom = unitPads[fromIdx][pi];
-            int  fromNet = unitNets[fromIdx][pi];
-            int  toNet = unitNets[toIdx][pi];
-
-            scheduleForPad( padFrom, fromNet, toNet );
+            scheduleForPad( unitPads[ui][pi], unitNets[ui][pi], unitNets[toIdx][pi] );
         }
     }
 
+    // Interactively confirm reassigning non-selected connected pads; a batch optimization includes
+    // them without prompting.
     bool includeConnectedPads = true;
 
-    if( !PromptConnectedPadDecision( frame(), nonSelectedPadsToChange, _( "Swap Gate Nets" ), includeConnectedPads ) )
+    if( aInteractive
+        && !PromptConnectedPadDecision( frame(), nonSelectedPadsToChange, _( "Swap Gate Nets" ),
+                                        includeConnectedPads ) )
     {
-        return 0;
+        return false;
     }
 
-    // Apply pad net swaps: rotate per position
+    // Apply pad net swaps: rotate per position.
     for( size_t pi = 0; pi < pinCount; ++pi )
     {
-        // First write back nets for each unit's pad at this position
         for( size_t ui = 0; ui < unitCount; ++ui )
         {
             size_t toIdx = ( ui + 1 ) % unitCount;
             PAD*   pad = unitPads[ui][pi];
-            int    newNet = unitNets[toIdx][pi];
 
-            commit->Modify( pad );
-            pad->SetNetCode( newNet );
+            aCommit->Modify( pad );
+            pad->SetNetCode( unitNets[toIdx][pi] );
         }
     }
 
-    // Apply connected items
+    // Apply connected items.
     for( const auto& kv : itemNewNets )
     {
         BOARD_CONNECTED_ITEM* item = kv.first;
-        int                   newNet = kv.second;
 
         if( item->Type() == PCB_PAD_T )
         {
@@ -670,15 +696,75 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
                 continue;
         }
 
-        commit->Modify( item );
-        item->SetNetCode( newNet );
+        aCommit->Modify( item );
+        item->SetNetCode( kv.second );
     }
 
-    if( !localCommit.Empty() )
-        localCommit.Push( _( "Swap Gate Nets" ) );
+    return true;
+}
 
+
+int EDIT_TOOL::OptimizeGateSwaps( const TOOL_EVENT& aEvent )
+{
+    if( isRouterActive() )
+    {
+        wxBell();
+        return 0;
+    }
+
+    std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( board() );
+
+    if( plan.empty() )
+    {
+        frame()->ShowInfoBarMsg( _( "Gate swap optimization found no improving swaps." ) );
+        return 0;
+    }
+
+    BOARD_COMMIT commit( this );
+    int          applied = 0;
+    double       totalDelta = 0.0;
+
+    for( const GATE_SWAP_PLAN_ITEM& step : plan )
+    {
+        const std::vector<FOOTPRINT::FP_UNIT_INFO>& units = step.m_footprint->GetUnitInfo();
+
+        auto indexOfUnit = [&]( const wxString& aName ) -> int
+        {
+            for( size_t i = 0; i < units.size(); ++i )
+            {
+                if( units[i].m_unitName == aName )
+                    return static_cast<int>( i );
+            }
+
+            return -1;
+        };
+
+        int idxA = indexOfUnit( step.m_unitA );
+        int idxB = indexOfUnit( step.m_unitB );
+
+        if( idxA < 0 || idxB < 0 )
+            continue;
+
+        if( rotateGateNets( step.m_footprint, { idxA, idxB }, &commit, /* aInteractive */ false ) )
+        {
+            ++applied;
+            totalDelta += step.m_delta;
+        }
+    }
+
+    if( applied == 0 )
+    {
+        frame()->ShowInfoBarMsg( _( "Gate swap optimization made no changes." ) );
+        return 0;
+    }
+
+    commit.Push( _( "Optimize Gate Swaps" ) );
     rebuildConnectivity();
     m_toolMgr->ProcessEvent( EVENTS::SelectedItemsModified );
+
+    frame()->ShowInfoBarMsg( wxString::Format(
+            _( "Optimized gate swaps: %d swap(s), ratsnest shortened by %.2f mm." ), applied,
+            -totalDelta / pcbIUScale.IU_PER_MM ) );
 
     return 0;
 }

@@ -130,6 +130,7 @@ public:
     /// Swap nets between selected pads/gates (and connected copper)
     static TOOL_ACTION swapPadNets;
     static TOOL_ACTION swapGateNets;
+    static TOOL_ACTION optimizeGateSwaps;
 
     /// Pack and start moving selected footprints
     static TOOL_ACTION packAndMoveFootprints;

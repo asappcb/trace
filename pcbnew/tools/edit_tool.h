@@ -112,6 +112,22 @@ public:
     int SwapPadNets( const TOOL_EVENT& aEvent );
     int SwapGateNets( const TOOL_EVENT& aEvent );
 
+    /**
+     * Run the gate-swap optimizer: reassign interchangeable gates across the whole board to shorten
+     * the ratsnest, applying every planned swap in one commit and back-annotating on the next
+     * schematic sync.
+     */
+    int OptimizeGateSwaps( const TOOL_EVENT& aEvent );
+
+    /**
+     * Rotate nets forward among @p aUnitIndices of @p aFootprint into @p aCommit (does not push).
+     * Shared by the interactive gate swap and the optimizer. When @p aInteractive, validation
+     * failures raise an info bar and the user is prompted before reassigning connected pads;
+     * otherwise it is silent and includes connected pads. Returns true if it changed anything.
+     */
+    bool rotateGateNets( FOOTPRINT* aFootprint, const std::vector<int>& aUnitIndices,
+                         BOARD_COMMIT* aCommit, bool aInteractive );
+
 
     /**
      * Try to fit selected footprints inside a minimal area and start movement.
