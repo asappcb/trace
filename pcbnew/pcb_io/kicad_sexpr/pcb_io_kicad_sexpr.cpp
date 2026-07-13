@@ -1404,6 +1404,11 @@ void PCB_IO_KICAD_SEXPR::format( const FOOTPRINT* aFootprint ) const
     {
         m_out->Print( "(units" );
 
+        // Only emitted when the source symbol's units are NOT interchangeable; absence means
+        // interchangeable (the default), keeping older files back-compatible.
+        if( !aFootprint->AreUnitsInterchangeable() )
+            m_out->Print( "(interchangeable no)" );
+
         for( const FOOTPRINT::FP_UNIT_INFO& u : aFootprint->GetUnitInfo() )
         {
             m_out->Print( "(unit (name %s)", m_out->Quotew( u.m_unitName ).c_str() );

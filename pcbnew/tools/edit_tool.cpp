@@ -387,6 +387,12 @@ public:
             if( units.size() < 2 )
                 continue;
 
+            // Gates may only be swapped when the source symbol's units are interchangeable
+            // (!UnitsLocked in the schematic). This is the single chokepoint for every gate-swap
+            // menu/condition, so a locked footprint is never offered a swap.
+            if( !fp->AreUnitsInterchangeable() )
+                continue;
+
             const wxString& padNum = pad->GetNumber();
             bool            inAnyUnit = false;
 

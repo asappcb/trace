@@ -939,6 +939,12 @@ public:
     void                             SetUnitInfo( const std::vector<FP_UNIT_INFO>& aUnits ) { m_unitInfo = aUnits; }
     const std::vector<FP_UNIT_INFO>& GetUnitInfo() const { return m_unitInfo; }
 
+    // Whether the source symbol's units are interchangeable (schematic side: !UnitsLocked()).
+    // Gate swapping is only legal when true. Defaults to true so boards predating this metadata (and
+    // KiCad's own default of unlocked units) keep offering gate swaps until re-synced.
+    void SetUnitsInterchangeable( bool aInterchangeable ) { m_unitsInterchangeable = aInterchangeable; }
+    bool AreUnitsInterchangeable() const { return m_unitsInterchangeable; }
+
     bool IsBoardOnly() const { return m_attributes & FP_BOARD_ONLY; }
     void SetBoardOnly( bool aIsBoardOnly = true )
     {
@@ -1485,6 +1491,7 @@ private:
 
     // Optional unit mapping information for multi-unit symbols
     std::vector<FP_UNIT_INFO> m_unitInfo;
+    bool                      m_unitsInterchangeable = true;
 
     std::vector<SEARCH_TERM> m_searchTerms;
 };

@@ -362,6 +362,7 @@ void KICAD_NETLIST_PARSER::parseComponent()
     std::vector<std::set<wxString>> jumperPinGroups;
 
     std::vector<COMPONENT::UNIT_INFO> parsedUnits;
+    bool                              parsedUnitsInterchangeable = true;
     std::vector<COMPONENT_VARIANT>    parsedVariants;
 
     // The token comp was read, so the next data is (ref P1)
@@ -537,7 +538,17 @@ void KICAD_NETLIST_PARSER::parseComponent()
                 if( token == T_LEFT )
                     token = NextTok();
 
-                if( token == T_unit )
+                if( token == T_interchangeable )
+                {
+                    // (interchangeable "no"); absence means interchangeable (the default).
+                    NeedSYMBOLorNUMBER();
+                    wxString value = From_UTF8( CurText() );
+                    parsedUnitsInterchangeable = !( value.IsSameAs( wxT( "no" ), false )
+                                                    || value.IsSameAs( wxT( "false" ), false )
+                                                    || value == wxT( "0" ) );
+                    NeedRIGHT();
+                }
+                else if( token == T_unit )
                 {
                     COMPONENT::UNIT_INFO info;
 
@@ -855,6 +866,7 @@ void KICAD_NETLIST_PARSER::parseComponent()
     std::ranges::copy( jumperPinGroups, std::inserter( component->JumperPadGroups(),
                                                        component->JumperPadGroups().end() ) );
     component->SetUnitInfo( parsedUnits );
+    component->SetUnitsInterchangeable( parsedUnitsInterchangeable );
 
     for( const COMPONENT_VARIANT& variant : parsedVariants )
         component->AddVariant( variant );

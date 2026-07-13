@@ -419,6 +419,14 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
         return 0;
     }
 
+    // Gates may only be swapped when the source symbol's units are interchangeable (!UnitsLocked).
+    if( !targetFp->AreUnitsInterchangeable() )
+    {
+        frame()->ShowInfoBarError( _( "Gate swapping is disabled: this symbol's units are marked "
+                                      "not interchangeable." ) );
+        return 0;
+    }
+
 
     const auto& units = targetFp->GetUnitInfo();
 
