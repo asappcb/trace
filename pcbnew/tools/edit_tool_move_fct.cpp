@@ -726,26 +726,8 @@ int EDIT_TOOL::OptimizeGateSwaps( const TOOL_EVENT& aEvent )
 
     for( const GATE_SWAP_PLAN_ITEM& step : plan )
     {
-        const std::vector<FOOTPRINT::FP_UNIT_INFO>& units = step.m_footprint->GetUnitInfo();
-
-        auto indexOfUnit = [&]( const wxString& aName ) -> int
-        {
-            for( size_t i = 0; i < units.size(); ++i )
-            {
-                if( units[i].m_unitName == aName )
-                    return static_cast<int>( i );
-            }
-
-            return -1;
-        };
-
-        int idxA = indexOfUnit( step.m_unitA );
-        int idxB = indexOfUnit( step.m_unitB );
-
-        if( idxA < 0 || idxB < 0 )
-            continue;
-
-        if( rotateGateNets( step.m_footprint, { idxA, idxB }, &commit, /* aInteractive */ false ) )
+        if( rotateGateNets( step.m_footprint, { step.m_unitIndexA, step.m_unitIndexB }, &commit,
+                            /* aInteractive */ false ) )
         {
             ++applied;
             totalDelta += step.m_delta;

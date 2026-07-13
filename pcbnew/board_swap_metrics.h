@@ -49,15 +49,16 @@ double EstimateSwapRatsnestDelta( const BOARD* aBoard, const std::map<const PAD*
 
 
 /**
- * One planned gate swap: exchange the nets of gates @ref m_unitA and @ref m_unitB (by
- * FOOTPRINT::FP_UNIT_INFO unit name) on @ref m_footprint. @ref m_delta is the estimated ratsnest
- * length change of this step given the swaps planned before it (negative = shorter).
+ * One planned gate swap: exchange the nets of the gates at indices @ref m_unitIndexA and
+ * @ref m_unitIndexB in @ref m_footprint's FOOTPRINT::FP_UNIT_INFO on @ref m_footprint. @ref m_delta
+ * is the estimated ratsnest length change of this step given the swaps planned before it (negative
+ * = shorter). Indices (not names) so the applier is unambiguous even if two units share a name.
  */
 struct GATE_SWAP_PLAN_ITEM
 {
     FOOTPRINT* m_footprint = nullptr;
-    wxString   m_unitA;
-    wxString   m_unitB;
+    int        m_unitIndexA = -1;
+    int        m_unitIndexB = -1;
     double     m_delta = 0.0;
 };
 
