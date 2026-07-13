@@ -68,6 +68,9 @@
 #include <jobs/job_pcb_import.h>
 #include <jobs/job_import_utils.h>
 #include <jobs/job_pcb_upgrade.h>
+#include <jobs/job_pcb_optimize_swaps.h>
+#include <board_swap_metrics.h>
+#include <gate_swap.h>
 #include <eda_units.h>
 #include <footprint_library_adapter.h>
 #include <lset.h>
@@ -165,6 +168,12 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
                   return dlg.ShowModal() == wxID_OK;
               } );
     Register( "upgrade", std::bind( &PCBNEW_JOBS_HANDLER::JobUpgrade, this, std::placeholders::_1 ),
+              []( JOB* job, wxWindow* aParent ) -> bool
+              {
+                  return true;
+              } );
+    Register( "optimize-swaps",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobOptimizeSwaps, this, std::placeholders::_1 ),
               []( JOB* job, wxWindow* aParent ) -> bool
               {
                   return true;
@@ -2826,6 +2835,46 @@ int PCBNEW_JOBS_HANDLER::JobUpgrade( JOB* aJob )
 
     return CLI::EXIT_CODES::SUCCESS;
 }
+
+int PCBNEW_JOBS_HANDLER::JobOptimizeSwaps( JOB* aJob )
+{
+    JOB_PCB_OPTIMIZE_SWAPS* job = dynamic_cast<JOB_PCB_OPTIMIZE_SWAPS*>( aJob );
+
+    if( job == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    try
+    {
+        IO_RELEASER<PCB_IO> pi( PCB_IO_MGR::FindPlugin( PCB_IO_MGR::KICAD_SEXP ) );
+        BOARD*              brd = getBoard( job->m_filename );
+
+        if( !brd )
+            return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+        // The optimizer's applier reads connectivity to propagate swaps onto connected copper.
+        brd->BuildConnectivity();
+
+        std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( brd );
+        int                              applied = ApplyGateSwapPlan( brd, plan );
+
+        wxString outputPath = job->m_outputFile.IsEmpty() ? job->m_filename : job->m_outputFile;
+        pi->SaveBoard( outputPath, brd );
+
+        m_reporter->Report( wxString::Format( _( "Applied %d gate swap(s); wrote '%s'\n" ), applied,
+                                              outputPath ),
+                            RPT_SEVERITY_INFO );
+    }
+    catch( const IO_ERROR& ioe )
+    {
+        wxString msg = wxString::Format( _( "Error optimizing gate swaps for board file '%s'.\n%s" ),
+                                         job->m_filename, ioe.What().GetData() );
+        m_reporter->Report( msg, RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+    }
+
+    return CLI::EXIT_CODES::SUCCESS;
+}
+
 
 // Most job handlers need to align the running job with the board before resolving any
 // output paths with variables in them like ${REVISION}.
