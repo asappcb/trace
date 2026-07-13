@@ -307,10 +307,19 @@ BOOST_AUTO_TEST_CASE( SplitFirstFracturePartitionProducesMultipleLeaves )
         BOOST_TEST( fraction > 0.15 );
 }
 
+// Absolute path to the QA data tree, injected by CMake (see this test's CMakeLists.txt). The
+// fallback keeps the file compilable in isolation (e.g. an IDE without the definition).
+#ifndef QA_KIMATH_DATA_DIR
+#define QA_KIMATH_DATA_DIR "data"
+#endif
+
 BOOST_AUTO_TEST_CASE( EarLookaheadImprovesBadTriangulationCase )
 {
-    fs::path polyPath = fs::path( __FILE__ ).parent_path().parent_path().parent_path().parent_path()
-                        .parent_path() / "data/triangulation/bad_triangulation_case.kicad_polys";
+    // Resolve against the injected absolute data dir rather than __FILE__: Ninja records __FILE__
+    // relative to the build directory, and ctest runs each test from its own binary directory, so a
+    // __FILE__-relative fixture path does not resolve on CI.
+    fs::path polyPath =
+            fs::path( QA_KIMATH_DATA_DIR ) / "triangulation" / "bad_triangulation_case.kicad_polys";
 
     BOOST_TEST( fs::exists( polyPath ) );
     BOOST_TEST( computeBoardSpikeyRatio( polyPath ) < 0.47 );

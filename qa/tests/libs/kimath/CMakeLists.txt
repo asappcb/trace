@@ -98,6 +98,12 @@ target_include_directories( qa_kimath PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Absolute path to the QA data tree, so tests can locate fixtures independently of the working
+# directory ctest runs them from (see QA_KICAD_CLI_PATH in qa/tests/api for the same idiom).
+target_compile_definitions( qa_kimath PRIVATE
+    QA_KIMATH_DATA_DIR="${CMAKE_SOURCE_DIR}/qa/data"
+)
+
 kicad_add_boost_test( qa_kimath qa_kimath )
 
 setup_qa_env( qa_kimath )
