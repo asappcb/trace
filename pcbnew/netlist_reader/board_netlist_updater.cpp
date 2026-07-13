@@ -1100,8 +1100,6 @@ bool BOARD_NETLIST_UPDATER::updateComponentPadConnections( FOOTPRINT* aFootprint
 
         wxString pinFunction;
         wxString pinType;
-        int      pinSwapUnit = 0;
-        int      pinSwapIndex = -1;
 
         if( net.IsValid() )     // i.e. the pad has a name
         {
@@ -1110,8 +1108,6 @@ bool BOARD_NETLIST_UPDATER::updateComponentPadConnections( FOOTPRINT* aFootprint
                         net.GetNetName() );
             pinFunction = net.GetPinFunction();
             pinType = net.GetPinType();
-            pinSwapUnit = net.GetPinSwapUnit();
-            pinSwapIndex = net.GetPinSwapIndex();
         }
         else
         {
@@ -1132,12 +1128,6 @@ bool BOARD_NETLIST_UPDATER::updateComponentPadConnections( FOOTPRINT* aFootprint
             {
                 changed = true;
                 pad->SetPinType( pinType );
-            }
-
-            if( pad->GetPinSwapUnit() != pinSwapUnit || pad->GetPinSwapIndex() != pinSwapIndex )
-            {
-                changed = true;
-                pad->SetPinSwapGroup( pinSwapUnit, pinSwapIndex );
             }
         }
         else

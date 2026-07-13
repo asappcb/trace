@@ -614,13 +614,6 @@ message SymbolPinInfo
 
   // True if the pin is attached to a no-connect marker in the schematic
   bool no_connect = 3;
-
-  // Gate/pin-swap equivalence transported from the schematic symbol's interchangeable units.
-  // swap_unit is the 1-based interchangeable unit the pad belongs to (0 = not gate-swappable);
-  // swap_index is the position within the unit, shared across interchangeable units, so pads with
-  // the same index in different units of one footprint are gate-swap-equivalent.
-  int32 swap_unit = 4;
-  int32 swap_index = 5;
 }
 
 message Pad
