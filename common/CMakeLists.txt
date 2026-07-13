@@ -197,6 +197,9 @@ set( KICOMMON_SRCS
     jobs/job_pcb_optimize_swaps.cpp
     jobs/job_sch_upgrade.cpp
 
+    # Release management
+    release/release_manifest.cpp
+
     local_history.cpp
     history_lock.cpp
 
