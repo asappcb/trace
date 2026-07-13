@@ -651,7 +651,9 @@ private:
 
         std::vector<PAD*> pads;
 
-        for( EDA_ITEM* it : sel )
+        // Use selection (click) order -- the cyclic rotation depends on it, and SwapPadNets orders
+        // the same way, so the preview must match to score the swap the user will actually get.
+        for( EDA_ITEM* it : sel.GetItemsSortedBySelectionOrder() )
         {
             if( it->Type() != PCB_PAD_T )
                 return;
