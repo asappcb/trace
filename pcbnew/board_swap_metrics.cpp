@@ -163,9 +163,11 @@ std::vector<GATE_SWAP_PLAN_ITEM> PlanGateSwapOptimization( BOARD* aBoard )
         };
 
         // Greedily apply the single best-improving pairwise gate swap until none shortens routing.
-        // Each accepted swap strictly reduces total (bounded, non-negative) MST length, so this
-        // terminates; the guard is a belt-and-braces cap.
-        const size_t maxIters = units.size() * units.size() + 1;
+        // Termination is guaranteed independently of the cap: every accepted swap strictly reduces
+        // the total (bounded, non-negative) MST length by more than IMPROVEMENT_EPSILON, and no
+        // permutation state repeats. The cap is only a safety valve against floating-point pathology;
+        // it is generous so it never truncates a legitimate greedy chain for a real part.
+        const size_t maxIters = units.size() * units.size() * units.size() + 8;
 
         for( size_t guard = 0; guard < maxIters; ++guard )
         {
