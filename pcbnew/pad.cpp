@@ -422,6 +422,10 @@ void PAD::Serialize( google::protobuf::Any &aContainer ) const
         pad.mutable_symbol_pin()->set_no_connect( pt->second );
     }
 
+    // Gate/pin-swap equivalence (swap_unit == 0 means the pad is not gate-swappable).
+    pad.mutable_symbol_pin()->set_swap_unit( m_pinSwapUnit );
+    pad.mutable_symbol_pin()->set_swap_index( m_pinSwapIndex );
+
     pad.set_sim_electrical_type( ToProtoEnum<PAD_SIM_ELECTRICAL_TYPE, PadSimElectricalType>( GetSimElectricalType() ) );
 
     aContainer.PackFrom( pad );
@@ -466,6 +470,13 @@ bool PAD::Deserialize( const google::protobuf::Any &aContainer )
         if( pad.symbol_pin().no_connect() )
             m_pinType += wxT( "+no_connect" );
     }
+
+    // Gate/pin-swap equivalence: a 1-based unit signals an eligible pad (0 = none), so a valid
+    // index of 0 is preserved rather than mistaken for "unset".
+    if( pad.symbol_pin().swap_unit() >= 1 )
+        SetPinSwapGroup( pad.symbol_pin().swap_unit(), pad.symbol_pin().swap_index() );
+    else
+        ClearPinSwapGroup();
 
     return true;
 }

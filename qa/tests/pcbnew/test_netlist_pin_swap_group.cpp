@@ -29,6 +29,15 @@
 
 #include <pcbnew/netlist_reader/pcb_netlist.h>
 #include <pcbnew/netlist_reader/netlist_reader.h>
+#include <pcbnew/netlist_reader/board_netlist_updater.h>
+
+#include <board.h>
+#include <footprint.h>
+#include <pad.h>
+#include <lib_id.h>
+#include <settings/settings_manager.h>
+#include <tool/tool_manager.h>
+#include <pcbnew_utils/board_test_utils.h>
 
 #include <wx/filename.h>
 
@@ -78,6 +87,73 @@ BOOST_AUTO_TEST_CASE( ReaderImportsPinSwapGroup )
     BOOST_CHECK_EQUAL( n5.GetPinSwapIndex(), -1 );
 
     wxRemoveFile( path );
+}
+
+
+// The board netlist updater must land the swap group on the actual pad, and clear a stale group
+// when a subsequent update no longer carries one.
+BOOST_AUTO_TEST_CASE( UpdaterAppliesAndClearsPinSwapGroup )
+{
+    SETTINGS_MANAGER settingsManager;
+    settingsManager.LoadProject( "" );
+
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+    board->SetProject( &settingsManager.Prj() );
+
+    LIB_ID fpid;
+    BOOST_REQUIRE_EQUAL( fpid.Parse( wxS( "TestLib:U" ) ), -1 );
+
+    FOOTPRINT* fp = new FOOTPRINT( board.get() );
+    fp->SetReference( wxS( "U1" ) );
+    fp->SetFPID( fpid );
+    board->Add( fp );
+
+    PAD* pad = new PAD( fp );
+    pad->SetNumber( wxS( "3" ) );
+    fp->Add( pad );
+
+    BOOST_REQUIRE( !pad->IsPinSwapEligible() );
+
+    TOOL_MANAGER toolMgr;
+    toolMgr.SetEnvironment( board.get(), nullptr, nullptr, nullptr, nullptr );
+    toolMgr.RegisterTool( new KI_TEST::DUMMY_TOOL() );
+
+    // First update: the net for pad 3 carries a swap group (unit 1, index 0).
+    {
+        NETLIST netlist;
+        KIID    kiid;
+        COMPONENT* comp = new COMPONENT( fpid, wxS( "U1" ), wxS( "U1" ), KIID_PATH(),
+                                         std::vector<KIID>{ kiid } );
+        comp->AddNet( wxS( "3" ), wxS( "N1" ), wxS( "In+" ), wxS( "input" ), 1, 0 );
+        netlist.AddComponent( comp );
+
+        BOARD_NETLIST_UPDATER updater( &toolMgr, board.get() );
+        updater.SetReplaceFootprints( false );
+        updater.SetDeleteUnusedFootprints( false );
+        BOOST_REQUIRE( updater.UpdateNetlist( netlist ) );
+
+        BOOST_CHECK( pad->IsPinSwapEligible() );
+        BOOST_CHECK_EQUAL( pad->GetPinSwapUnit(), 1 );
+        BOOST_CHECK_EQUAL( pad->GetPinSwapIndex(), 0 );
+    }
+
+    // Second update: the same net no longer carries a swap group -> the stale group is cleared.
+    {
+        NETLIST netlist;
+        KIID    kiid;
+        COMPONENT* comp = new COMPONENT( fpid, wxS( "U1" ), wxS( "U1" ), KIID_PATH(),
+                                         std::vector<KIID>{ kiid } );
+        comp->AddNet( wxS( "3" ), wxS( "N1" ), wxS( "In+" ), wxS( "input" ) );
+        netlist.AddComponent( comp );
+
+        BOARD_NETLIST_UPDATER updater( &toolMgr, board.get() );
+        updater.SetReplaceFootprints( false );
+        updater.SetDeleteUnusedFootprints( false );
+        BOOST_REQUIRE( updater.UpdateNetlist( netlist ) );
+
+        BOOST_CHECK( !pad->IsPinSwapEligible() );
+        BOOST_CHECK_EQUAL( pad->GetPinSwapIndex(), -1 );
+    }
 }
 
 

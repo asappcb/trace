@@ -325,3 +325,58 @@ BOOST_FIXTURE_TEST_CASE( NetlistExporterXML_EmitsGateSwapGroups, XML_STACKED_PIN
 
     wxRemoveFile( netFile.GetFullPath() );
 }
+
+
+// The inverse of the above: when the symbol's units are LOCKED (not interchangeable), the exporter
+// must emit no pin_swap_group at all. The fixture's TL072 is cached with its units locked, so a
+// plain export (no in-test unlock) must produce zero swap groups.
+BOOST_FIXTURE_TEST_CASE( NetlistExporterXML_LockedUnitsEmitNoSwapGroup, XML_STACKED_PIN_FIXTURE )
+{
+    KI_TEST::LoadSchematic( m_settingsManager, wxT( "netlist_exporter_unit_metadata_per_unit" ), m_schematic );
+
+    // Sanity: the fixture's multi-unit symbol really is locked (otherwise this test proves nothing).
+    bool sawLockedMultiUnit = false;
+
+    for( const SCH_SHEET_PATH& sheet : m_schematic->Hierarchy() )
+    {
+        for( SCH_ITEM* item : sheet.LastScreen()->Items().OfType( SCH_SYMBOL_T ) )
+        {
+            SCH_SYMBOL* sym = static_cast<SCH_SYMBOL*>( item );
+
+            if( sym->GetLibSymbolRef() && sym->GetLibSymbolRef()->GetUnitCount() > 1
+                && sym->GetLibSymbolRef()->UnitsLocked() )
+            {
+                sawLockedMultiUnit = true;
+            }
+        }
+    }
+
+    BOOST_REQUIRE( sawLockedMultiUnit );
+
+    wxFileName netFile = m_schematic->Project().GetProjectFullName();
+    netFile.SetName( netFile.GetName() + wxT( "_xml_locked_swap_test" ) );
+    netFile.SetExt( wxT( "xml" ) );
+
+    if( wxFileExists( netFile.GetFullPath() ) )
+        wxRemoveFile( netFile.GetFullPath() );
+
+    WX_STRING_REPORTER                    reporter;
+    std::unique_ptr<NETLIST_EXPORTER_XML> exporter = std::make_unique<NETLIST_EXPORTER_XML>( m_schematic.get() );
+
+    BOOST_REQUIRE( exporter->WriteNetlist( netFile.GetFullPath(), 0, reporter )
+                   && reporter.GetMessages().IsEmpty() );
+
+    wxXmlDocument xdoc;
+    BOOST_REQUIRE( xdoc.Load( netFile.GetFullPath() ) );
+
+    wxXmlNode* nets = find_child( xdoc.GetRoot(), wxT( "nets" ) );
+    BOOST_REQUIRE( nets );
+
+    for( wxXmlNode* net : find_children( nets, wxT( "net" ) ) )
+    {
+        for( wxXmlNode* node : find_children( net, wxT( "node" ) ) )
+            BOOST_CHECK( !node->HasAttribute( wxT( "pin_swap_group" ) ) );
+    }
+
+    wxRemoveFile( netFile.GetFullPath() );
+}

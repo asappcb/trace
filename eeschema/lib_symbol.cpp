@@ -1218,7 +1218,9 @@ std::vector<LIB_SYMBOL::UNIT_PIN_INFO> LIB_SYMBOL::GetUnitPinInfo() const
 
         std::vector<const SCH_PIN*> pinList = GetGraphicalPins( unitIdx, 0 );
 
-        std::sort( pinList.begin(), pinList.end(), compareByPosition );
+        // Stable so two pins at an identical position keep a deterministic order across units (the
+        // cross-unit position correspondence used for gate swapping relies on it).
+        std::stable_sort( pinList.begin(), pinList.end(), compareByPosition );
 
         std::unordered_set<wxString> seenNumbers;
 

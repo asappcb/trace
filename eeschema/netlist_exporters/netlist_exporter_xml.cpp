@@ -1123,6 +1123,10 @@ XNODE* NETLIST_EXPORTER_XML::makeListOfNets( unsigned aCtl )
     XNODE*   xnets = node( wxT( "nets" ) ); // auto_ptr if exceptions ever get used.
     XNODE*   xnet = nullptr;
 
+    // GetUnitPinInfo() rebuilds (sorts, expands stacked pins) on every call, so cache it per
+    // LIB_SYMBOL for the gate/pin-swap derivation below instead of recomputing it per net node.
+    std::map<const LIB_SYMBOL*, std::vector<LIB_SYMBOL::UNIT_PIN_INFO>> unitPinInfoCache;
+
     /*  output:
         <net code="123" name="/cfcard.sch/WAIT#" class="signal">
             <node ref="R23" pin="1"/>
@@ -1298,6 +1302,10 @@ XNODE* NETLIST_EXPORTER_XML::makeListOfNets( unsigned aCtl )
             // Gate/pin-swap equivalence: for a symbol with interchangeable (unlocked) multi-unit
             // gates, pins at the same position index across units are swap-equivalent. Emit
             // "unit index" so a layout-side optimizer can reassign gates without a live schematic.
+            // NB: the position index comes from GetUnitPinInfo()'s geometric pin ordering, so the
+            // correspondence is only valid when the library draws each interchangeable gate with
+            // pins in the same relative layout (true for standard multi-gate parts). A future
+            // optimizer must still validate a proposed swap rather than trust the index blindly.
             wxString swapGroupAttr;
 
             if( const SCH_SYMBOL* schSym =
@@ -1308,7 +1316,13 @@ XNODE* NETLIST_EXPORTER_XML::makeListOfNets( unsigned aCtl )
                 if( lib && lib->GetUnitCount() > 1 && !lib->UnitsLocked() )
                 {
                     int unit = schSym->GetUnitSelection( &netNode.m_Sheet );
-                    const std::vector<LIB_SYMBOL::UNIT_PIN_INFO> unitInfo = lib->GetUnitPinInfo();
+
+                    auto cacheIt = unitPinInfoCache.find( lib.get() );
+
+                    if( cacheIt == unitPinInfoCache.end() )
+                        cacheIt = unitPinInfoCache.emplace( lib.get(), lib->GetUnitPinInfo() ).first;
+
+                    const std::vector<LIB_SYMBOL::UNIT_PIN_INFO>& unitInfo = cacheIt->second;
 
                     if( unit >= 1 && unit <= static_cast<int>( unitInfo.size() ) )
                     {
