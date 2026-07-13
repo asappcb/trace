@@ -6789,15 +6789,6 @@ PAD* PCB_IO_KICAD_SEXPR_PARSER::parsePAD( FOOTPRINT* aParent )
             NeedRIGHT();
             break;
 
-        case T_pin_swap_group:
-        {
-            int swapUnit = parseInt( "pad pin-swap unit" );
-            int swapIndex = parseInt( "pad pin-swap index" );
-            pad->SetPinSwapGroup( swapUnit, swapIndex );
-            NeedRIGHT();
-            break;
-        }
-
         case T_sim_electrical_type:
         {
             token = NextTok();
