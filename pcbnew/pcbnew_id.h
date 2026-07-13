@@ -56,6 +56,8 @@ enum pcbnew_ids
     // Dynamic gate swap submenu entries (index offset added to base)
     ID_POPUP_PCB_SWAP_UNIT_BASE,
     ID_POPUP_PCB_SWAP_UNIT_LAST = ID_POPUP_PCB_SWAP_UNIT_BASE + 63,
+    // Dynamic pad-net swap submenu entry (shows the ratsnest-delta preview)
+    ID_POPUP_PCB_SWAP_PADS,
     ID_POPUP_PCB_SELECT_CUSTOM_DIFFPAIR,
     ID_POPUP_PCB_SELECT_USE_NETCLASS_DIFFPAIR,
     ID_POPUP_PCB_SELECT_DIFFPAIR1,
