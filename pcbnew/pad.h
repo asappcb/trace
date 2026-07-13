@@ -173,7 +173,10 @@ public:
     void ClearPinSwapGroup() { m_pinSwapUnit = 0; m_pinSwapIndex = -1; }
     int  GetPinSwapUnit() const { return m_pinSwapUnit; }
     int  GetPinSwapIndex() const { return m_pinSwapIndex; }
-    bool IsPinSwapEligible() const { return m_pinSwapIndex >= 0; }
+
+    // Requires a 1-based unit as well as a valid index so the s-expr and IPC round-trips agree on
+    // eligibility (both drop a nonsensical unit-0 group); the normal pipeline always sets both.
+    bool IsPinSwapEligible() const { return m_pinSwapUnit >= 1 && m_pinSwapIndex >= 0; }
 
     /**
      * Before we had custom pad shapes it was common to have multiple overlapping pads to
