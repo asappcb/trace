@@ -427,7 +427,6 @@ int EDIT_TOOL::SwapGateNets( const TOOL_EVENT& aEvent )
         return 0;
     }
 
-
     const auto& units = targetFp->GetUnitInfo();
 
     // Collect unit hits and ordered unit list based on selection order
