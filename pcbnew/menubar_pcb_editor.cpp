@@ -432,6 +432,7 @@ void PCB_EDIT_FRAME::doReCreateMenuBar()
     toolsMenu->AppendSeparator();
     toolsMenu->Add( PCB_ACTIONS::cleanupTracksAndVias );
     toolsMenu->Add( PCB_ACTIONS::removeUnusedPads );
+    toolsMenu->Add( PCB_ACTIONS::optimizeGateSwaps );
     toolsMenu->Add( PCB_ACTIONS::cleanupGraphics );
     toolsMenu->Add( PCB_ACTIONS::repairBoard );
 

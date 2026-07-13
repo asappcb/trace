@@ -755,6 +755,13 @@ TOOL_ACTION PCB_ACTIONS::swapGateNets( TOOL_ACTION_ARGS()
         .Parameter<wxString>( wxString() )
         .Icon( BITMAPS::swap ) );
 
+TOOL_ACTION PCB_ACTIONS::optimizeGateSwaps( TOOL_ACTION_ARGS()
+        .Name( "pcbnew.InteractiveEdit.optimizeGateSwaps" )
+        .Scope( AS_GLOBAL )
+        .FriendlyName( _( "Optimize Gate Swaps" ) )
+        .Tooltip( _( "Reassign interchangeable gates across the board to shorten the ratsnest" ) )
+        .Icon( BITMAPS::swap ) );
+
 TOOL_ACTION PCB_ACTIONS::packAndMoveFootprints( TOOL_ACTION_ARGS()
         .Name( "pcbnew.InteractiveEdit.packAndMoveFootprints" )
         .Scope( AS_GLOBAL )

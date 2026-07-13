@@ -232,7 +232,7 @@ std::vector<GATE_SWAP_PLAN_ITEM> PlanGateSwapOptimization( BOARD* aBoard )
                 break; // no improving swap left
 
             assignment = std::move( bestProposal );
-            plan.push_back( { fp, units[bestI].m_unitName, units[bestJ].m_unitName, bestDelta } );
+            plan.push_back( { fp, static_cast<int>( bestI ), static_cast<int>( bestJ ), bestDelta } );
         }
     }
 

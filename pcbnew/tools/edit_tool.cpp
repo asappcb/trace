@@ -3833,6 +3833,7 @@ void EDIT_TOOL::setTransitions()
     Go( &EDIT_TOOL::Swap,                  PCB_ACTIONS::swap.MakeEvent() );
     Go( &EDIT_TOOL::SwapPadNets,           PCB_ACTIONS::swapPadNets.MakeEvent() );
     Go( &EDIT_TOOL::SwapGateNets,          PCB_ACTIONS::swapGateNets.MakeEvent() );
+    Go( &EDIT_TOOL::OptimizeGateSwaps,     PCB_ACTIONS::optimizeGateSwaps.MakeEvent() );
     Go( &EDIT_TOOL::PackAndMoveFootprints,    PCB_ACTIONS::packAndMoveFootprints.MakeEvent() );
     Go( &EDIT_TOOL::ToggleFootprintAttribute, PCB_ACTIONS::toggleExcludeFromBOM.MakeEvent() );
     Go( &EDIT_TOOL::ToggleFootprintAttribute, PCB_ACTIONS::toggleExcludeFromPosFiles.MakeEvent() );

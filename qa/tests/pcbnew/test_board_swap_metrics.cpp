@@ -238,8 +238,9 @@ BOOST_AUTO_TEST_CASE( PlannerFindsImprovingGateSwap )
 
     BOOST_REQUIRE_EQUAL( plan.size(), 1u );
     BOOST_CHECK_EQUAL( plan[0].m_footprint, fp );
-    BOOST_CHECK( ( plan[0].m_unitA == wxT( "A" ) && plan[0].m_unitB == wxT( "B" ) )
-                 || ( plan[0].m_unitA == wxT( "B" ) && plan[0].m_unitB == wxT( "A" ) ) );
+    // The only interchangeable pair is unit index 0 (A) and 1 (B), in either order.
+    BOOST_CHECK( ( plan[0].m_unitIndexA == 0 && plan[0].m_unitIndexB == 1 )
+                 || ( plan[0].m_unitIndexA == 1 && plan[0].m_unitIndexB == 0 ) );
 
     // Exact reduction: before {net1 106mm, net2 95mm}=201; after {6mm,6mm}=12; delta = -189mm.
     BOOST_CHECK_CLOSE( plan[0].m_delta, -static_cast<double>( pcbIUScale.mmToIU( 189.0 ) ), 0.1 );
@@ -290,8 +291,24 @@ BOOST_AUTO_TEST_CASE( PlannerComposesMultipleSwaps )
     BOOST_CHECK( plan[0].m_delta < 0.0 );
     BOOST_CHECK( plan[1].m_delta < 0.0 );
 
-    // Replay the plan by unit name (exchange the two gates' single pads) and confirm the board is
+    // Replay the plan by unit index (exchange the two gates' single pads) and confirm the board is
     // then optimal: a re-plan finds nothing further. This proves the composed sequence is real.
+    auto padOfUnitIndex = [&]( int aIndex ) -> PAD*
+    {
+        return fp->FindPadByNumber( fp->GetUnitInfo()[aIndex].m_pins.front() );
+    };
+
+    for( const GATE_SWAP_PLAN_ITEM& step : plan )
+    {
+        PAD* pa = padOfUnitIndex( step.m_unitIndexA );
+        PAD* pb = padOfUnitIndex( step.m_unitIndexB );
+        BOOST_REQUIRE( pa && pb );
+        int na = pa->GetNetCode();
+        int nb = pb->GetNetCode();
+        pa->SetNetCode( nb );
+        pb->SetNetCode( na );
+    }
+
     auto padOfUnit = [&]( const wxString& aUnit ) -> PAD*
     {
         for( const FOOTPRINT::FP_UNIT_INFO& u : fp->GetUnitInfo() )
@@ -301,17 +318,6 @@ BOOST_AUTO_TEST_CASE( PlannerComposesMultipleSwaps )
         }
         return nullptr;
     };
-
-    for( const GATE_SWAP_PLAN_ITEM& step : plan )
-    {
-        PAD* pa = padOfUnit( step.m_unitA );
-        PAD* pb = padOfUnit( step.m_unitB );
-        BOOST_REQUIRE( pa && pb );
-        int na = pa->GetNetCode();
-        int nb = pb->GetNetCode();
-        pa->SetNetCode( nb );
-        pb->SetNetCode( na );
-    }
 
     // Each gate should now sit on the net whose anchor is at its home position.
     BOOST_CHECK_EQUAL( padOfUnit( wxT( "A" ) )->GetNetCode(), 1 );
