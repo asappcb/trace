@@ -50,11 +50,14 @@ public:
     COMPONENT_NET() {}
 
     COMPONENT_NET( const wxString& aPinName, const wxString& aNetName,
-                   const wxString& aPinFunction, const wxString& aPinType ) :
+                   const wxString& aPinFunction, const wxString& aPinType,
+                   int aPinSwapUnit = 0, int aPinSwapIndex = -1 ) :
         m_pinName( aPinName ),
         m_netName( aNetName ),
         m_pinFunction( aPinFunction ),
-        m_pinType( aPinType )
+        m_pinType( aPinType ),
+        m_pinSwapUnit( aPinSwapUnit ),
+        m_pinSwapIndex( aPinSwapIndex )
     {
     }
 
@@ -62,6 +65,10 @@ public:
     const wxString& GetNetName() const { return m_netName; }
     const wxString& GetPinFunction() const { return m_pinFunction; }
     const wxString& GetPinType() const { return m_pinType; }
+
+    // Gate/pin-swap equivalence transported from the schematic symbol (see PAD::SetPinSwapGroup).
+    int GetPinSwapUnit() const { return m_pinSwapUnit; }
+    int GetPinSwapIndex() const { return m_pinSwapIndex; }
 
     bool IsValid() const { return !m_pinName.IsEmpty(); }
 
@@ -77,6 +84,8 @@ private:
     wxString m_netName;
     wxString m_pinFunction;
     wxString m_pinType;
+    int      m_pinSwapUnit = 0;
+    int      m_pinSwapIndex = -1;
 };
 
 
@@ -128,9 +137,10 @@ public:
     virtual ~COMPONENT();
 
     void AddNet( const wxString& aPinName, const wxString& aNetName, const wxString& aPinFunction,
-                 const wxString& aPinType )
+                 const wxString& aPinType, int aPinSwapUnit = 0, int aPinSwapIndex = -1 )
     {
-        m_nets.emplace_back( aPinName, aNetName, aPinFunction, aPinType );
+        m_nets.emplace_back( aPinName, aNetName, aPinFunction, aPinType, aPinSwapUnit,
+                             aPinSwapIndex );
     }
 
     unsigned GetNetCount() const { return m_nets.size(); }

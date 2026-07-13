@@ -24,6 +24,9 @@
 #include <vector>
 
 #include <schematic.h>
+#include <sch_screen.h>
+#include <sch_symbol.h>
+#include <lib_symbol.h>
 #include <settings/settings_manager.h>
 #include <netlist_exporter_xml.h>
 
@@ -236,6 +239,89 @@ BOOST_FIXTURE_TEST_CASE( NetlistExporterXML_UsesPerUnitResolvedLibraryMetadata, 
     BOOST_CHECK( get_pin_numbers( unitA ) == expectedUnitA );
     BOOST_CHECK( get_pin_numbers( unitB ) == expectedUnitB );
     BOOST_CHECK( get_pin_numbers( unitC ) == expectedUnitC );
+
+    wxRemoveFile( netFile.GetFullPath() );
+}
+
+
+// The XML netlist must carry pin_swap_group on the net nodes of interchangeable-unit symbols so a
+// layout-side optimizer can reassign gates. For the TL072 (two 3-pin amp sections A/B plus a 2-pin
+// power unit C), the amp pins must be marked gate-swappable (unit 1 or 2) while the power pins must
+// not -- the mismatched-size power unit is excluded.
+BOOST_FIXTURE_TEST_CASE( NetlistExporterXML_EmitsGateSwapGroups, XML_STACKED_PIN_FIXTURE )
+{
+    KI_TEST::LoadSchematic( m_settingsManager, wxT( "netlist_exporter_unit_metadata_per_unit" ), m_schematic );
+
+    // The fixture's TL072 is cached with its units locked; unlock the interchangeable sections so
+    // the gate-swap emission path is exercised deterministically regardless of the cached state.
+    for( const SCH_SHEET_PATH& sheet : m_schematic->Hierarchy() )
+    {
+        for( SCH_ITEM* item : sheet.LastScreen()->Items().OfType( SCH_SYMBOL_T ) )
+        {
+            SCH_SYMBOL* sym = static_cast<SCH_SYMBOL*>( item );
+
+            if( sym->GetLibSymbolRef() && sym->GetLibSymbolRef()->GetUnitCount() > 1 )
+                sym->GetLibSymbolRef()->LockUnits( false );
+        }
+    }
+
+    wxFileName netFile = m_schematic->Project().GetProjectFullName();
+    netFile.SetName( netFile.GetName() + wxT( "_xml_swap_group_test" ) );
+    netFile.SetExt( wxT( "xml" ) );
+
+    if( wxFileExists( netFile.GetFullPath() ) )
+        wxRemoveFile( netFile.GetFullPath() );
+
+    WX_STRING_REPORTER                    reporter;
+    std::unique_ptr<NETLIST_EXPORTER_XML> exporter = std::make_unique<NETLIST_EXPORTER_XML>( m_schematic.get() );
+
+    BOOST_REQUIRE( exporter->WriteNetlist( netFile.GetFullPath(), 0, reporter )
+                   && reporter.GetMessages().IsEmpty() );
+
+    wxXmlDocument xdoc;
+    BOOST_REQUIRE( xdoc.Load( netFile.GetFullPath() ) );
+
+    wxXmlNode* nets = find_child( xdoc.GetRoot(), wxT( "nets" ) );
+    BOOST_REQUIRE( nets );
+
+    // Collect, for U1, the pin_swap_group of every emitted node (only pins that carry one).
+    std::map<wxString, wxString> u1SwapByPin;
+
+    for( wxXmlNode* net : find_children( nets, wxT( "net" ) ) )
+    {
+        for( wxXmlNode* node : find_children( net, wxT( "node" ) ) )
+        {
+            if( node->GetAttribute( wxT( "ref" ) ) != wxT( "U1" ) )
+                continue;
+
+            wxString group;
+
+            if( node->GetAttribute( wxT( "pin_swap_group" ), &group ) )
+                u1SwapByPin[node->GetAttribute( wxT( "pin" ) )] = group;
+        }
+    }
+
+    // The amp sections are marked; the 2-pin power unit's pins (4, 8) are not.
+    BOOST_REQUIRE( !u1SwapByPin.empty() );
+    BOOST_CHECK( u1SwapByPin.count( wxT( "4" ) ) == 0 );
+    BOOST_CHECK( u1SwapByPin.count( wxT( "8" ) ) == 0 );
+
+    // Every marked pin belongs to an amp section (unit 1 or 2), never the power unit (3).
+    for( const auto& [pin, group] : u1SwapByPin )
+    {
+        long unit = 0;
+        BOOST_REQUIRE( group.BeforeFirst( ' ' ).ToLong( &unit ) );
+        BOOST_CHECK_MESSAGE( unit == 1 || unit == 2,
+                             "pin " << pin << " got unexpected swap unit " << unit );
+    }
+
+    // The first-position input of each amp section (pin 3 in unit A, pin 6 in unit B) shares index
+    // 0, proving the cross-unit position correspondence is consistent.
+    if( u1SwapByPin.count( wxT( "3" ) ) && u1SwapByPin.count( wxT( "6" ) ) )
+    {
+        BOOST_CHECK_EQUAL( u1SwapByPin[wxT( "3" )], wxT( "1 0" ) );
+        BOOST_CHECK_EQUAL( u1SwapByPin[wxT( "6" )], wxT( "2 0" ) );
+    }
 
     wxRemoveFile( netFile.GetFullPath() );
 }

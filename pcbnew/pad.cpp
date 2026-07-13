@@ -83,6 +83,8 @@ PAD::PAD( FOOTPRINT* parent ) :
     drill.x = drill.y = EDA_UNIT_UTILS::Mils2IU( pcbIUScale, 30 );       // Default drill size 30 mils.
     m_lengthPadToDie = 0;
     m_delayPadToDie = 0;
+    m_pinSwapUnit = 0;
+    m_pinSwapIndex = -1;
 
     SetShape( F_Cu, PAD_SHAPE::CIRCLE );          // Default pad shape is PAD_CIRCLE.
     SetAnchorPadShape( F_Cu, PAD_SHAPE::CIRCLE ); // Default anchor shape for custom shaped pads is PAD_CIRCLE.
@@ -346,6 +348,7 @@ PAD& PAD::operator=( const PAD &aOther )
     SetNumber( aOther.GetNumber() );
     SetPinType( aOther.GetPinType() );
     SetPinFunction( aOther.GetPinFunction() );
+    SetPinSwapGroup( aOther.GetPinSwapUnit(), aOther.GetPinSwapIndex() );
     SetSubRatsnest( aOther.GetSubRatsnest() );
     m_effectiveBoundingRadius = aOther.m_effectiveBoundingRadius;
 

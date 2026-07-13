@@ -42,6 +42,7 @@ part
 pin
 pins
 pinfunction
+pin_swap_group
 pintype
 property
 ref
