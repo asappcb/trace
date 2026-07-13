@@ -49,6 +49,18 @@ PAD* addPad( FOOTPRINT* aFp, NETINFO_ITEM* aNet, double aXmm, double aYmm )
     aFp->Add( pad );
     return pad;
 }
+
+
+PAD* addNumberedPad( FOOTPRINT* aFp, const wxString& aNumber, NETINFO_ITEM* aNet, double aXmm,
+                     double aYmm )
+{
+    PAD* pad = new PAD( aFp );
+    pad->SetNumber( aNumber );
+    pad->SetPosition( VECTOR2I( pcbIUScale.mmToIU( aXmm ), pcbIUScale.mmToIU( aYmm ) ) );
+    pad->SetNet( aNet );
+    aFp->Add( pad );
+    return pad;
+}
 } // namespace
 
 
@@ -174,6 +186,172 @@ BOOST_AUTO_TEST_CASE( EmptyOrNullYieldsZeroDelta )
 
     BOOST_CHECK_EQUAL( EstimateSwapRatsnestDelta( board.get(), {} ), 0.0 );
     BOOST_CHECK_EQUAL( EstimateSwapRatsnestDelta( nullptr, {} ), 0.0 );
+}
+
+
+// Build a board with a 2-gate interchangeable part whose gates are "crossed": gate A (near net1's
+// anchor) currently carries net2 (far), gate B (near net2's anchor) carries net1 (far). The best
+// swap regroups each net locally. @p aInterchangeable controls the units-locked gate.
+static std::unique_ptr<BOARD> makeCrossedTwoGateBoard( bool aInterchangeable, FOOTPRINT** aOutFp )
+{
+    auto board = std::make_unique<BOARD>();
+
+    NETINFO_ITEM* net1 = new NETINFO_ITEM( board.get(), wxT( "N1" ), 1 );
+    NETINFO_ITEM* net2 = new NETINFO_ITEM( board.get(), wxT( "N2" ), 2 );
+    board->Add( net1 );
+    board->Add( net2 );
+
+    // External anchors: net1 near x=0, net2 near x=100.
+    FOOTPRINT* ext = new FOOTPRINT( board.get() );
+    ext->SetReference( wxT( "J1" ) );
+    board->Add( ext );
+    addNumberedPad( ext, wxT( "1" ), net1, 0.0, 0.0 );
+    addNumberedPad( ext, wxT( "2" ), net2, 100.0, 0.0 );
+
+    // The gate part: gate A pads near x=0 but on net2; gate B pads near x=100 but on net1 (crossed).
+    FOOTPRINT* fp = new FOOTPRINT( board.get() );
+    fp->SetReference( wxT( "U1" ) );
+    board->Add( fp );
+    addNumberedPad( fp, wxT( "1" ), net2, 5.0, 0.0 );   // gate A
+    addNumberedPad( fp, wxT( "2" ), net2, 6.0, 0.0 );   // gate A
+    addNumberedPad( fp, wxT( "3" ), net1, 105.0, 0.0 ); // gate B
+    addNumberedPad( fp, wxT( "4" ), net1, 106.0, 0.0 ); // gate B
+
+    fp->SetUnitInfo( { { wxT( "A" ), { wxT( "1" ), wxT( "2" ) } },
+                       { wxT( "B" ), { wxT( "3" ), wxT( "4" ) } } } );
+    fp->SetUnitsInterchangeable( aInterchangeable );
+
+    if( aOutFp )
+        *aOutFp = fp;
+
+    return board;
+}
+
+
+// The planner must find the improving A<->B gate swap on a crossed interchangeable part.
+BOOST_AUTO_TEST_CASE( PlannerFindsImprovingGateSwap )
+{
+    FOOTPRINT*             fp = nullptr;
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( true, &fp );
+
+    std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( board.get() );
+
+    BOOST_REQUIRE_EQUAL( plan.size(), 1u );
+    BOOST_CHECK_EQUAL( plan[0].m_footprint, fp );
+    BOOST_CHECK( ( plan[0].m_unitA == wxT( "A" ) && plan[0].m_unitB == wxT( "B" ) )
+                 || ( plan[0].m_unitA == wxT( "B" ) && plan[0].m_unitB == wxT( "A" ) ) );
+
+    // Exact reduction: before {net1 106mm, net2 95mm}=201; after {6mm,6mm}=12; delta = -189mm.
+    BOOST_CHECK_CLOSE( plan[0].m_delta, -static_cast<double>( pcbIUScale.mmToIU( 189.0 ) ), 0.1 );
+}
+
+
+// Three interchangeable gates arranged as a 3-cycle (each gate carries a net whose anchor is at a
+// different gate's home). Fixing it needs TWO sequential swaps, so this exercises the greedy
+// composition (each step's delta measured against the state left by the previous step).
+BOOST_AUTO_TEST_CASE( PlannerComposesMultipleSwaps )
+{
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+
+    NETINFO_ITEM* net1 = new NETINFO_ITEM( board.get(), wxT( "N1" ), 1 );
+    NETINFO_ITEM* net2 = new NETINFO_ITEM( board.get(), wxT( "N2" ), 2 );
+    NETINFO_ITEM* net3 = new NETINFO_ITEM( board.get(), wxT( "N3" ), 3 );
+    board->Add( net1 );
+    board->Add( net2 );
+    board->Add( net3 );
+
+    // Anchors: net1 home x=0, net2 home x=10, net3 home x=20.
+    FOOTPRINT* ext = new FOOTPRINT( board.get() );
+    ext->SetReference( wxT( "J1" ) );
+    board->Add( ext );
+    addNumberedPad( ext, wxT( "1" ), net1, 0.0, 0.0 );
+    addNumberedPad( ext, wxT( "2" ), net2, 10.0, 0.0 );
+    addNumberedPad( ext, wxT( "3" ), net3, 20.0, 0.0 );
+
+    // Gate part: gate A near x=0, gate B near x=10, gate C near x=20; but the nets are 3-cycled:
+    // A carries net2, B carries net3, C carries net1.
+    FOOTPRINT* fp = nullptr;
+    fp = new FOOTPRINT( board.get() );
+    fp->SetReference( wxT( "U1" ) );
+    board->Add( fp );
+    addNumberedPad( fp, wxT( "1" ), net2, 0.1, 0.0 );  // gate A (home net1)
+    addNumberedPad( fp, wxT( "2" ), net3, 10.1, 0.0 ); // gate B (home net2)
+    addNumberedPad( fp, wxT( "3" ), net1, 20.1, 0.0 ); // gate C (home net3)
+
+    fp->SetUnitInfo( { { wxT( "A" ), { wxT( "1" ) } },
+                       { wxT( "B" ), { wxT( "2" ) } },
+                       { wxT( "C" ), { wxT( "3" ) } } } );
+    fp->SetUnitsInterchangeable( true );
+
+    std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( board.get() );
+
+    // A 3-cycle needs two transpositions to resolve.
+    BOOST_REQUIRE_EQUAL( plan.size(), 2u );
+    BOOST_CHECK( plan[0].m_delta < 0.0 );
+    BOOST_CHECK( plan[1].m_delta < 0.0 );
+
+    // Replay the plan by unit name (exchange the two gates' single pads) and confirm the board is
+    // then optimal: a re-plan finds nothing further. This proves the composed sequence is real.
+    auto padOfUnit = [&]( const wxString& aUnit ) -> PAD*
+    {
+        for( const FOOTPRINT::FP_UNIT_INFO& u : fp->GetUnitInfo() )
+        {
+            if( u.m_unitName == aUnit )
+                return fp->FindPadByNumber( u.m_pins.front() );
+        }
+        return nullptr;
+    };
+
+    for( const GATE_SWAP_PLAN_ITEM& step : plan )
+    {
+        PAD* pa = padOfUnit( step.m_unitA );
+        PAD* pb = padOfUnit( step.m_unitB );
+        BOOST_REQUIRE( pa && pb );
+        int na = pa->GetNetCode();
+        int nb = pb->GetNetCode();
+        pa->SetNetCode( nb );
+        pb->SetNetCode( na );
+    }
+
+    // Each gate should now sit on the net whose anchor is at its home position.
+    BOOST_CHECK_EQUAL( padOfUnit( wxT( "A" ) )->GetNetCode(), 1 );
+    BOOST_CHECK_EQUAL( padOfUnit( wxT( "B" ) )->GetNetCode(), 2 );
+    BOOST_CHECK_EQUAL( padOfUnit( wxT( "C" ) )->GetNetCode(), 3 );
+
+    BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
+}
+
+
+// A part whose units are locked (not interchangeable) must be skipped entirely.
+BOOST_AUTO_TEST_CASE( PlannerSkipsLockedUnits )
+{
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( false, nullptr );
+
+    BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
+}
+
+
+// Applying the planned swap (reassigning the gate pads' nets) leaves nothing further to improve --
+// the planner converges and re-planning the optimized board yields an empty plan.
+BOOST_AUTO_TEST_CASE( PlannerConvergesAfterApplying )
+{
+    FOOTPRINT*             fp = nullptr;
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( true, &fp );
+
+    // Apply the A<->B swap by hand: exchange the nets of pads (1,2) and (3,4).
+    PAD* p1 = fp->FindPadByNumber( wxT( "1" ) );
+    PAD* p2 = fp->FindPadByNumber( wxT( "2" ) );
+    PAD* p3 = fp->FindPadByNumber( wxT( "3" ) );
+    PAD* p4 = fp->FindPadByNumber( wxT( "4" ) );
+
+    int n1 = p1->GetNetCode();
+    int n3 = p3->GetNetCode();
+    p1->SetNetCode( n3 );
+    p2->SetNetCode( n3 );
+    p3->SetNetCode( n1 );
+    p4->SetNetCode( n1 );
+
+    BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
 }
 
 
