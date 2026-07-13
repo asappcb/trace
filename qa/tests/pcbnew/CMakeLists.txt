@@ -142,6 +142,7 @@ set( QA_PCBNEW_SRCS
     net_chains/test_tuning_bridging_clamp.cpp
 
     drc/test_custom_rule_severities.cpp
+    drc/test_drc_item_registration.cpp
     drc/test_drc_backdrill_postmachining.cpp
     drc/test_drc_courtyard_invalid.cpp
     drc/test_drc_courtyard_overlap.cpp
