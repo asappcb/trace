@@ -49,6 +49,18 @@ PAD* addPad( FOOTPRINT* aFp, NETINFO_ITEM* aNet, double aXmm, double aYmm )
     aFp->Add( pad );
     return pad;
 }
+
+
+PAD* addNumberedPad( FOOTPRINT* aFp, const wxString& aNumber, NETINFO_ITEM* aNet, double aXmm,
+                     double aYmm )
+{
+    PAD* pad = new PAD( aFp );
+    pad->SetNumber( aNumber );
+    pad->SetPosition( VECTOR2I( pcbIUScale.mmToIU( aXmm ), pcbIUScale.mmToIU( aYmm ) ) );
+    pad->SetNet( aNet );
+    aFp->Add( pad );
+    return pad;
+}
 } // namespace
 
 
@@ -174,6 +186,94 @@ BOOST_AUTO_TEST_CASE( EmptyOrNullYieldsZeroDelta )
 
     BOOST_CHECK_EQUAL( EstimateSwapRatsnestDelta( board.get(), {} ), 0.0 );
     BOOST_CHECK_EQUAL( EstimateSwapRatsnestDelta( nullptr, {} ), 0.0 );
+}
+
+
+// Build a board with a 2-gate interchangeable part whose gates are "crossed": gate A (near net1's
+// anchor) currently carries net2 (far), gate B (near net2's anchor) carries net1 (far). The best
+// swap regroups each net locally. @p aInterchangeable controls the units-locked gate.
+static std::unique_ptr<BOARD> makeCrossedTwoGateBoard( bool aInterchangeable, FOOTPRINT** aOutFp )
+{
+    auto board = std::make_unique<BOARD>();
+
+    NETINFO_ITEM* net1 = new NETINFO_ITEM( board.get(), wxT( "N1" ), 1 );
+    NETINFO_ITEM* net2 = new NETINFO_ITEM( board.get(), wxT( "N2" ), 2 );
+    board->Add( net1 );
+    board->Add( net2 );
+
+    // External anchors: net1 near x=0, net2 near x=100.
+    FOOTPRINT* ext = new FOOTPRINT( board.get() );
+    ext->SetReference( wxT( "J1" ) );
+    board->Add( ext );
+    addNumberedPad( ext, wxT( "1" ), net1, 0.0, 0.0 );
+    addNumberedPad( ext, wxT( "2" ), net2, 100.0, 0.0 );
+
+    // The gate part: gate A pads near x=0 but on net2; gate B pads near x=100 but on net1 (crossed).
+    FOOTPRINT* fp = new FOOTPRINT( board.get() );
+    fp->SetReference( wxT( "U1" ) );
+    board->Add( fp );
+    addNumberedPad( fp, wxT( "1" ), net2, 5.0, 0.0 );   // gate A
+    addNumberedPad( fp, wxT( "2" ), net2, 6.0, 0.0 );   // gate A
+    addNumberedPad( fp, wxT( "3" ), net1, 105.0, 0.0 ); // gate B
+    addNumberedPad( fp, wxT( "4" ), net1, 106.0, 0.0 ); // gate B
+
+    fp->SetUnitInfo( { { wxT( "A" ), { wxT( "1" ), wxT( "2" ) } },
+                       { wxT( "B" ), { wxT( "3" ), wxT( "4" ) } } } );
+    fp->SetUnitsInterchangeable( aInterchangeable );
+
+    if( aOutFp )
+        *aOutFp = fp;
+
+    return board;
+}
+
+
+// The planner must find the improving A<->B gate swap on a crossed interchangeable part.
+BOOST_AUTO_TEST_CASE( PlannerFindsImprovingGateSwap )
+{
+    FOOTPRINT*             fp = nullptr;
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( true, &fp );
+
+    std::vector<GATE_SWAP_PLAN_ITEM> plan = PlanGateSwapOptimization( board.get() );
+
+    BOOST_REQUIRE_EQUAL( plan.size(), 1u );
+    BOOST_CHECK_EQUAL( plan[0].m_footprint, fp );
+    BOOST_CHECK( ( plan[0].m_unitA == wxT( "A" ) && plan[0].m_unitB == wxT( "B" ) )
+                 || ( plan[0].m_unitA == wxT( "B" ) && plan[0].m_unitB == wxT( "A" ) ) );
+    BOOST_CHECK( plan[0].m_delta < 0.0 );
+}
+
+
+// A part whose units are locked (not interchangeable) must be skipped entirely.
+BOOST_AUTO_TEST_CASE( PlannerSkipsLockedUnits )
+{
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( false, nullptr );
+
+    BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
+}
+
+
+// Applying the planned swap (reassigning the gate pads' nets) leaves nothing further to improve --
+// the planner converges and re-planning the optimized board yields an empty plan.
+BOOST_AUTO_TEST_CASE( PlannerConvergesAfterApplying )
+{
+    FOOTPRINT*             fp = nullptr;
+    std::unique_ptr<BOARD> board = makeCrossedTwoGateBoard( true, &fp );
+
+    // Apply the A<->B swap by hand: exchange the nets of pads (1,2) and (3,4).
+    PAD* p1 = fp->FindPadByNumber( wxT( "1" ) );
+    PAD* p2 = fp->FindPadByNumber( wxT( "2" ) );
+    PAD* p3 = fp->FindPadByNumber( wxT( "3" ) );
+    PAD* p4 = fp->FindPadByNumber( wxT( "4" ) );
+
+    int n1 = p1->GetNetCode();
+    int n3 = p3->GetNetCode();
+    p1->SetNetCode( n3 );
+    p2->SetNetCode( n3 );
+    p3->SetNetCode( n1 );
+    p4->SetNetCode( n1 );
+
+    BOOST_CHECK( PlanGateSwapOptimization( board.get() ).empty() );
 }
 
 

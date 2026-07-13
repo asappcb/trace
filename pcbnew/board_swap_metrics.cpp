@@ -78,6 +78,40 @@ static double euclideanMSTLength( const std::vector<VECTOR2I>& aPoints )
 }
 
 
+/**
+ * Total MST length over @p aNets, where each pad's net is taken from @p aAssignment when present,
+ * otherwise its current board net. This is the shared core: the delta estimate and the optimizer
+ * both score a candidate assignment against another with it.
+ */
+static double totalNetMSTLength( const BOARD* aBoard, const std::set<int>& aNets,
+                                 const std::map<const PAD*, int>& aAssignment )
+{
+    if( aNets.empty() )
+        return 0.0;
+
+    std::map<int, std::vector<VECTOR2I>> buckets;
+
+    for( const FOOTPRINT* fp : aBoard->Footprints() )
+    {
+        for( const PAD* pad : fp->Pads() )
+        {
+            auto      it = aAssignment.find( pad );
+            const int net = ( it != aAssignment.end() ) ? it->second : pad->GetNetCode();
+
+            if( aNets.count( net ) )
+                buckets[net].push_back( pad->GetPosition() );
+        }
+    }
+
+    double total = 0.0;
+
+    for( int net : aNets )
+        total += euclideanMSTLength( buckets[net] );
+
+    return total;
+}
+
+
 double EstimateSwapRatsnestDelta( const BOARD* aBoard, const std::map<const PAD*, int>& aNewNetByPad )
 {
     if( !aBoard || aNewNetByPad.empty() )
@@ -97,32 +131,108 @@ double EstimateSwapRatsnestDelta( const BOARD* aBoard, const std::map<const PAD*
     if( affected.empty() )
         return 0.0;
 
-    // Bucket every board pad's position by its net, both under the current assignment and under the
-    // hypothetical one, in a single pass.
-    std::map<int, std::vector<VECTOR2I>> before;
-    std::map<int, std::vector<VECTOR2I>> after;
+    const std::map<const PAD*, int> current; // empty = current board nets
+    return totalNetMSTLength( aBoard, affected, aNewNetByPad )
+           - totalNetMSTLength( aBoard, affected, current );
+}
 
-    for( const FOOTPRINT* fp : aBoard->Footprints() )
+
+std::vector<GATE_SWAP_PLAN_ITEM> PlanGateSwapOptimization( BOARD* aBoard )
+{
+    std::vector<GATE_SWAP_PLAN_ITEM> plan;
+
+    if( !aBoard )
+        return plan;
+
+    constexpr double IMPROVEMENT_EPSILON = 1.0; // nm; ignore sub-nm floating-point noise
+
+    for( FOOTPRINT* fp : aBoard->Footprints() )
     {
-        for( const PAD* pad : fp->Pads() )
+        const std::vector<FOOTPRINT::FP_UNIT_INFO>& units = fp->GetUnitInfo();
+
+        if( units.size() < 2 || !fp->AreUnitsInterchangeable() )
+            continue;
+
+        // Working net assignment for this footprint's gate pads; composes swaps across iterations.
+        std::map<const PAD*, int> assignment;
+
+        auto padNet = [&]( const PAD* aPad ) -> int
         {
-            const int oldNet = pad->GetNetCode();
+            auto it = assignment.find( aPad );
+            return ( it != assignment.end() ) ? it->second : aPad->GetNetCode();
+        };
 
-            auto      it = aNewNetByPad.find( pad );
-            const int newNet = ( it != aNewNetByPad.end() ) ? it->second : oldNet;
+        // Greedily apply the single best-improving pairwise gate swap until none shortens routing.
+        // Each accepted swap strictly reduces total (bounded, non-negative) MST length, so this
+        // terminates; the guard is a belt-and-braces cap.
+        const size_t maxIters = units.size() * units.size() + 1;
 
-            if( affected.count( oldNet ) )
-                before[oldNet].push_back( pad->GetPosition() );
+        for( size_t guard = 0; guard < maxIters; ++guard )
+        {
+            double                    bestDelta = -IMPROVEMENT_EPSILON;
+            size_t                    bestI = 0;
+            size_t                    bestJ = 0;
+            std::map<const PAD*, int> bestProposal;
 
-            if( affected.count( newNet ) )
-                after[newNet].push_back( pad->GetPosition() );
+            for( size_t i = 0; i < units.size(); ++i )
+            {
+                for( size_t j = i + 1; j < units.size(); ++j )
+                {
+                    // Only equal-pin-count gates are interchangeable.
+                    if( units[i].m_pins.size() != units[j].m_pins.size() )
+                        continue;
+
+                    std::map<const PAD*, int> proposal = assignment;
+                    std::set<int>             affected;
+                    bool                      ok = true;
+
+                    for( size_t p = 0; p < units[i].m_pins.size(); ++p )
+                    {
+                        PAD* padI = fp->FindPadByNumber( units[i].m_pins[p] );
+                        PAD* padJ = fp->FindPadByNumber( units[j].m_pins[p] );
+
+                        if( !padI || !padJ )
+                        {
+                            ok = false;
+                            break;
+                        }
+
+                        int netI = padNet( padI );
+                        int netJ = padNet( padJ );
+
+                        proposal[padI] = netJ;
+                        proposal[padJ] = netI;
+
+                        if( netI )
+                            affected.insert( netI );
+
+                        if( netJ )
+                            affected.insert( netJ );
+                    }
+
+                    if( !ok || affected.empty() )
+                        continue;
+
+                    double delta = totalNetMSTLength( aBoard, affected, proposal )
+                                   - totalNetMSTLength( aBoard, affected, assignment );
+
+                    if( delta < bestDelta )
+                    {
+                        bestDelta = delta;
+                        bestI = i;
+                        bestJ = j;
+                        bestProposal = std::move( proposal );
+                    }
+                }
+            }
+
+            if( bestDelta >= -IMPROVEMENT_EPSILON )
+                break; // no improving swap left
+
+            assignment = std::move( bestProposal );
+            plan.push_back( { fp, units[bestI].m_unitName, units[bestJ].m_unitName, bestDelta } );
         }
     }
 
-    double delta = 0.0;
-
-    for( int net : affected )
-        delta += euclideanMSTLength( after[net] ) - euclideanMSTLength( before[net] );
-
-    return delta;
+    return plan;
 }

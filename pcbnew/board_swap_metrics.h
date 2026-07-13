@@ -21,8 +21,12 @@
 #define BOARD_SWAP_METRICS_H
 
 #include <map>
+#include <vector>
+
+#include <wx/string.h>
 
 class BOARD;
+class FOOTPRINT;
 class PAD;
 
 /**
@@ -42,5 +46,30 @@ class PAD;
  *         means the swap shortens the ratsnest (a routing improvement); zero means no change.
  */
 double EstimateSwapRatsnestDelta( const BOARD* aBoard, const std::map<const PAD*, int>& aNewNetByPad );
+
+
+/**
+ * One planned gate swap: exchange the nets of gates @ref m_unitA and @ref m_unitB (by
+ * FOOTPRINT::FP_UNIT_INFO unit name) on @ref m_footprint. @ref m_delta is the estimated ratsnest
+ * length change of this step given the swaps planned before it (negative = shorter).
+ */
+struct GATE_SWAP_PLAN_ITEM
+{
+    FOOTPRINT* m_footprint = nullptr;
+    wxString   m_unitA;
+    wxString   m_unitB;
+    double     m_delta = 0.0;
+};
+
+/**
+ * Plan a sequence of gate swaps that shorten total routing. For each footprint whose units are
+ * interchangeable, greedily swaps equal-pin-count gate pairs while any swap shortens the ratsnest
+ * (using the same MST metric as EstimateSwapRatsnestDelta), composing swaps within the footprint.
+ *
+ * Pure: it reads the board and mutates nothing; the caller applies the returned ordered list (e.g.
+ * through the existing gate-swap machinery) and validates routability. The greedy pairwise search
+ * finds a local optimum, not necessarily the global one.
+ */
+std::vector<GATE_SWAP_PLAN_ITEM> PlanGateSwapOptimization( BOARD* aBoard );
 
 #endif // BOARD_SWAP_METRICS_H
