@@ -1,39 +1,63 @@
 name: Build and Test
 
-# Native GitHub CI for the asappcb/trace fork (upstream KiCad's real CI is on GitLab; this makes the
-# fork self-sufficient). Builds in KiCad's public CI container so we don't reimplement the very
-# large dependency stack, then runs the Boost/CTest QA suite.
+# Native GitHub CI for the asappcb/trace fork (upstream KiCad's real CI is on GitLab).
+#
+# Scope is decided at runtime for fast feedback:
+#   * pull_request  -> build & test only the affected module (see .github/ci/affected-targets.sh),
+#                      falling back to the full suite for build-system / cross-cutting / multi-module
+#                      changes. This is the quick PR gate.
+#   * push: master  -> full build & test (post-merge safety net).
+#   * schedule      -> nightly full build & test.
+# A fast-fail clang-format job runs in parallel on PRs, and a report job surfaces results inline.
 
 on:
   push:
     branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'Documentation/**'
+      - 'LICENSE*'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'Documentation/**'
+      - 'LICENSE*'
+  schedule:
+    - cron: '0 6 * * *'   # 06:00 UTC nightly full run
+  workflow_dispatch:        # manual full run
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Fedora QABUILD + QA
+    # Build every push/schedule, but skip draft PRs to save runner time.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     container:
       image: registry.gitlab.com/kicad/kicad-ci/source_containers/master/fedora:41
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: "2G"
+      CCACHE_MAXSIZE: "5G"
       CTEST_OUTPUT_ON_FAILURE: "1"
       BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need history to diff a PR against its merge base
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Restore ccache
         # restore + explicit save (below) instead of actions/cache, which does NOT save on a failed
-        # job -- so a failing test step would otherwise discard the whole build cache and force the
-        # next run to rebuild cold.
+        # job -- so a failing test step would otherwise discard the whole build cache.
         uses: actions/cache/restore@v4
         with:
           path: .ccache
@@ -42,6 +66,29 @@ jobs:
             ccache-fedora-${{ github.ref_name }}-
             ccache-fedora-master-
             ccache-fedora-
+
+      - name: Determine build/test scope
+        id: scope
+        # PRs build/test only the affected module; everything else runs the full suite.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git config --global --add safe.directory "$GITHUB_WORKSPACE"
+            git fetch --no-tags origin ${{ github.event.pull_request.base.ref }}
+            BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
+            git diff --name-only "$BASE" HEAD > changed.txt
+            echo "Changed files:"; cat changed.txt
+            RESULT=$(.github/ci/affected-targets.sh < changed.txt)
+          else
+            RESULT=full
+          fi
+          echo "Scope: $RESULT"
+          if [ "$RESULT" = "full" ]; then
+            echo "mode=full" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=fast" >> "$GITHUB_OUTPUT"
+            echo "targets=${RESULT%%|*}" >> "$GITHUB_OUTPUT"
+            echo "ctest_re=${RESULT##*|}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Configure (QABUILD)
         run: |
@@ -54,10 +101,16 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build
-        run: ninja -C build
+        run: |
+          if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
+            echo "Fast build: ${{ steps.scope.outputs.targets }}"
+            ninja -C build ${{ steps.scope.outputs.targets }}
+          else
+            echo "Full build"
+            ninja -C build
+          fi
 
       - name: Save ccache
-        # Save with the unique per-run key even when a later step fails, so the next run starts warm.
         if: always()
         uses: actions/cache/save@v4
         with:
@@ -69,13 +122,19 @@ jobs:
         run: ccache -s || true
 
       - name: Run QA tests
-        # Temporarily excluded (both stay covered by upstream's GitLab CI):
-        #   qa_cli                                - kicad-cli SIGSEGVs in this container (issue #68)
-        #   qa_diff_merge_mergetool_workflow_e2e  - interactive mergetool under xvfb; sibling still runs
+        # qa_cli (SIGSEGV in this container, issue #68) and qa_diff_merge_mergetool_workflow_e2e
+        # (interactive mergetool under xvfb) are excluded; both stay covered by upstream GitLab CI.
         run: |
           cd build/qa
-          ctest --output-on-failure --output-junit test_results.xml \
-            --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
+          if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
+            echo "Fast tests: ${{ steps.scope.outputs.ctest_re }}"
+            ctest -j"$(nproc)" --output-on-failure --output-junit test_results.xml \
+              --tests-regex '${{ steps.scope.outputs.ctest_re }}' \
+              --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
+          else
+            ctest -j"$(nproc)" --output-on-failure --output-junit test_results.xml \
+              --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
+          fi
 
       - name: Upload test results
         if: always()
@@ -85,3 +144,58 @@ jobs:
           path: |
             build/qa/**/*.xml
           if-no-files-found: ignore
+
+  report:
+    name: Publish test report
+    needs: build-and-test
+    if: always() && needs.build-and-test.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        # test-reporter runs `git ls-files` to relate results to sources, so it needs the repo.
+        uses: actions/checkout@v4
+
+      - name: Download test results
+        uses: actions/download-artifact@v4
+        continue-on-error: true # no artifact when the build failed before producing XML
+        with:
+          name: qa-test-results
+          path: test-results
+
+      - name: Publish JUnit report
+        uses: dorny/test-reporter@v1
+        with:
+          name: QA test results
+          path: 'test-results/**/test_results.xml'
+          reporter: java-junit
+          fail-on-error: false # the build-and-test job is the gate; never fail solely on reporting
+          fail-on-empty: false # a missing/empty report must not fail this non-gating job
+
+  format:
+    name: clang-format
+    # PR-only fast-fail, mirroring upstream's GitLab MR formatting check. Runs in parallel with the
+    # build so a formatting slip is caught in seconds rather than after a full build cycle.
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/kicad/kicad-ci/source_containers/master/fedora:41
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check formatting of changed lines
+        # Reuse KiCad's own tool (same container upstream uses), so the clang-format version and the
+        # clang-format-kicad git attribute exactly match the project's expectations.
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --no-tags origin ${{ github.event.pull_request.base.ref }}
+          MERGE_BASE=$(git merge-base origin/${{ github.event.pull_request.base.ref }} HEAD)
+          echo "Checking formatting since $MERGE_BASE"
+          ./tools/check_coding.sh --diff --ci --commit "$MERGE_BASE"
