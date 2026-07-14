@@ -60,6 +60,7 @@ set( QA_PCBNEW_SRCS
     test_headless_pcb_context.cpp
     test_history_autosave.cpp
     test_footprint.cpp
+    test_footprint_ipc_nonproto_roundtrip.cpp
     test_footprint_editor_tabs.cpp
     test_footprint_library_adapter.cpp
     test_footprint_load_save.cpp
