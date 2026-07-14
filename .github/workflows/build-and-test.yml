@@ -45,6 +45,13 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_MAXSIZE: "5G"
+      # #74: the restored cache actually hits 81% of *cacheable* calls, but ~58% of compiler
+      # invocations are UNCACHEABLE and recompile every run. pch_defines/time_macros make KiCad's
+      # heavy precompiled-header + __DATE__/__TIME__ TUs cacheable; include_file_[m|c]time keeps
+      # fresh-checkout mtimes from busting direct-mode lookups. `ccache -s -v` (below) breaks down
+      # the remaining uncacheable category so the fix can be verified/extended from evidence.
+      CCACHE_SLOPPINESS: "include_file_mtime,include_file_ctime,time_macros,pch_defines"
+      CCACHE_COMPILERCHECK: "content"
       CTEST_OUTPUT_ON_FAILURE: "1"
       BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
 
@@ -119,7 +126,7 @@ jobs:
 
       - name: ccache stats
         if: always()
-        run: ccache -s || true
+        run: ccache -s -v || true
 
       - name: Run QA tests
         # qa_cli (SIGSEGV in this container, issue #68) and qa_diff_merge_mergetool_workflow_e2e
