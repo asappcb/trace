@@ -13,9 +13,13 @@
 set -euo pipefail
 
 # Map one path to a module tag. "BROAD" forces a full run; "" (unmapped) also forces full.
+#
+# Note: only the top-level CMakeLists.txt and *.cmake / cmake/ files are BROAD. A module's own
+# CMakeLists.txt (e.g. pcbnew/CMakeLists.txt or qa/tests/pcbnew/CMakeLists.txt -- typically a test
+# registration) falls through to the module patterns below and stays on that module's fast lane.
 module_of() {
     case "$1" in
-        CMakeLists.txt|*/CMakeLists.txt|*.cmake|cmake/*|.github/*|.gitlab*|vcpkg*|tools/*|thirdparty/*|resources/*) echo BROAD ;;
+        CMakeLists.txt|*.cmake|cmake/*|.github/*|.gitlab*|vcpkg*|tools/*|thirdparty/*|resources/*) echo BROAD ;;
         libs/core/*|include/core/*|libs/kiplatform/*|qa/mocks/*|qa/qa_utils/*)             echo BROAD ;;
         common/*|include/*|qa/tests/common/*)  echo common ;;
         pcbnew/*|qa/tests/pcbnew/*)            echo pcbnew ;;
