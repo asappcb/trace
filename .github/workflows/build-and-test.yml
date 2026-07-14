@@ -1,0 +1,87 @@
+name: Build and Test
+
+# Native GitHub CI for the asappcb/trace fork (upstream KiCad's real CI is on GitLab; this makes the
+# fork self-sufficient). Builds in KiCad's public CI container so we don't reimplement the very
+# large dependency stack, then runs the Boost/CTest QA suite.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Fedora QABUILD + QA
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/kicad/kicad-ci/source_containers/master/fedora:41
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: "2G"
+      CTEST_OUTPUT_ON_FAILURE: "1"
+      BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore ccache
+        # restore + explicit save (below) instead of actions/cache, which does NOT save on a failed
+        # job -- so a failing test step would otherwise discard the whole build cache and force the
+        # next run to rebuild cold.
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-fedora-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            ccache-fedora-${{ github.ref_name }}-
+            ccache-fedora-master-
+            ccache-fedora-
+
+      - name: Configure (QABUILD)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=QABUILD \
+            -DKICAD_STDLIB_LIGHT_DEBUG=ON \
+            -DKICAD_TEST_XML_OUTPUT=ON \
+            -DKICAD_USE_CMAKE_FINDPROTOBUF=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build
+        run: ninja -C build
+
+      - name: Save ccache
+        # Save with the unique per-run key even when a later step fails, so the next run starts warm.
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: ccache-fedora-${{ github.ref_name }}-${{ github.run_id }}
+
+      - name: ccache stats
+        if: always()
+        run: ccache -s || true
+
+      - name: Run QA tests
+        # Temporarily excluded (both stay covered by upstream's GitLab CI):
+        #   qa_cli                                - kicad-cli SIGSEGVs in this container (issue #68)
+        #   qa_diff_merge_mergetool_workflow_e2e  - interactive mergetool under xvfb; sibling still runs
+        run: |
+          cd build/qa
+          ctest --output-on-failure --output-junit test_results.xml \
+            --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-test-results
+          path: |
+            build/qa/**/*.xml
+          if-no-files-found: ignore
