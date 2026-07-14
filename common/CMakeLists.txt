@@ -199,6 +199,7 @@ set( KICOMMON_SRCS
 
     # Release management
     release/release_manifest.cpp
+    release/release_builder.cpp
 
     local_history.cpp
     history_lock.cpp

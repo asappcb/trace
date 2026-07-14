@@ -97,6 +97,57 @@ wxString PROJECT_GIT_UTILS::GetCurrentHash( const wxString& aProjectFile, bool a
 }
 
 
+wxString PROJECT_GIT_UTILS::GetCurrentBranch( const wxString& aProjectFile )
+{
+    wxString        result;
+    git_repository* repo = PROJECT_GIT_UTILS::GetRepositoryForFile( TO_UTF8( aProjectFile ) );
+
+    if( repo )
+    {
+        git_reference* head = nullptr;
+
+        if( git_repository_head( &head, repo ) == 0 )
+        {
+            if( const char* shorthand = git_reference_shorthand( head ) )
+                result = wxString::FromUTF8( shorthand );
+
+            git_reference_free( head );
+        }
+
+        git_repository_free( repo );
+    }
+
+    return result;
+}
+
+
+bool PROJECT_GIT_UTILS::HasUncommittedChanges( const wxString& aProjectFile )
+{
+    bool            dirty = false;
+    git_repository* repo = PROJECT_GIT_UTILS::GetRepositoryForFile( TO_UTF8( aProjectFile ) );
+
+    if( repo )
+    {
+        git_status_options opts;
+        git_status_init_options( &opts, GIT_STATUS_OPTIONS_VERSION );
+        opts.show = GIT_STATUS_SHOW_INDEX_AND_WORKDIR;
+        opts.flags = GIT_STATUS_OPT_INCLUDE_UNTRACKED;
+
+        git_status_list* statusList = nullptr;
+
+        if( git_status_list_new( &statusList, repo, &opts ) == GIT_OK )
+        {
+            dirty = git_status_list_entrycount( statusList ) > 0;
+            git_status_list_free( statusList );
+        }
+
+        git_repository_free( repo );
+    }
+
+    return dirty;
+}
+
+
 wxString PROJECT_GIT_UTILS::ComputeSymlinkPreservingWorkDir( const wxString& aUserProjectPath,
                                                              const wxString& aCanonicalWorkDir )
 {

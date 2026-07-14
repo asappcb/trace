@@ -55,6 +55,8 @@ set( KICAD_CLI_SRCS
     cli/command.cpp
     cli/command_api_server.cpp
     cli/command_jobset_run.cpp
+    cli/command_release_create.cpp
+    cli/command_release_verify.cpp
     cli/command_pcb_export_base.cpp
     cli/command_pcb_diff.cpp
     cli/command_pcb_drc.cpp
