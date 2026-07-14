@@ -1,0 +1,86 @@
+name: Diagnose qa_cli SIGSEGV (#68)
+
+# Manual, one-shot diagnostic for #68: kicad-cli segfaults in the qa_cli pcb-export tests on the
+# GitHub Fedora runner. Modern glibc dropped libSegFault.so / catchsegv, so we run the failing
+# command under gdb and print the backtrace. Trigger from the Actions tab (workflow_dispatch);
+# it does not run on push/PR.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: gdb backtrace of kicad-cli
+    runs-on: ubuntu-latest
+    container:
+      image: registry.gitlab.com/kicad/kicad-ci/source_containers/master/fedora:41
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: "5G"
+      CCACHE_SLOPPINESS: "include_file_mtime,include_file_ctime,time_macros,pch_defines"
+      CCACHE_COMPILERCHECK: "content"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: ccache-fedora-diagnose-${{ github.run_id }}
+          restore-keys: |
+            ccache-fedora-master-
+            ccache-fedora-
+
+      - name: Configure (QABUILD)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=QABUILD \
+            -DKICAD_STDLIB_LIGHT_DEBUG=ON \
+            -DKICAD_USE_CMAKE_FINDPROTOBUF=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+
+      - name: Build (kicad-cli + kifaces)
+        # Full build so kicad-cli and every kiface it dlopens at runtime are present.
+        run: ninja -C build
+
+      - name: gdb backtrace of a failing pcb export
+        run: |
+          command -v gdb >/dev/null 2>&1 || dnf install -y gdb
+
+          # Match how ctest runs kicad-cli from the build tree.
+          export KICAD_RUN_FROM_BUILD_DIR=1
+          export PATH="$PWD/build/kicad:$PWD/build/pcbnew:$PWD/build/common:$PWD/build/common/gal:$PWD/build/eeschema:$PWD/build/api:$PWD/build/cvpcb:$PATH"
+          export LD_LIBRARY_PATH="$PWD/build/common:$PWD/build/common/gal:$PWD/build/api:$PWD/build/pcbnew:$PWD/build/eeschema:${LD_LIBRARY_PATH:-}"
+
+          CLI="$PWD/build/kicad/kicad-cli"
+          BOARD=$(find qa/data/pcbnew -maxdepth 1 -name '*.kicad_pcb' 2>/dev/null | head -1)
+          echo "kicad-cli: $CLI"
+          echo "board:     $BOARD"
+
+          echo "===== sanity: kicad-cli version (does it even start?) ====="
+          "$CLI" version || echo "[version subcommand exited $?]"
+
+          echo "===== gdb: pcb export svg ====="
+          gdb -batch -nx \
+            -ex 'set pagination off' \
+            -ex 'set confirm off' \
+            -ex run \
+            -ex 'printf "\n===== STOPPED (signal/exit) — BACKTRACE =====\n"' \
+            -ex 'bt full' \
+            -ex 'printf "\n===== ALL THREADS =====\n"' \
+            -ex 'thread apply all bt' \
+            -ex 'printf "\n===== SHARED LIBRARIES =====\n"' \
+            -ex 'info sharedlibrary' \
+            --args "$CLI" pcb export svg "$BOARD" --output /tmp/diag.svg \
+            2>&1 | tail -200
