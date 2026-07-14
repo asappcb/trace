@@ -183,6 +183,7 @@ set( QA_COMMON_SRCS
 
     # Release management tests
     test_release_manifest.cpp
+    test_release_builder.cpp
 
     # Translation integrity tests
     test_translation_format_strings.cpp

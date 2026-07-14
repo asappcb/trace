@@ -59,6 +59,21 @@ public:
     static wxString GetCurrentHash( const wxString& aProjectFile, bool aShort );
 
     /**
+     * Return the short name of the checked-out branch of the repository containing aProjectFile.
+     *
+     * @param aProjectFile Absolute path to any file within the repository.
+     * @return the branch short name, or an empty string if unavailable / not a repository.
+     */
+    static wxString GetCurrentBranch( const wxString& aProjectFile );
+
+    /**
+     * @param aProjectFile Absolute path to any file within the repository.
+     * @return true if the repository containing aProjectFile has staged, unstaged, or untracked
+     *         changes; false if it is clean or not a repository.
+     */
+    static bool HasUncommittedChanges( const wxString& aProjectFile );
+
+    /**
      * Remove version control from a directory by freeing the repository and
      * optionally removing the .git directory.
      *

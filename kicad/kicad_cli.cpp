@@ -50,6 +50,9 @@
 
 #include "cli/command_jobset.h"
 #include "cli/command_jobset_run.h"
+#include "cli/command_release.h"
+#include "cli/command_release_create.h"
+#include "cli/command_release_verify.h"
 #include "cli/command_pcb.h"
 #include "cli/command_pcb_export.h"
 #include "cli/command_fp_diff.h"
@@ -142,6 +145,9 @@ struct COMMAND_ENTRY
 
 static CLI::JOBSET_COMMAND               jobsetCmd{};
 static CLI::JOBSET_RUN_COMMAND           jobsetRunCmd{};
+static CLI::RELEASE_COMMAND              releaseCmd{};
+static CLI::RELEASE_CREATE_COMMAND       releaseCreateCmd{};
+static CLI::RELEASE_VERIFY_COMMAND       releaseVerifyCmd{};
 static CLI::PCB_COMMAND                  pcbCmd{};
 static CLI::PCB_DIFF_COMMAND             pcbDiffCmd{};
 static CLI::PCB_DRC_COMMAND              pcbDrcCmd{};
@@ -233,6 +239,17 @@ static std::vector<COMMAND_ENTRY> commandStack = {
         {
             {
                 &jobsetRunCmd
+            }
+        }
+    },
+    {
+        &releaseCmd,
+        {
+            {
+                &releaseCreateCmd
+            },
+            {
+                &releaseVerifyCmd
             }
         }
     },
