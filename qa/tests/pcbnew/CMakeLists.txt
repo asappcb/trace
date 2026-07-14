@@ -148,6 +148,7 @@ set( QA_PCBNEW_SRCS
     drc/test_drc_error_limit.cpp
     drc/test_footprint_courtyard_index.cpp
     drc/test_drc_regressions.cpp
+    drc/test_drc_item_registration.cpp
     drc/test_drc_issue23469.cpp
     drc/test_drc_issue24525.cpp
     drc/test_drc_arc_arc_edge_clearance.cpp
