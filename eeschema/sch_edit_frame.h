@@ -448,6 +448,10 @@ public:
      */
     void HardRedraw() override;
 
+    /// Instantiate @a aLibId from the symbol libraries and start interactive placement. Backs the
+    /// command palette's recently-used-part quick-place items.
+    void placeRecentSymbol( const LIB_ID& aLibId, const wxString& aMruKey );
+
     /**
      * Draw the current sheet on the display.
      */

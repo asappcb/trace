@@ -49,6 +49,19 @@ const int commonSchemaVersion = 6;
 
 COMMON_SETTINGS::~COMMON_SETTINGS() = default;
 
+
+void COMMON_SETTINGS::UpdateMruList( std::vector<wxString>& aList, const wxString& aKey, size_t aLimit )
+{
+    if( aKey.IsEmpty() )
+        return;
+
+    std::erase( aList, aKey );
+    aList.insert( aList.begin(), aKey );
+
+    if( aList.size() > aLimit )
+        aList.resize( aLimit );
+}
+
 COMMON_SETTINGS::COMMON_SETTINGS() :
         JSON_SETTINGS( "kicad_common", SETTINGS_LOC::USER, commonSchemaVersion ),
         m_Appearance(),
@@ -410,6 +423,12 @@ COMMON_SETTINGS::COMMON_SETTINGS() :
 
     m_params.emplace_back(
             new PARAM_LIST<wxString>( "session.command_palette_mru", &m_Session.command_palette_mru, {} ) );
+
+    m_params.emplace_back( new PARAM_LIST<wxString>( "session.recently_placed_footprints",
+            &m_Session.recently_placed_footprints, {} ) );
+
+    m_params.emplace_back( new PARAM_LIST<wxString>( "session.recently_placed_symbols",
+            &m_Session.recently_placed_symbols, {} ) );
 
     m_params.emplace_back( new PARAM<int>( "package_manager.sash_pos",
             &m_PackageManager.sash_pos, 380 ) );

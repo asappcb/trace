@@ -21,6 +21,7 @@
 
 #include <pgm_base.h>
 #include <settings/settings_manager.h>
+#include <settings/common_settings.h>
 #include <project/project_file.h>
 #include <symbol_library_common.h>
 #include <confirm.h>
@@ -82,6 +83,13 @@ PICKED_SYMBOL SCH_BASE_FRAME::PickSymbolFromLibrary( const SYMBOL_LIBRARY_FILTER
                                       } );
 
         aHistoryList.insert( aHistoryList.begin(), sel );
+
+        // Also persist to the cross-session recently-placed list surfaced by the command palette.
+        if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+        {
+            COMMON_SETTINGS::UpdateMruList( cfg->m_Session.recently_placed_symbols,
+                                            sel.LibId.Format().wx_str() );
+        }
     }
 
     sel.KeepSymbol = dlg.GetKeepSymbol();

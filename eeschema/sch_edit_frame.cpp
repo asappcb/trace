@@ -81,6 +81,10 @@
 #include <tool/tool_manager.h>
 #include <tool/zoom_tool.h>
 #include <tools/sch_actions.h>
+#include <sch_symbol.h>
+#include <sch_screen.h>
+#include <lib_symbol.h>
+#include <settings/common_settings.h>
 #include <tools/sch_align_tool.h>
 #include <tools/ee_grid_helper.h>
 #include <tools/sch_inspection_tool.h>
@@ -2240,6 +2244,31 @@ void SCH_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
     const wxBitmapBundle symbolIcon = KiBitmapBundle( BITMAPS::add_component, 16 );
     const wxBitmapBundle sheetIcon = KiBitmapBundle( BITMAPS::hierarchy_nav, 16 );
 
+    // Recently-used symbols -> quick-place the part at the cursor. Bounded, cheap (no library
+    // scan) and modelled as COMMAND items so they surface in the default palette view and are
+    // re-ranked by the palette's own MRU machinery.
+    if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+    {
+        for( const wxString& key : cfg->m_Session.recently_placed_symbols )
+        {
+            LIB_ID libId;
+
+            if( libId.Parse( key ) >= 0 || !libId.IsValid() )
+                continue;
+
+            COMMAND_PALETTE_ITEM item;
+            item.m_name = libId.GetUniStringLibItemName();
+            item.m_detail = _( "recent symbol" );
+            item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+            item.m_mruKey = key;
+            item.m_icon = symbolIcon;
+
+            item.m_run = [this, libId, key]() { placeRecentSymbol( libId, key ); };
+
+            aItems.push_back( std::move( item ) );
+        }
+    }
+
     SCH_SHEET_LIST hierarchy = Schematic().Hierarchy();
 
     // Symbols -> find and navigate to the symbol (across sheets).
@@ -2289,6 +2318,35 @@ void SCH_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
 
         aItems.push_back( std::move( item ) );
     }
+}
+
+
+void SCH_EDIT_FRAME::placeRecentSymbol( const LIB_ID& aLibId, const wxString& aMruKey )
+{
+    LIB_SYMBOL* libSymbol = GetLibSymbol( aLibId );
+
+    if( !libSymbol )
+    {
+        ShowInfoBarError( wxString::Format( _( "Symbol '%s' not found." ),
+                                            aLibId.Format().wx_str() ) );
+        return;
+    }
+
+    // Build a placement instance and hand it to the Place Symbol tool. Passing a pre-built symbol
+    // via PLACE_SYMBOL_PARAMS makes the tool place-and-exit (mirrors sch_drawing_tools.cpp), so the
+    // palette drops the user straight into positioning the chosen part.
+    PICKED_SYMBOL sel;
+    sel.LibId = aLibId;
+    sel.Unit = 1;
+
+    SCH_SYMBOL* symbol = new SCH_SYMBOL( *libSymbol, &GetCurrentSheet(), sel, VECTOR2I( 0, 0 ),
+                                         &Schematic() );
+
+    COMMON_SETTINGS::UpdateMruList( Pgm().GetCommonSettings()->m_Session.recently_placed_symbols,
+                                    aMruKey );
+
+    GetToolManager()->RunAction( SCH_ACTIONS::placeSymbol,
+                                 SCH_ACTIONS::PLACE_SYMBOL_PARAMS{ symbol, true } );
 }
 
 

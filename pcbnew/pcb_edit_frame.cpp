@@ -49,9 +49,13 @@
 #include <api/api_utils.h>
 #include <geometry/geometry_utils.h>
 #include <bitmaps.h>
+#include <board_commit.h>
 #include <confirm.h>
 #include <footprint.h>
+#include <footprint_library_adapter.h>
 #include <footprint_utils.h>
+#include <project_pcb.h>
+#include <tools/pcb_actions.h>
 #include <lset.h>
 #include <trace_helpers.h>
 #include <pcbnew_id.h>
@@ -2404,6 +2408,86 @@ void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
 
         aItems.push_back( std::move( item ) );
     }
+
+    // Recently-used footprints -> quick-place the part at the cursor. These are eager, cheap
+    // (bounded MRU list, no library scan) and modelled as COMMAND items so they surface in the
+    // default (no-sigil) palette view and are re-ranked by the palette's own MRU machinery.
+    if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+    {
+        for( const wxString& key : cfg->m_Session.recently_placed_footprints )
+        {
+            LIB_ID libId;
+
+            if( libId.Parse( key ) >= 0 || !libId.IsValid() )
+                continue;
+
+            COMMAND_PALETTE_ITEM item;
+            item.m_name = libId.GetUniStringLibItemName();
+            item.m_detail = _( "recent footprint" );
+            item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+            item.m_mruKey = key;
+            item.m_icon = fpIcon;
+
+            item.m_run = [this, libId, key]()
+            {
+                placeRecentFootprint( libId, key );
+            };
+
+            aItems.push_back( std::move( item ) );
+        }
+    }
+}
+
+
+void PCB_EDIT_FRAME::placeRecentFootprint( const LIB_ID& aLibId, const wxString& aMruKey )
+{
+    FOOTPRINT* fp = nullptr;
+
+    try
+    {
+        fp = LoadFootprint( aLibId );
+    }
+    catch( const IO_ERROR& e )
+    {
+        ShowInfoBarError( wxString::Format( _( "Could not load footprint '%s': %s" ),
+                                            aLibId.Format().wx_str(), e.What() ) );
+        return;
+    }
+
+    if( !fp )
+    {
+        ShowInfoBarError( wxString::Format( _( "Footprint '%s' not found." ),
+                                            aLibId.Format().wx_str() ) );
+        return;
+    }
+
+    // Insert the footprint on the board, then hand it to the Place Footprint tool for interactive
+    // positioning. This mirrors the sanctioned insert path in footprint_libraries_utils.cpp /
+    // footprint_viewer_frame.cpp: the caller must Add()+Push() the footprint before the tool takes
+    // over (the tool's parameterised entry provides only the re-drag, not the initial commit).
+    BOARD_COMMIT commit( this );
+
+    fp->SetParent( GetBoard() );
+    fp->SetLink( niluuid );
+    fp->SetFlags( IS_NEW );
+
+    for( PAD* pad : fp->Pads() )
+        pad->SetNetCode( 0 );  // pads in the library carry orphaned nets; reset to unconnected
+
+    if( fp->IsFlipped() )
+        fp->Flip( fp->GetPosition(), GetPcbNewSettings()->m_FlipDirection );
+
+    fp->SetOrientation( ANGLE_0 );
+
+    commit.Add( fp );
+    PlaceFootprint( fp );
+    commit.Push( _( "Place Footprint" ) );
+
+    // Refresh recency so repeated quick-places keep the part at the top of the list.
+    if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+        COMMON_SETTINGS::UpdateMruList( cfg->m_Session.recently_placed_footprints, aMruKey );
+
+    GetToolManager()->PostAction( PCB_ACTIONS::placeFootprint, fp );
 }
 
 
