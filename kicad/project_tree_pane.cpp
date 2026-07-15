@@ -42,6 +42,7 @@
 #include <bitmaps.h>
 #include <bitmap_store.h>
 #include <confirm.h>
+#include <dialogs/dialog_git_mr_review.h>
 #include <dialogs/git/dialog_git_commit.h>
 #include <dialogs/git/dialog_git_credentials.h>
 #include <dialogs/git/dialog_git_switch.h>
@@ -171,6 +172,7 @@ enum project_tree_ids
     ID_GIT_CLONE_PROJECT,      // Clone a project from a remote repository
     ID_GIT_COMMIT_PROJECT,     // Commit all files in the project
     ID_GIT_COMMIT_FILE,        // Commit a single file
+    ID_GIT_REVIEW_CHANGES,     // Open the board-aware review of two refs (#116)
     ID_GIT_AMEND_COMMIT,       // Amend the last commit on HEAD
     ID_GIT_SYNC_PROJECT,       // Sync the project with the remote repository (pull and push -- same as Update)
     ID_GIT_FETCH,              // Fetch the remote repository (without merging -- this is the same as Refresh)
@@ -208,6 +210,7 @@ BEGIN_EVENT_TABLE( PROJECT_TREE_PANE, wxSashLayoutWindow )
     EVT_MENU( ID_GIT_REMOTE_SETTINGS, PROJECT_TREE_PANE::onGitRemoteSettings )
     EVT_MENU( ID_GIT_COMMIT_PROJECT, PROJECT_TREE_PANE::onGitCommit )
     EVT_MENU( ID_GIT_COMMIT_FILE, PROJECT_TREE_PANE::onGitCommit )
+    EVT_MENU( ID_GIT_REVIEW_CHANGES, PROJECT_TREE_PANE::onGitReview )
     EVT_MENU( ID_GIT_AMEND_COMMIT, PROJECT_TREE_PANE::onGitAmendCommit )
     EVT_MENU( ID_GIT_SYNC_PROJECT, PROJECT_TREE_PANE::onGitSyncProject )
     EVT_MENU( ID_GIT_FETCH, PROJECT_TREE_PANE::onGitFetch )
@@ -1041,6 +1044,11 @@ void PROJECT_TREE_PANE::onRight( wxTreeEvent& Event )
         vcs_menuitem = vcs_submenu->Append( ID_GIT_COMMIT_PROJECT, _( "Commit Project..." ),
                                             _( "Commit changes to the local repository" ) );
         vcs_menuitem->Enable( vcs_can_commit );
+
+        vcs_menuitem = vcs_submenu->Append( ID_GIT_REVIEW_CHANGES, _( "Review Changes..." ),
+                                            _( "Compare two revisions and review the board/schematic "
+                                               "diff of each changed file" ) );
+        vcs_menuitem->Enable( vcs_can_switch );
 
         vcs_menuitem = vcs_submenu->Append( ID_GIT_AMEND_COMMIT, _( "Amend Last Commit..." ),
                                             _( "Rewrite the most recent commit on the current branch" ) );
@@ -2064,6 +2072,26 @@ void PROJECT_TREE_PANE::onGitRemoteSettings( wxCommandEvent& aEvent )
 
     common->UpdateCurrentBranchInfo();
     m_gitStatusTimer.Start( 500, wxTIMER_ONE_SHOT );
+}
+
+
+void PROJECT_TREE_PANE::onGitReview( wxCommandEvent& aEvent )
+{
+    git_repository* repo = m_TreeProject->GetGitRepo();
+
+    if( !repo )
+        return;
+
+    std::vector<wxString> refs;
+
+    if( KIGIT_COMMON* git = m_TreeProject->GitCommon() )
+        refs = git->GetBranchNames();
+
+    // The review dialog is fully built (base/head ref compare -> changed-file list -> per-file
+    // board/schematic visual diff via DispatchOpenDiffDialog) but was never wired to a menu; this
+    // makes it reachable as the git-native review surface (#116).
+    DIALOG_GIT_MR_REVIEW dlg( wxGetTopLevelParent( this ), repo, refs );
+    dlg.ShowModal();
 }
 
 
