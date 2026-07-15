@@ -64,13 +64,48 @@ struct ALIAS
 };
 
 const ALIAS ALIASES[] = {
-    { wxT( "delete" ), wxT( "remove" ) },  { wxT( "measure" ), wxT( "ruler" ) },
-    { wxT( "find" ), wxT( "search" ) },    { wxT( "shortcut" ), wxT( "hotkey" ) },
-    { wxT( "shortcuts" ), wxT( "hotkey" ) }, { wxT( "settings" ), wxT( "preferences" ) },
-    { wxT( "config" ), wxT( "preferences" ) }, { wxT( "props" ), wxT( "properties" ) },
-    { wxT( "duplicate" ), wxT( "copy" ) }, { wxT( "netlist" ), wxT( "net" ) },
-    { wxT( "reference" ), wxT( "annotate" ) }, { wxT( "gerber" ), wxT( "fabrication" ) },
-    { wxT( "3d" ), wxT( "3d viewer" ) },   { wxT( "bom" ), wxT( "bill of materials" ) },
+    // General
+    { wxT( "delete" ), wxT( "remove" ) },
+    { wxT( "measure" ), wxT( "ruler" ) },
+    { wxT( "find" ), wxT( "search" ) },
+    { wxT( "shortcut" ), wxT( "hotkey" ) },
+    { wxT( "shortcuts" ), wxT( "hotkey" ) },
+    { wxT( "settings" ), wxT( "preferences" ) },
+    { wxT( "config" ), wxT( "preferences" ) },
+    { wxT( "props" ), wxT( "properties" ) },
+    { wxT( "duplicate" ), wxT( "copy" ) },
+    { wxT( "flip" ), wxT( "mirror" ) },
+    // Copper / geometry (KiCad's own vocabulary)
+    { wxT( "trace" ), wxT( "track" ) },
+    { wxT( "wire" ), wxT( "track" ) },
+    { wxT( "pour" ), wxT( "zone" ) },
+    { wxT( "fill" ), wxT( "zone" ) },
+    { wxT( "keepout" ), wxT( "rule area" ) },
+    { wxT( "silk" ), wxT( "silkscreen" ) },
+    { wxT( "rats" ), wxT( "ratsnest" ) },
+    { wxT( "push" ), wxT( "route" ) },
+    { wxT( "shove" ), wxT( "route" ) },
+    { wxT( "tune" ), wxT( "length" ) },
+    { wxT( "via" ), wxT( "track" ) },
+    // Parts / nets
+    { wxT( "component" ), wxT( "footprint" ) },
+    { wxT( "part" ), wxT( "footprint" ) },
+    { wxT( "label" ), wxT( "net" ) },
+    { wxT( "netlist" ), wxT( "net" ) },
+    { wxT( "renumber" ), wxT( "annotate" ) },
+    { wxT( "reference" ), wxT( "annotate" ) },
+    // Rules / setup
+    { wxT( "constraints" ), wxT( "rules" ) },
+    { wxT( "drc" ), wxT( "design rules" ) },
+    { wxT( "erc" ), wxT( "electrical rules" ) },
+    { wxT( "stackup" ), wxT( "board setup" ) },
+    // Output
+    { wxT( "gerber" ), wxT( "fabrication" ) },
+    { wxT( "print" ), wxT( "plot" ) },
+    { wxT( "centroid" ), wxT( "placement" ) },
+    { wxT( "pick" ), wxT( "placement" ) },
+    { wxT( "3d" ), wxT( "3d viewer" ) },
+    { wxT( "bom" ), wxT( "bill of materials" ) },
 };
 
 
