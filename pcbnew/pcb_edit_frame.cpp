@@ -1133,6 +1133,44 @@ void PCB_EDIT_FRAME::setupUIConditions()
 
     mgr->SetConditions( ACTIONS::group,        ENABLE( SELECTION_CONDITIONS::MoreThan( 1 ) ) );
     mgr->SetConditions( ACTIONS::ungroup,      ENABLE( SELECTION_CONDITIONS::HasTypes( groupTypes ) ) );
+
+    // "Add Items" / "Remove Items" need a group context; without conditions they defaulted to
+    // always-enabled and no-op'd (e.g. when reached from the command palette).
+    auto addToGroupCond =
+            []( const SELECTION& aSel )
+            {
+                int  groups = 0;
+                bool hasUngrouped = false;
+
+                for( EDA_ITEM* item : aSel )
+                {
+                    if( item->Type() == PCB_GROUP_T )
+                        ++groups;
+                    else if( !item->GetParentGroup() )
+                        hasUngrouped = true;
+                }
+
+                return groups == 1 && hasUngrouped;
+            };
+
+    auto inGroupCond =
+            []( const SELECTION& aSel )
+            {
+                for( EDA_ITEM* item : aSel )
+                {
+                    if( item->GetParentGroup() )
+                        return true;
+                }
+
+                return false;
+            };
+
+    mgr->SetConditions( ACTIONS::addToGroup,      ENABLE( addToGroupCond ) );
+    mgr->SetConditions( ACTIONS::removeFromGroup, ENABLE( inGroupCond ) );
+
+    // A bare pad can only be placed inside the footprint editor; disable it here so it is not
+    // offered (as an inert command) in the board editor.
+    mgr->SetConditions( PCB_ACTIONS::placePad,    ENABLE( SELECTION_CONDITIONS::ShowNever ) );
     mgr->SetConditions( PCB_ACTIONS::lock,     ENABLE( PCB_SELECTION_CONDITIONS::HasUnlockedItems ) );
     mgr->SetConditions( PCB_ACTIONS::unlock,   ENABLE( PCB_SELECTION_CONDITIONS::HasLockedItems ) );
 
