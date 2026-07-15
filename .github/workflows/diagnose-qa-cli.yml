@@ -72,15 +72,29 @@ jobs:
           "$CLI" version || echo "[version subcommand exited $?]"
 
           echo "===== gdb: pcb export svg ====="
+          # NOTE: gdb's `info sharedlibrary` emits ~200 lines for kicad-cli, so a
+          # naive `| tail -200` evicts the backtrace entirely (this is why the first
+          # #68 diagnostic run captured only the shared-library list). Capture full
+          # output to a file, emit the shared-library list FIRST and the backtraces
+          # LAST so they always survive, and upload the file as an artifact.
           gdb -batch -nx \
             -ex 'set pagination off' \
             -ex 'set confirm off' \
             -ex run \
-            -ex 'printf "\n===== STOPPED (signal/exit) — BACKTRACE =====\n"' \
-            -ex 'bt full' \
-            -ex 'printf "\n===== ALL THREADS =====\n"' \
-            -ex 'thread apply all bt' \
             -ex 'printf "\n===== SHARED LIBRARIES =====\n"' \
             -ex 'info sharedlibrary' \
+            -ex 'printf "\n===== ALL THREADS =====\n"' \
+            -ex 'thread apply all bt' \
+            -ex 'printf "\n===== STOPPED (signal/exit) — BACKTRACE =====\n"' \
+            -ex 'bt full' \
             --args "$CLI" pcb export svg "$BOARD" --output /tmp/diag.svg \
-            2>&1 | tail -200
+            2>&1 | tee /tmp/gdb-diag.log
+          echo "===== TAIL (backtrace, guaranteed to survive) ====="
+          tail -120 /tmp/gdb-diag.log
+
+      - name: Upload full gdb log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gdb-diag-log
+          path: /tmp/gdb-diag.log
