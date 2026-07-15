@@ -122,7 +122,7 @@ int fuzzyScoreImpl( const wxString& aPattern, const wxString& aText, std::vector
 
     return score;
 }
-}
+} // namespace
 
 
 int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
@@ -131,8 +131,7 @@ int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
 }
 
 
-int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText,
-                         std::vector<int>& aMatchedPositions )
+int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText, std::vector<int>& aMatchedPositions )
 {
     return fuzzyScoreImpl( aPattern, aText, &aMatchedPositions );
 }

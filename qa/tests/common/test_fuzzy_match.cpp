@@ -137,8 +137,7 @@ BOOST_AUTO_TEST_CASE( ReportsMatchedPositions )
 
     // No match must leave the caller's vector untouched.
     std::vector<int> keep = { 7 };
-    BOOST_CHECK_EQUAL( KIFUZZY::FuzzyScore( wxT( "zzz" ), wxT( "Swap" ), keep ),
-                       KIFUZZY::NO_MATCH );
+    BOOST_CHECK_EQUAL( KIFUZZY::FuzzyScore( wxT( "zzz" ), wxT( "Swap" ), keep ), KIFUZZY::NO_MATCH );
     BOOST_REQUIRE_EQUAL( keep.size(), 1u );
     BOOST_CHECK_EQUAL( keep[0], 7 );
 }

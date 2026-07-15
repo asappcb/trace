@@ -72,10 +72,10 @@ private:
     void onActivate( wxActivateEvent& aEvent );
 
     TOOL_MANAGER*      m_toolMgr;
-    bool               m_ready;      ///< True once shown; gates the close-on-deactivate.
-    bool               m_dismissed;  ///< Guards against dismissing/destroying twice.
+    bool               m_ready;     ///< True once shown; gates the close-on-deactivate.
+    bool               m_dismissed; ///< Guards against dismissing/destroying twice.
 
-    wxTextCtrl*          m_queryCtrl;
+    wxTextCtrl*           m_queryCtrl;
     COMMAND_PALETTE_LIST* m_resultsList;
 
     std::vector<ENTRY>        m_entries;   ///< All eligible commands.

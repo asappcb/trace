@@ -408,8 +408,8 @@ COMMON_SETTINGS::COMMON_SETTINGS() :
     m_params.emplace_back( new PARAM_LIST<wxString>( "session.pinned_design_block_libs",
             &m_Session.pinned_design_block_libs, {} ) );
 
-    m_params.emplace_back( new PARAM_LIST<wxString>( "session.command_palette_mru",
-            &m_Session.command_palette_mru, {} ) );
+    m_params.emplace_back(
+            new PARAM_LIST<wxString>( "session.command_palette_mru", &m_Session.command_palette_mru, {} ) );
 
     m_params.emplace_back( new PARAM<int>( "package_manager.sash_pos",
             &m_PackageManager.sash_pos, 380 ) );

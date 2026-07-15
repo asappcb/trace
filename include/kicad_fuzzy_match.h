@@ -54,8 +54,7 @@ KICOMMON_API int FuzzyScore( const wxString& aPattern, const wxString& aText );
  * so callers (e.g. the command palette) can highlight them. @p aMatchedPositions is cleared and
  * filled only on a match; it is left untouched when the result is NO_MATCH.
  */
-KICOMMON_API int FuzzyScore( const wxString& aPattern, const wxString& aText,
-                             std::vector<int>& aMatchedPositions );
+KICOMMON_API int FuzzyScore( const wxString& aPattern, const wxString& aText, std::vector<int>& aMatchedPositions );
 
 /**
  * Convenience predicate: true when @p aPattern is a (fuzzy) subsequence of @p aText.

@@ -66,7 +66,7 @@ public:
         wxString         m_name;
         wxString         m_hotkey;
         wxBitmapBundle   m_icon;
-        std::vector<int> m_matched;   ///< Indices into m_name to highlight.
+        std::vector<int> m_matched; ///< Indices into m_name to highlight.
         bool             m_enabled;
     };
 
@@ -94,20 +94,20 @@ protected:
 
     void OnDrawItem( wxDC& aDC, const wxRect& aRect, size_t aItem ) const override
     {
-        const ROW& row      = m_rows[aItem];
+        const ROW& row = m_rows[aItem];
         const bool selected = ( GetSelection() == static_cast<int>( aItem ) );
 
-        const int pad      = FromDIP( 6 );
+        const int pad = FromDIP( 6 );
         const int iconSize = FromDIP( 16 );
 
-        wxColour text   = selected ? wxSystemSettings::GetColour( wxSYS_COLOUR_HIGHLIGHTTEXT )
-                                   : wxSystemSettings::GetColour( wxSYS_COLOUR_WINDOWTEXT );
+        wxColour text = selected ? wxSystemSettings::GetColour( wxSYS_COLOUR_HIGHLIGHTTEXT )
+                                 : wxSystemSettings::GetColour( wxSYS_COLOUR_WINDOWTEXT );
         wxColour subtle = selected ? text : wxSystemSettings::GetColour( wxSYS_COLOUR_GRAYTEXT );
         wxColour accent = selected ? text : wxSystemSettings::GetColour( wxSYS_COLOUR_HOTLIGHT );
 
         if( !row.m_enabled )
         {
-            text   = subtle;
+            text = subtle;
             accent = subtle;
         }
 
@@ -139,7 +139,7 @@ protected:
         while( i < row.m_name.length() )
         {
             const bool runHit = hit[i];
-            size_t     j      = i;
+            size_t     j = i;
 
             while( j < row.m_name.length() && hit[j] == runHit )
                 ++j;
@@ -165,8 +165,8 @@ private:
 
 
 DIALOG_COMMAND_PALETTE::DIALOG_COMMAND_PALETTE( wxWindow* aParent, TOOL_MANAGER* aToolManager ) :
-        DIALOG_SHIM( aParent, wxID_ANY, _( "Command Palette" ), wxDefaultPosition,
-                     wxSize( 560, 460 ), wxBORDER_SIMPLE ),
+        DIALOG_SHIM( aParent, wxID_ANY, _( "Command Palette" ), wxDefaultPosition, wxSize( 560, 460 ),
+                     wxBORDER_SIMPLE ),
         m_toolMgr( aToolManager ),
         m_ready( false ),
         m_dismissed( false ),
@@ -248,7 +248,7 @@ void DIALOG_COMMAND_PALETTE::recordMru( const TOOL_ACTION* aAction )
         return;
 
     const wxString name = aAction->GetName();
-    auto&          mru  = cfg->m_Session.command_palette_mru;
+    auto&          mru = cfg->m_Session.command_palette_mru;
 
     mru.erase( std::remove( mru.begin(), mru.end(), name ), mru.end() );
     mru.insert( mru.begin(), name );
@@ -283,7 +283,7 @@ void DIALOG_COMMAND_PALETTE::collectActions()
         if( !seen.insert( action ).second )
             continue;
 
-        friendly.Replace( wxT( "&" ), wxT( "" ) );  // strip menu-accelerator markers for display
+        friendly.Replace( wxT( "&" ), wxT( "" ) ); // strip menu-accelerator markers for display
 
         wxString hotkeyText;
         int      hotkey = actionMgr->GetHotKey( *action );
@@ -327,7 +327,7 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
     {
         const ENTRY*     m_entry;
         int              m_score;
-        int              m_mru;      ///< MRU index, or -1.
+        int              m_mru; ///< MRU index, or -1.
         std::vector<int> m_matched;
     };
 
@@ -341,7 +341,7 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
         if( score == KIFUZZY::NO_MATCH )
             continue;
 
-        auto      it  = mruRank.find( wxString( entry.m_action->GetName() ) );
+        auto      it = mruRank.find( wxString( entry.m_action->GetName() ) );
         const int mru = ( it != mruRank.end() ) ? it->second : -1;
 
         scored.push_back( { &entry, score, mru, std::move( matched ) } );
@@ -387,8 +387,8 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
             break;
 
         m_shown.push_back( sc.m_entry );
-        rows.push_back( { sc.m_entry->m_name, sc.m_entry->m_hotkey, sc.m_entry->m_icon,
-                          std::move( sc.m_matched ), sc.m_entry->m_enabled } );
+        rows.push_back( { sc.m_entry->m_name, sc.m_entry->m_hotkey, sc.m_entry->m_icon, std::move( sc.m_matched ),
+                          sc.m_entry->m_enabled } );
     }
 
     m_resultsList->SetRows( std::move( rows ) );
@@ -411,9 +411,9 @@ void DIALOG_COMMAND_PALETTE::acceptSelection()
         return;
     }
 
-    const TOOL_ACTION* action  = entry->m_action;
+    const TOOL_ACTION* action = entry->m_action;
     TOOL_MANAGER*      toolMgr = m_toolMgr;
-    wxWindow*          parent  = GetParent();
+    wxWindow*          parent = GetParent();
 
     recordMru( action );
     dismiss();
@@ -422,7 +422,10 @@ void DIALOG_COMMAND_PALETTE::acceptSelection()
     // but promptly (the wx event loop drains CallAfter continuously). PostAction would instead sit
     // in the tool-manager queue until the next tool-dispatch event, i.e. until the user next
     // interacts; CallAfter here mirrors how a menu/toolbar click dispatches.
-    auto run = [toolMgr, action]() { toolMgr->RunAction( *action ); };
+    auto run = [toolMgr, action]()
+    {
+        toolMgr->RunAction( *action );
+    };
 
     if( parent )
         parent->CallAfter( run );
@@ -478,9 +481,7 @@ void DIALOG_COMMAND_PALETTE::onCharHook( wxKeyEvent& aEvent )
         acceptSelection();
         return; // consumed
 
-    case WXK_ESCAPE:
-        dismiss();
-        return; // consumed
+    case WXK_ESCAPE: dismiss(); return; // consumed
 
     default:
         aEvent.Skip(); // ordinary typing flows to the search box
