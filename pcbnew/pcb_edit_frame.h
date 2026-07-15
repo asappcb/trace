@@ -101,6 +101,10 @@ public:
     /// Supply footprints (by reference) and nets as command-palette "go to" targets.
     void GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems ) override;
 
+    /// Load @a aLibId from the footprint libraries, add it to the board and start interactive
+    /// placement. Backs the command palette's recently-used-part quick-place items.
+    void placeRecentFootprint( const LIB_ID& aLibId, const wxString& aMruKey );
+
     /**
      * Execute a remote command send by Eeschema via a socket, port KICAD_PCB_PORT_SERVICE_NUMBER
      * (currently 4242).
