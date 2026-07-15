@@ -114,4 +114,33 @@ BOOST_AUTO_TEST_CASE( ShorterCandidateWinsOnTie )
 }
 
 
+BOOST_AUTO_TEST_CASE( ReportsMatchedPositions )
+{
+    std::vector<int> pos;
+
+    // Contiguous prefix: positions 0,1,2.
+    int score = KIFUZZY::FuzzyScore( wxT( "swa" ), wxT( "Swap Pad Nets" ), pos );
+    BOOST_CHECK( score != KIFUZZY::NO_MATCH );
+    BOOST_REQUIRE_EQUAL( pos.size(), 3u );
+    BOOST_CHECK_EQUAL( pos[0], 0 );
+    BOOST_CHECK_EQUAL( pos[1], 1 );
+    BOOST_CHECK_EQUAL( pos[2], 2 );
+
+    // Scattered subsequence, greedy-first: s(0) p(3, the 'p' in "Swap") n(9, start of "Nets").
+    pos.clear();
+    score = KIFUZZY::FuzzyScore( wxT( "spn" ), wxT( "Swap Pad Nets" ), pos );
+    BOOST_CHECK( score != KIFUZZY::NO_MATCH );
+    BOOST_REQUIRE_EQUAL( pos.size(), 3u );
+    BOOST_CHECK_EQUAL( pos[0], 0 );
+    BOOST_CHECK_EQUAL( pos[1], 3 );
+    BOOST_CHECK_EQUAL( pos[2], 9 );
+
+    // No match must leave the caller's vector untouched.
+    std::vector<int> keep = { 7 };
+    BOOST_CHECK_EQUAL( KIFUZZY::FuzzyScore( wxT( "zzz" ), wxT( "Swap" ), keep ), KIFUZZY::NO_MATCH );
+    BOOST_REQUIRE_EQUAL( keep.size(), 1u );
+    BOOST_CHECK_EQUAL( keep[0], 7 );
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()

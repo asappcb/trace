@@ -57,7 +57,11 @@ bool isWordStart( const wxString& aRawText, size_t aIdx )
 }
 
 
-int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
+namespace
+{
+/// Shared scoring core. When @p aPositions is non-null it is filled (only on a match) with the
+/// matched character indices, in order.
+int fuzzyScoreImpl( const wxString& aPattern, const wxString& aText, std::vector<int>* aPositions )
 {
     if( aPattern.IsEmpty() )
         return 0;
@@ -69,6 +73,8 @@ int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
     int    run      = 0;   // length of the current contiguous matched run
     int    lastIdx  = -2;  // index in text of the previously matched char
     size_t searchAt = 0;
+
+    std::vector<int> positions;
 
     for( size_t pi = 0; pi < pattern.length(); ++pi )
     {
@@ -98,6 +104,9 @@ int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
         const int gap = static_cast<int>( foundAt ) - static_cast<int>( searchAt );
         score += 10 + bonus - std::min( gap, 8 );
 
+        if( aPositions )
+            positions.push_back( static_cast<int>( foundAt ) );
+
         lastIdx  = static_cast<int>( foundAt );
         searchAt = foundAt + 1;
     }
@@ -108,7 +117,23 @@ int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
 
     score += std::max( 0, 15 - static_cast<int>( text.length() ) / 2 );
 
+    if( aPositions )
+        *aPositions = std::move( positions );
+
     return score;
+}
+} // namespace
+
+
+int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText )
+{
+    return fuzzyScoreImpl( aPattern, aText, nullptr );
+}
+
+
+int KIFUZZY::FuzzyScore( const wxString& aPattern, const wxString& aText, std::vector<int>& aMatchedPositions )
+{
+    return fuzzyScoreImpl( aPattern, aText, &aMatchedPositions );
 }
 
 
