@@ -1168,9 +1168,13 @@ void PCB_EDIT_FRAME::setupUIConditions()
     mgr->SetConditions( ACTIONS::addToGroup,      ENABLE( addToGroupCond ) );
     mgr->SetConditions( ACTIONS::removeFromGroup, ENABLE( inGroupCond ) );
 
-    // A bare pad can only be placed inside the footprint editor; disable it here so it is not
-    // offered (as an inert command) in the board editor.
-    mgr->SetConditions( PCB_ACTIONS::placePad,    ENABLE( SELECTION_CONDITIONS::ShowNever ) );
+    // A bare pad can't be placed on the board, but with a single footprint selected "Add Pad"
+    // opens that footprint in the footprint editor (see PAD_TOOL::PlacePad); enable it then, and
+    // keep it disabled otherwise instead of offering an inert command.
+    static const std::vector<KICAD_T> fpType = { PCB_FOOTPRINT_T };
+    mgr->SetConditions( PCB_ACTIONS::placePad,
+                        ENABLE( SELECTION_CONDITIONS::Count( 1 )
+                                && SELECTION_CONDITIONS::OnlyTypes( fpType ) ) );
     mgr->SetConditions( PCB_ACTIONS::lock,     ENABLE( PCB_SELECTION_CONDITIONS::HasUnlockedItems ) );
     mgr->SetConditions( PCB_ACTIONS::unlock,   ENABLE( PCB_SELECTION_CONDITIONS::HasLockedItems ) );
 
@@ -2312,6 +2316,21 @@ void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
 
     const wxBitmapBundle fpIcon = KiBitmapBundle( BITMAPS::module, 16 );
     const wxBitmapBundle netIcon = KiBitmapBundle( BITMAPS::general_ratsnest, 16 );
+    const wxBitmapBundle layerIcon = KiBitmapBundle( BITMAPS::show_all_layers, 16 );
+
+    // Layers -> make the active layer.
+    for( PCB_LAYER_ID layer : board->GetEnabledLayers().UIOrder() )
+    {
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = board->GetLayerName( layer );
+        item.m_detail = _( "layer" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon = layerIcon;
+
+        item.m_run = [this, layer]() { SetActiveLayer( layer ); };
+
+        aItems.push_back( std::move( item ) );
+    }
 
     // Footprints -> select and centre.
     for( FOOTPRINT* footprint : board->Footprints() )
