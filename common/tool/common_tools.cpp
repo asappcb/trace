@@ -805,7 +805,7 @@ int COMMON_TOOLS::ToggleBoundingBoxes( const TOOL_EVENT& aEvent )
 void COMMON_TOOLS::setTransitions()
 {
     Go( &COMMON_TOOLS::SelectionTool,       ACTIONS::selectionTool.MakeEvent() );
-    Go( &COMMON_TOOLS::CommandPalette,      ACTIONS::commandPalette.MakeEvent() );
+    Go( &COMMON_TOOLS::CommandPalette, ACTIONS::commandPalette.MakeEvent() );
 
     // Cursor control
     Go( &COMMON_TOOLS::CursorControl,       ACTIONS::cursorUp.MakeEvent() );
