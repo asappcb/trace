@@ -52,6 +52,51 @@ constexpr int MRU_BONUS = 8;
 
 /// How many recent commands to remember.
 constexpr size_t MRU_LIMIT = 25;
+
+
+/// Common alternate terms -> a word that actually appears in the matching command's name, so a
+/// user who types the word they have in mind still finds the command KiCad happens to call
+/// something else. Applied in addition to a direct match, never instead of it.
+struct ALIAS
+{
+    const wxChar* m_typed;
+    const wxChar* m_canonical;
+};
+
+const ALIAS ALIASES[] = {
+    { wxT( "delete" ), wxT( "remove" ) },  { wxT( "measure" ), wxT( "ruler" ) },
+    { wxT( "find" ), wxT( "search" ) },    { wxT( "shortcut" ), wxT( "hotkey" ) },
+    { wxT( "shortcuts" ), wxT( "hotkey" ) }, { wxT( "settings" ), wxT( "preferences" ) },
+    { wxT( "config" ), wxT( "preferences" ) }, { wxT( "props" ), wxT( "properties" ) },
+    { wxT( "duplicate" ), wxT( "copy" ) }, { wxT( "netlist" ), wxT( "net" ) },
+    { wxT( "reference" ), wxT( "annotate" ) }, { wxT( "gerber" ), wxT( "fabrication" ) },
+    { wxT( "3d" ), wxT( "3d viewer" ) },   { wxT( "bom" ), wxT( "bill of materials" ) },
+};
+
+
+/// Expand a query into the terms to match against: the query itself, plus the canonical word for
+/// any alias the query is a prefix of. The first element is always the original query, so its match
+/// positions drive highlighting when it is what actually hit.
+std::vector<wxString> expandQuery( const wxString& aQuery )
+{
+    std::vector<wxString> terms;
+    terms.push_back( aQuery );
+
+    if( aQuery.IsEmpty() )
+        return terms;
+
+    const wxString lower = aQuery.Lower();
+
+    for( const ALIAS& alias : ALIASES )
+    {
+        const wxString typed = wxString( alias.m_typed );
+
+        if( typed.StartsWith( lower ) )
+            terms.push_back( wxString( alias.m_canonical ) );
+    }
+
+    return terms;
+}
 }
 
 
@@ -347,6 +392,9 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
     query.Trim( false );
     const bool empty = query.IsEmpty();
 
+    // The query plus any alias canonicals ("delete" -> "remove", …); each item takes its best.
+    const std::vector<wxString> terms = expandQuery( query );
+
     std::map<wxString, int> mruRank;
 
     for( int i = 0; i < static_cast<int>( m_mru.size() ); ++i )
@@ -372,8 +420,28 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
         if( !scoped && empty && item.m_category == COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE )
             continue;
 
+        // Score against the query and any alias canonicals; keep the best. Alias matches (terms
+        // past the first) are penalised slightly so a direct hit always outranks an alias hit.
+        int              score = KIFUZZY::NO_MATCH;
         std::vector<int> matched;
-        const int        score = KIFUZZY::FuzzyScore( query, item.m_name, matched );
+
+        for( size_t t = 0; t < terms.size(); ++t )
+        {
+            std::vector<int> m;
+            int              s = KIFUZZY::FuzzyScore( terms[t], item.m_name, m );
+
+            if( s == KIFUZZY::NO_MATCH )
+                continue;
+
+            if( t > 0 )
+                s -= 6;
+
+            if( s > score )
+            {
+                score   = s;
+                matched = std::move( m );
+            }
+        }
 
         if( score == KIFUZZY::NO_MATCH )
             continue;
@@ -436,6 +504,11 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
         rows.push_back(
                 { sc.m_item->m_name, right, sc.m_item->m_icon, std::move( sc.m_matched ), sc.m_item->m_enabled } );
     }
+
+    // Nothing matched a non-empty query: show a non-selectable hint rather than a blank void.
+    // m_shown stays empty, so keyboard navigation and Enter are inert on this placeholder.
+    if( rows.empty() && !empty )
+        rows.push_back( { _( "No matching commands" ), wxEmptyString, wxBitmapBundle(), {}, false } );
 
     m_resultsList->SetRows( std::move( rows ) );
 }
