@@ -40,8 +40,8 @@ wxString RenderBoardToSvg( BOARD* aBoard, const LSEQ& aLayers, REPORTER& aReport
     // so default to cropping to the board and dropping the drawing sheet / title block -- unlike a
     // fabrication SVG, which keeps the page frame. (These become explicit options in a later PR.)
     JOB_EXPORT_PCB_SVG job;
-    job.m_genMode          = JOB_EXPORT_PCB_SVG::GEN_MODE::SINGLE;
-    job.m_fitPageToBoard   = true;
+    job.m_genMode = JOB_EXPORT_PCB_SVG::GEN_MODE::SINGLE;
+    job.m_fitPageToBoard = true;
     job.m_plotDrawingSheet = false;
 
     PCB_PLOT_PARAMS plotOpts;
@@ -52,12 +52,12 @@ wxString RenderBoardToSvg( BOARD* aBoard, const LSEQ& aLayers, REPORTER& aReport
     // no PLOTTER changes.
     const wxString tempPath = wxFileName::CreateTempFileName( wxT( "kicad-render-" ) ) + wxT( ".svg" );
 
-    PCB_PLOTTER            plotter( aBoard, &aReporter, plotOpts );
-    std::vector<wxString>  outputFiles;
+    PCB_PLOTTER           plotter( aBoard, &aReporter, plotOpts );
+    std::vector<wxString> outputFiles;
 
     const bool ok = plotter.Plot( tempPath, aLayers, /*aCommonLayers*/ {},
-                                  /*aUseGerberFileExtensions*/ false, /*aOutputPathIsSingle*/ true,
-                                  std::nullopt, std::nullopt, std::nullopt, &outputFiles );
+                                  /*aUseGerberFileExtensions*/ false, /*aOutputPathIsSingle*/ true, std::nullopt,
+                                  std::nullopt, std::nullopt, &outputFiles );
 
     // Plot may write to a slightly different name (layer suffix, etc.); the reported path is
     // authoritative.
