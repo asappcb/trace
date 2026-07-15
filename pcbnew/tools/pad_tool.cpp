@@ -565,7 +565,18 @@ int PAD_TOOL::PlacePad( const TOOL_EVENT& aEvent )
     static bool neednewPadNumber;
 
     if( !m_isFootprintEditor )
+    {
+        // A bare pad can't exist on the board. If a single footprint is selected, take the user to
+        // the footprint editor for it, where pads can actually be added -- so the command guides
+        // rather than silently doing nothing.
+        PCB_SELECTION_TOOL*  selTool = m_toolMgr->GetTool<PCB_SELECTION_TOOL>();
+        const PCB_SELECTION& selection = selTool->GetSelection();
+
+        if( selection.Size() == 1 && selection[0]->Type() == PCB_FOOTPRINT_T )
+            m_toolMgr->RunAction( PCB_ACTIONS::editFpInFpEditor );
+
         return 0;
+    }
 
     if( !board()->GetFirstFootprint() )
         return 0;
