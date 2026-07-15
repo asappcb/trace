@@ -87,7 +87,8 @@ jobs:
             -ex 'thread apply all bt' \
             -ex 'printf "\n===== STOPPED (signal/exit) — BACKTRACE =====\n"' \
             -ex 'bt full' \
-            --args "$CLI" pcb export svg "$BOARD" --output /tmp/diag.svg \
+            --args "$CLI" pcb export svg --page-size-mode 1 --exclude-drawing-sheet \
+                   --black-and-white --layers F.Cu,B.Cu,Edge.Cuts -o /tmp/diag.svg "$BOARD" \
             2>&1 | tee /tmp/gdb-diag.log
           echo "===== TAIL (backtrace, guaranteed to survive) ====="
           tail -120 /tmp/gdb-diag.log
