@@ -42,6 +42,9 @@ public:
 
     int SelectionTool( const TOOL_EVENT& aEvent );
 
+    /// Open the searchable command palette (Ctrl/Cmd-K) and run the chosen action.
+    int CommandPalette( const TOOL_EVENT& aEvent );
+
     // View controls
     int ZoomRedraw( const TOOL_EVENT& aEvent );
     int ZoomInOut( const TOOL_EVENT& aEvent );
