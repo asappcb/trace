@@ -23,6 +23,8 @@
 #include <api/api_server.h>
 #include <base_units.h>
 #include <bitmaps.h>
+#include <sch_reference_list.h>
+#include <set>
 #include <confirm.h>
 #include <connection_graph.h>
 #include <dialogs/dialog_erc.h>
@@ -2229,6 +2231,63 @@ void SCH_EDIT_FRAME::FocusOnItem( EDA_ITEM* aItem, bool aAllowScroll )
         }
 
         FocusOnLocation( aItem->GetFocusPosition(), aAllowScroll );
+    }
+}
+
+
+void SCH_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems )
+{
+    const wxBitmapBundle symbolIcon = KiBitmapBundle( BITMAPS::add_component, 16 );
+    const wxBitmapBundle sheetIcon = KiBitmapBundle( BITMAPS::hierarchy_nav, 16 );
+
+    SCH_SHEET_LIST hierarchy = Schematic().Hierarchy();
+
+    // Symbols -> find and navigate to the symbol (across sheets).
+    SCH_REFERENCE_LIST references;
+    hierarchy.GetSymbols( references, SYMBOL_FILTER_NON_POWER, true );
+
+    std::set<wxString> seen;
+
+    for( size_t i = 0; i < references.GetCount(); ++i )
+    {
+        const wxString refdes = references[i].GetFullRef( false );
+
+        if( refdes.IsEmpty() || !seen.insert( refdes ).second )
+            continue;
+
+        const wxString value = references[i].GetValue();
+
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = value.IsEmpty() ? refdes : wxString::Format( wxT( "%s — %s" ), refdes, value );
+        item.m_detail = _( "symbol" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon = symbolIcon;
+
+        item.m_run = [this, refdes]()
+        {
+            if( SCH_EDITOR_CONTROL* ctrl = m_toolManager->GetTool<SCH_EDITOR_CONTROL>() )
+                ctrl->FindSymbolAndItem( nullptr, &refdes, true, HIGHLIGHT_SYMBOL, wxEmptyString );
+        };
+
+        aItems.push_back( std::move( item ) );
+    }
+
+    // Sheets -> switch to the sheet.
+    for( const SCH_SHEET_PATH& path : hierarchy )
+    {
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = path.PathHumanReadable();
+        item.m_detail = _( "sheet" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon = sheetIcon;
+
+        item.m_run = [this, path]()
+        {
+            SetCurrentSheet( path );
+            DisplayCurrentSheet();
+        };
+
+        aItems.push_back( std::move( item ) );
     }
 }
 

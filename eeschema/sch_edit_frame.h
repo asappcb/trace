@@ -822,6 +822,9 @@ public:
 
     void FocusOnItem( EDA_ITEM* aItem, bool aAllowScroll = true ) override;
 
+    /// Supply symbols (by reference) and sheets as command-palette "go to" targets.
+    void GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems ) override;
+
     bool IsSyncingSelection() { return m_syncingPcbToSchSelection; }
 
     /**

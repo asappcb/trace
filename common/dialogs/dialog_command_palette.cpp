@@ -352,6 +352,11 @@ void DIALOG_COMMAND_PALETTE::collectItems()
         if( !action || action == &ACTIONS::commandPalette )
             continue;
 
+        // Skip commands that no tool in this editor handles -- the action registry is process-wide,
+        // so e.g. the PCB-only "3D Viewer" would otherwise appear (and do nothing) in eeschema.
+        if( !m_toolMgr->HasHandlerForAction( *action ) )
+            continue;
+
         // Prefer the friendly name; fall back to the menu label so commands defined with only
         // MenuText (no FriendlyName) are still reachable. Skip anything with no user-facing label.
         wxString friendly = action->GetFriendlyName();
