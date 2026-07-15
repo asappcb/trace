@@ -143,6 +143,7 @@ public:
         std::vector<wxString> pinned_symbol_libs;
         std::vector<wxString> pinned_fp_libs;
         std::vector<wxString> pinned_design_block_libs;
+        std::vector<wxString> command_palette_mru; ///< Recently-run command-palette actions, MRU first.
     };
 
     struct SYSTEM

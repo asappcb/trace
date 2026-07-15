@@ -34,7 +34,6 @@
 #include <core/kicad_algo.h>
 #include <kiface_base.h>
 #include <settings/app_settings.h>
-#include <tool/action_manager.h>
 #include <tool/actions.h>
 #include <tool/common_tools.h>
 #include <tool/tool_manager.h>
@@ -105,32 +104,10 @@ int COMMON_TOOLS::SelectionTool( const TOOL_EVENT& aEvent )
 
 int COMMON_TOOLS::CommandPalette( const TOOL_EVENT& aEvent )
 {
-    DIALOG_COMMAND_PALETTE dlg( m_frame, m_toolMgr );
-
-    if( dlg.ShowModal() != wxID_OK )
-        return 0;
-
-    const TOOL_ACTION* action = dlg.GetSelectedAction();
-
-    if( !action )
-        return 0;
-
-    // Gate on the action's enable condition, exactly as hotkey dispatch does (ACTION_MANAGER::
-    // RunHotKey), so the palette can't fire a command that is invalid in the current context --
-    // e.g. Rotate/Delete with nothing selected, which would be a no-op at best and a failed
-    // assertion in a QABUILD at worst.
-    ACTION_MANAGER* actionMgr = m_toolMgr->GetActionManager();
-    SELECTION&      selection = m_toolMgr->GetToolHolder()->GetCurrentSelection();
-
-    if( const ACTION_CONDITIONS* cond = actionMgr->GetCondition( *action ) )
-    {
-        if( !cond->GetHotkeyCondition()( selection ) )
-            return 0;
-    }
-
-    // Post (not Run) so the chosen action executes after this palette handler's coroutine ends
-    // rather than nested inside it -- important when the action is itself an interactive tool.
-    m_toolMgr->PostAction( *action );
+    // Modeless, chromeless, self-destroying popup that runs the chosen action itself (gating it on
+    // its ACTION_CONDITIONS) and dismisses on Escape or focus loss.
+    DIALOG_COMMAND_PALETTE* dlg = new DIALOG_COMMAND_PALETTE( m_frame, m_toolMgr );
+    dlg->Show( true );
     return 0;
 }
 

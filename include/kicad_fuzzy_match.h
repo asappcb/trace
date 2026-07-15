@@ -20,6 +20,7 @@
 #ifndef KICAD_FUZZY_MATCH_H
 #define KICAD_FUZZY_MATCH_H
 
+#include <vector>
 #include <wx/string.h>
 #include <kicommon.h>
 
@@ -47,6 +48,14 @@ static constexpr int NO_MATCH = -1;
  *         subsequence of @p aText. An empty pattern matches everything with a neutral score of 0.
  */
 KICOMMON_API int FuzzyScore( const wxString& aPattern, const wxString& aText );
+
+/**
+ * Score overload that also reports which character indices of @p aText were matched, in order,
+ * so callers (e.g. the command palette) can highlight them. @p aMatchedPositions is cleared and
+ * filled only on a match; it is left untouched when the result is NO_MATCH.
+ */
+KICOMMON_API int FuzzyScore( const wxString& aPattern, const wxString& aText,
+                             std::vector<int>& aMatchedPositions );
 
 /**
  * Convenience predicate: true when @p aPattern is a (fuzzy) subsequence of @p aText.
