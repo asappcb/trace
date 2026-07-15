@@ -35,10 +35,14 @@ wxString RenderBoardToSvg( BOARD* aBoard, const LSEQ& aLayers, REPORTER& aReport
     if( !aBoard || aLayers.empty() )
         return wxEmptyString;
 
-    // Configure SVG plot options from a single-file export job, exactly as `kicad-cli pcb export
-    // svg` does (colours/theme/crop/background become options in later render-query PRs).
+    // Configure SVG plot options from a single-file export job, as `kicad-cli pcb export svg` does.
+    // A render query is meant to hand back a clean image of the *board* (for a viewer/thumbnail),
+    // so default to cropping to the board and dropping the drawing sheet / title block -- unlike a
+    // fabrication SVG, which keeps the page frame. (These become explicit options in a later PR.)
     JOB_EXPORT_PCB_SVG job;
-    job.m_genMode = JOB_EXPORT_PCB_SVG::GEN_MODE::SINGLE;
+    job.m_genMode          = JOB_EXPORT_PCB_SVG::GEN_MODE::SINGLE;
+    job.m_fitPageToBoard   = true;
+    job.m_plotDrawingSheet = false;
 
     PCB_PLOT_PARAMS plotOpts;
     PCB_PLOTTER::PlotJobToPlotOpts( plotOpts, &job, aReporter );
