@@ -617,6 +617,23 @@ TOOL_BASE* TOOL_MANAGER::FindTool( const std::string& aName ) const
 }
 
 
+bool TOOL_MANAGER::HasHandlerForAction( const TOOL_ACTION& aAction ) const
+{
+    TOOL_EVENT evt = aAction.MakeEvent();
+
+    for( const auto& state : m_toolState )
+    {
+        for( const TRANSITION& tr : state.second->transitions )
+        {
+            if( tr.first.Matches( evt ) )
+                return true;
+        }
+    }
+
+    return false;
+}
+
+
 void TOOL_MANAGER::DeactivateTool()
 {
     // Deactivate the active tool, but do not run anything new
