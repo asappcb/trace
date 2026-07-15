@@ -129,18 +129,19 @@ jobs:
         run: ccache -s -v || true
 
       - name: Run QA tests
-        # qa_cli (SIGSEGV in this container, issue #68) and qa_diff_merge_mergetool_workflow_e2e
-        # (interactive mergetool under xvfb) are excluded; both stay covered by upstream GitLab CI.
+        # qa_diff_merge_mergetool_workflow_e2e (interactive mergetool under xvfb) is excluded; it
+        # stays covered by upstream GitLab CI. qa_cli was re-enabled (issue #68) to verify the
+        # SIGSEGV no longer reproduces on this container.
         run: |
           cd build/qa
           if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
             echo "Fast tests: ${{ steps.scope.outputs.ctest_re }}"
             ctest -j"$(nproc)" --output-on-failure --output-junit test_results.xml \
               --tests-regex '${{ steps.scope.outputs.ctest_re }}' \
-              --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
+              --exclude-regex '^(qa_diff_merge_mergetool_workflow_e2e)$'
           else
             ctest -j"$(nproc)" --output-on-failure --output-junit test_results.xml \
-              --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
+              --exclude-regex '^(qa_diff_merge_mergetool_workflow_e2e)$'
           fi
 
       - name: Upload test results
