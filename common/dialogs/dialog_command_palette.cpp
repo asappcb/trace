@@ -31,6 +31,7 @@
 
 #include <bitmaps/bitmap_types.h>
 #include <bitmaps/bitmaps_list.h>
+#include <eda_draw_frame.h>
 #include <hotkeys_basic.h>
 #include <kicad_fuzzy_match.h>
 #include <pgm_base.h>
@@ -55,8 +56,9 @@ constexpr size_t MRU_LIMIT = 25;
 
 
 /**
- * Owner-drawn results list: each row is an icon, the command name with its matched characters
- * highlighted, and a right-aligned hotkey. Context-invalid commands are drawn greyed.
+ * Owner-drawn results list: each row is an icon, the item name with its matched characters
+ * highlighted, and a right-aligned qualifier (a hotkey for commands, a type for navigation).
+ * Context-invalid items are drawn greyed.
  */
 class COMMAND_PALETTE_LIST : public wxVListBox
 {
@@ -64,7 +66,7 @@ public:
     struct ROW
     {
         wxString         m_name;
-        wxString         m_hotkey;
+        wxString         m_right; ///< Right-aligned text (hotkey or detail).
         wxBitmapBundle   m_icon;
         std::vector<int> m_matched; ///< Indices into m_name to highlight.
         bool             m_enabled;
@@ -151,11 +153,11 @@ protected:
             i = j;
         }
 
-        if( !row.m_hotkey.IsEmpty() )
+        if( !row.m_right.IsEmpty() )
         {
             aDC.SetTextForeground( subtle );
-            wxSize hs = aDC.GetTextExtent( row.m_hotkey );
-            aDC.DrawText( row.m_hotkey, aRect.GetRight() - hs.GetWidth() - pad, ty );
+            wxSize hs = aDC.GetTextExtent( row.m_right );
+            aDC.DrawText( row.m_right, aRect.GetRight() - hs.GetWidth() - pad, ty );
         }
     }
 
@@ -177,7 +179,7 @@ DIALOG_COMMAND_PALETTE::DIALOG_COMMAND_PALETTE( wxWindow* aParent, TOOL_MANAGER*
 
     m_queryCtrl = new wxTextCtrl( this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize,
                                   wxTE_PROCESS_ENTER );
-    m_queryCtrl->SetHint( _( "Type a command…" ) );
+    m_queryCtrl->SetHint( _( "Type a command…  (> commands, @ go to)" ) );
     mainSizer->Add( m_queryCtrl, 0, wxEXPAND | wxALL, 6 );
 
     m_resultsList = new COMMAND_PALETTE_LIST( this );
@@ -186,7 +188,7 @@ DIALOG_COMMAND_PALETTE::DIALOG_COMMAND_PALETTE( wxWindow* aParent, TOOL_MANAGER*
     SetSizer( mainSizer );
 
     loadMru();
-    collectActions();
+    collectItems();
     rebuildList();
 
     m_queryCtrl->Bind( wxEVT_TEXT, &DIALOG_COMMAND_PALETTE::onQueryChanged, this );
@@ -237,9 +239,9 @@ void DIALOG_COMMAND_PALETTE::loadMru()
 }
 
 
-void DIALOG_COMMAND_PALETTE::recordMru( const TOOL_ACTION* aAction )
+void DIALOG_COMMAND_PALETTE::recordMru( const wxString& aMruKey )
 {
-    if( !aAction )
+    if( aMruKey.IsEmpty() )
         return;
 
     COMMON_SETTINGS* cfg = Pgm().GetCommonSettings();
@@ -247,21 +249,21 @@ void DIALOG_COMMAND_PALETTE::recordMru( const TOOL_ACTION* aAction )
     if( !cfg )
         return;
 
-    const wxString name = aAction->GetName();
-    auto&          mru = cfg->m_Session.command_palette_mru;
+    auto& mru = cfg->m_Session.command_palette_mru;
 
-    mru.erase( std::remove( mru.begin(), mru.end(), name ), mru.end() );
-    mru.insert( mru.begin(), name );
+    mru.erase( std::remove( mru.begin(), mru.end(), aMruKey ), mru.end() );
+    mru.insert( mru.begin(), aMruKey );
 
     if( mru.size() > MRU_LIMIT )
         mru.resize( MRU_LIMIT );
 }
 
 
-void DIALOG_COMMAND_PALETTE::collectActions()
+void DIALOG_COMMAND_PALETTE::collectItems()
 {
     ACTION_MANAGER* actionMgr = m_toolMgr->GetActionManager();
     SELECTION&      selection = m_toolMgr->GetToolHolder()->GetCurrentSelection();
+    TOOL_MANAGER*   toolMgr = m_toolMgr;
 
     std::set<const TOOL_ACTION*> seen;
 
@@ -285,28 +287,36 @@ void DIALOG_COMMAND_PALETTE::collectActions()
 
         friendly.Replace( wxT( "&" ), wxT( "" ) ); // strip menu-accelerator markers for display
 
-        wxString hotkeyText;
-        int      hotkey = actionMgr->GetHotKey( *action );
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = friendly;
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+        item.m_mruKey = wxString( action->GetName() );
 
-        if( hotkey != 0 )
-            hotkeyText = KeyNameFromKeyCode( hotkey );
-
-        bool enabled = true;
+        if( int hotkey = actionMgr->GetHotKey( *action ) )
+            item.m_hotkey = KeyNameFromKeyCode( hotkey );
 
         if( const ACTION_CONDITIONS* cond = actionMgr->GetCondition( *action ) )
-            enabled = cond->GetHotkeyCondition()( selection );
-
-        wxBitmapBundle icon;
+            item.m_enabled = cond->GetHotkeyCondition()( selection );
 
         if( action->GetIcon() != BITMAPS::INVALID_BITMAP )
-            icon = KiBitmapBundle( action->GetIcon(), 16 );
+            item.m_icon = KiBitmapBundle( action->GetIcon(), 16 );
 
-        m_entries.push_back( { action, friendly, hotkeyText, icon, enabled } );
+        const TOOL_ACTION* act = action;
+        item.m_run = [toolMgr, act]()
+        {
+            toolMgr->RunAction( *act );
+        };
+
+        m_items.push_back( std::move( item ) );
     }
 
+    // Editor-supplied navigation targets (nets, footprints, sheets, …).
+    if( EDA_DRAW_FRAME* frame = dynamic_cast<EDA_DRAW_FRAME*>( GetParent() ) )
+        frame->GetCommandPaletteItems( m_items );
+
     // Stable alphabetical baseline so ordering is deterministic before ranking.
-    std::stable_sort( m_entries.begin(), m_entries.end(),
-                      []( const ENTRY& a, const ENTRY& b )
+    std::stable_sort( m_items.begin(), m_items.end(),
+                      []( const COMMAND_PALETTE_ITEM& a, const COMMAND_PALETTE_ITEM& b )
                       {
                           return a.m_name.CmpNoCase( b.m_name ) < 0;
                       } );
@@ -315,8 +325,27 @@ void DIALOG_COMMAND_PALETTE::collectActions()
 
 void DIALOG_COMMAND_PALETTE::rebuildList()
 {
-    const wxString query = m_queryCtrl->GetValue();
-    const bool     empty = query.IsEmpty();
+    wxString query = m_queryCtrl->GetValue();
+
+    // Leading sigil scopes the search to one category.
+    bool                           scoped = false;
+    COMMAND_PALETTE_ITEM::CATEGORY only = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+
+    if( query.StartsWith( wxT( ">" ) ) )
+    {
+        scoped = true;
+        only = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+        query = query.Mid( 1 );
+    }
+    else if( query.StartsWith( wxT( "@" ) ) )
+    {
+        scoped = true;
+        only = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        query = query.Mid( 1 );
+    }
+
+    query.Trim( false );
+    const bool empty = query.IsEmpty();
 
     std::map<wxString, int> mruRank;
 
@@ -325,35 +354,50 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
 
     struct SCORED
     {
-        const ENTRY*     m_entry;
-        int              m_score;
-        int              m_mru; ///< MRU index, or -1.
-        std::vector<int> m_matched;
+        const COMMAND_PALETTE_ITEM* m_item;
+        int                         m_score;
+        int                         m_mru;
+        std::vector<int>            m_matched;
     };
 
     std::vector<SCORED> scored;
 
-    for( const ENTRY& entry : m_entries )
+    for( const COMMAND_PALETTE_ITEM& item : m_items )
     {
+        if( scoped && item.m_category != only )
+            continue;
+
+        // In the default (no-sigil) empty view, don't flood the list with every navigation target;
+        // they surface once the user types (or scopes with '@').
+        if( !scoped && empty && item.m_category == COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE )
+            continue;
+
         std::vector<int> matched;
-        const int        score = KIFUZZY::FuzzyScore( query, entry.m_name, matched );
+        const int        score = KIFUZZY::FuzzyScore( query, item.m_name, matched );
 
         if( score == KIFUZZY::NO_MATCH )
             continue;
 
-        auto      it = mruRank.find( wxString( entry.m_action->GetName() ) );
-        const int mru = ( it != mruRank.end() ) ? it->second : -1;
+        int mru = -1;
 
-        scored.push_back( { &entry, score, mru, std::move( matched ) } );
+        if( !item.m_mruKey.IsEmpty() )
+        {
+            auto it = mruRank.find( item.m_mruKey );
+
+            if( it != mruRank.end() )
+                mru = it->second;
+        }
+
+        scored.push_back( { &item, score, mru, std::move( matched ) } );
     }
 
-    // Ranking: valid-in-context commands first. With no query, most-recent then alphabetical.
+    // Ranking: valid-in-context items first. With no query, most-recent then alphabetical.
     // With a query, by match score (recent commands get a small nudge), then alphabetical.
     std::stable_sort( scored.begin(), scored.end(),
                       [empty]( const SCORED& a, const SCORED& b )
                       {
-                          if( a.m_entry->m_enabled != b.m_entry->m_enabled )
-                              return a.m_entry->m_enabled;
+                          if( a.m_item->m_enabled != b.m_item->m_enabled )
+                              return a.m_item->m_enabled;
 
                           if( empty )
                           {
@@ -366,7 +410,7 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
                               if( am && bm && a.m_mru != b.m_mru )
                                   return a.m_mru < b.m_mru;
 
-                              return a.m_entry->m_name.CmpNoCase( b.m_entry->m_name ) < 0;
+                              return a.m_item->m_name.CmpNoCase( b.m_item->m_name ) < 0;
                           }
 
                           const int as = a.m_score + ( a.m_mru >= 0 ? MRU_BONUS : 0 );
@@ -375,7 +419,7 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
                           if( as != bs )
                               return as > bs;
 
-                          return a.m_entry->m_name.CmpNoCase( b.m_entry->m_name ) < 0;
+                          return a.m_item->m_name.CmpNoCase( b.m_item->m_name ) < 0;
                       } );
 
     m_shown.clear();
@@ -386,9 +430,11 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
         if( static_cast<int>( m_shown.size() ) >= MAX_RESULTS )
             break;
 
-        m_shown.push_back( sc.m_entry );
-        rows.push_back( { sc.m_entry->m_name, sc.m_entry->m_hotkey, sc.m_entry->m_icon, std::move( sc.m_matched ),
-                          sc.m_entry->m_enabled } );
+        const wxString right = sc.m_item->m_hotkey.IsEmpty() ? sc.m_item->m_detail : sc.m_item->m_hotkey;
+
+        m_shown.push_back( sc.m_item );
+        rows.push_back(
+                { sc.m_item->m_name, right, sc.m_item->m_icon, std::move( sc.m_matched ), sc.m_item->m_enabled } );
     }
 
     m_resultsList->SetRows( std::move( rows ) );
@@ -402,31 +448,24 @@ void DIALOG_COMMAND_PALETTE::acceptSelection()
     if( idx == wxNOT_FOUND || idx < 0 || idx >= static_cast<int>( m_shown.size() ) )
         return;
 
-    const ENTRY* entry = m_shown[idx];
+    const COMMAND_PALETTE_ITEM* item = m_shown[idx];
 
-    // Refuse to launch a command that is invalid in the current context (it would no-op anyway).
-    if( !entry->m_enabled )
+    // Refuse to launch something invalid in the current context (it would no-op anyway).
+    if( !item->m_enabled || !item->m_run )
     {
         wxBell();
         return;
     }
 
-    const TOOL_ACTION* action = entry->m_action;
-    TOOL_MANAGER*      toolMgr = m_toolMgr;
-    wxWindow*          parent = GetParent();
+    std::function<void()> run = item->m_run; // copy: the item is destroyed with the dialog
+    wxWindow*             parent = GetParent();
 
-    recordMru( action );
+    recordMru( item->m_mruKey );
     dismiss();
 
-    // Run the action on the parent frame's next event-loop turn -- after this popup has torn down,
-    // but promptly (the wx event loop drains CallAfter continuously). PostAction would instead sit
-    // in the tool-manager queue until the next tool-dispatch event, i.e. until the user next
-    // interacts; CallAfter here mirrors how a menu/toolbar click dispatches.
-    auto run = [toolMgr, action]()
-    {
-        toolMgr->RunAction( *action );
-    };
-
+    // Run on the parent frame's next event-loop turn -- after this popup has torn down, but
+    // promptly (the wx event loop drains CallAfter continuously). This mirrors how a menu/toolbar
+    // click dispatches, and is safe when the item starts an interactive tool.
     if( parent )
         parent->CallAfter( run );
     else
