@@ -66,9 +66,9 @@ public:
     struct ROW
     {
         wxString         m_name;
-        wxString         m_right;    ///< Right-aligned text (hotkey or detail).
+        wxString         m_right; ///< Right-aligned text (hotkey or detail).
         wxBitmapBundle   m_icon;
-        std::vector<int> m_matched;  ///< Indices into m_name to highlight.
+        std::vector<int> m_matched; ///< Indices into m_name to highlight.
         bool             m_enabled;
     };
 
@@ -96,20 +96,20 @@ protected:
 
     void OnDrawItem( wxDC& aDC, const wxRect& aRect, size_t aItem ) const override
     {
-        const ROW& row      = m_rows[aItem];
+        const ROW& row = m_rows[aItem];
         const bool selected = ( GetSelection() == static_cast<int>( aItem ) );
 
-        const int pad      = FromDIP( 6 );
+        const int pad = FromDIP( 6 );
         const int iconSize = FromDIP( 16 );
 
-        wxColour text   = selected ? wxSystemSettings::GetColour( wxSYS_COLOUR_HIGHLIGHTTEXT )
-                                   : wxSystemSettings::GetColour( wxSYS_COLOUR_WINDOWTEXT );
+        wxColour text = selected ? wxSystemSettings::GetColour( wxSYS_COLOUR_HIGHLIGHTTEXT )
+                                 : wxSystemSettings::GetColour( wxSYS_COLOUR_WINDOWTEXT );
         wxColour subtle = selected ? text : wxSystemSettings::GetColour( wxSYS_COLOUR_GRAYTEXT );
         wxColour accent = selected ? text : wxSystemSettings::GetColour( wxSYS_COLOUR_HOTLIGHT );
 
         if( !row.m_enabled )
         {
-            text   = subtle;
+            text = subtle;
             accent = subtle;
         }
 
@@ -141,7 +141,7 @@ protected:
         while( i < row.m_name.length() )
         {
             const bool runHit = hit[i];
-            size_t     j      = i;
+            size_t     j = i;
 
             while( j < row.m_name.length() && hit[j] == runHit )
                 ++j;
@@ -167,8 +167,8 @@ private:
 
 
 DIALOG_COMMAND_PALETTE::DIALOG_COMMAND_PALETTE( wxWindow* aParent, TOOL_MANAGER* aToolManager ) :
-        DIALOG_SHIM( aParent, wxID_ANY, _( "Command Palette" ), wxDefaultPosition,
-                     wxSize( 560, 460 ), wxBORDER_SIMPLE ),
+        DIALOG_SHIM( aParent, wxID_ANY, _( "Command Palette" ), wxDefaultPosition, wxSize( 560, 460 ),
+                     wxBORDER_SIMPLE ),
         m_toolMgr( aToolManager ),
         m_ready( false ),
         m_dismissed( false ),
@@ -263,7 +263,7 @@ void DIALOG_COMMAND_PALETTE::collectItems()
 {
     ACTION_MANAGER* actionMgr = m_toolMgr->GetActionManager();
     SELECTION&      selection = m_toolMgr->GetToolHolder()->GetCurrentSelection();
-    TOOL_MANAGER*   toolMgr   = m_toolMgr;
+    TOOL_MANAGER*   toolMgr = m_toolMgr;
 
     std::set<const TOOL_ACTION*> seen;
 
@@ -285,12 +285,12 @@ void DIALOG_COMMAND_PALETTE::collectItems()
         if( !seen.insert( action ).second )
             continue;
 
-        friendly.Replace( wxT( "&" ), wxT( "" ) );  // strip menu-accelerator markers for display
+        friendly.Replace( wxT( "&" ), wxT( "" ) ); // strip menu-accelerator markers for display
 
         COMMAND_PALETTE_ITEM item;
-        item.m_name     = friendly;
+        item.m_name = friendly;
         item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
-        item.m_mruKey   = wxString( action->GetName() );
+        item.m_mruKey = wxString( action->GetName() );
 
         if( int hotkey = actionMgr->GetHotKey( *action ) )
             item.m_hotkey = KeyNameFromKeyCode( hotkey );
@@ -302,7 +302,10 @@ void DIALOG_COMMAND_PALETTE::collectItems()
             item.m_icon = KiBitmapBundle( action->GetIcon(), 16 );
 
         const TOOL_ACTION* act = action;
-        item.m_run             = [toolMgr, act]() { toolMgr->RunAction( *act ); };
+        item.m_run = [toolMgr, act]()
+        {
+            toolMgr->RunAction( *act );
+        };
 
         m_items.push_back( std::move( item ) );
     }
@@ -325,20 +328,20 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
     wxString query = m_queryCtrl->GetValue();
 
     // Leading sigil scopes the search to one category.
-    bool                            scoped = false;
-    COMMAND_PALETTE_ITEM::CATEGORY  only   = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+    bool                           scoped = false;
+    COMMAND_PALETTE_ITEM::CATEGORY only = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
 
     if( query.StartsWith( wxT( ">" ) ) )
     {
         scoped = true;
-        only   = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
-        query  = query.Mid( 1 );
+        only = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+        query = query.Mid( 1 );
     }
     else if( query.StartsWith( wxT( "@" ) ) )
     {
         scoped = true;
-        only   = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
-        query  = query.Mid( 1 );
+        only = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        query = query.Mid( 1 );
     }
 
     query.Trim( false );
@@ -427,12 +430,11 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
         if( static_cast<int>( m_shown.size() ) >= MAX_RESULTS )
             break;
 
-        const wxString right = sc.m_item->m_hotkey.IsEmpty() ? sc.m_item->m_detail
-                                                             : sc.m_item->m_hotkey;
+        const wxString right = sc.m_item->m_hotkey.IsEmpty() ? sc.m_item->m_detail : sc.m_item->m_hotkey;
 
         m_shown.push_back( sc.m_item );
-        rows.push_back( { sc.m_item->m_name, right, sc.m_item->m_icon, std::move( sc.m_matched ),
-                          sc.m_item->m_enabled } );
+        rows.push_back(
+                { sc.m_item->m_name, right, sc.m_item->m_icon, std::move( sc.m_matched ), sc.m_item->m_enabled } );
     }
 
     m_resultsList->SetRows( std::move( rows ) );
@@ -455,7 +457,7 @@ void DIALOG_COMMAND_PALETTE::acceptSelection()
         return;
     }
 
-    std::function<void()> run    = item->m_run;   // copy: the item is destroyed with the dialog
+    std::function<void()> run = item->m_run; // copy: the item is destroyed with the dialog
     wxWindow*             parent = GetParent();
 
     recordMru( item->m_mruKey );
@@ -518,9 +520,7 @@ void DIALOG_COMMAND_PALETTE::onCharHook( wxKeyEvent& aEvent )
         acceptSelection();
         return; // consumed
 
-    case WXK_ESCAPE:
-        dismiss();
-        return; // consumed
+    case WXK_ESCAPE: dismiss(); return; // consumed
 
     default:
         aEvent.Skip(); // ordinary typing flows to the search box

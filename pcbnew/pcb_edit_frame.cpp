@@ -2272,7 +2272,7 @@ void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
     if( !board )
         return;
 
-    const wxBitmapBundle fpIcon  = KiBitmapBundle( BITMAPS::module, 16 );
+    const wxBitmapBundle fpIcon = KiBitmapBundle( BITMAPS::module, 16 );
     const wxBitmapBundle netIcon = KiBitmapBundle( BITMAPS::general_ratsnest, 16 );
 
     // Footprints -> select and centre.
@@ -2286,12 +2286,15 @@ void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
         const wxString value = footprint->GetValue();
 
         COMMAND_PALETTE_ITEM item;
-        item.m_name     = value.IsEmpty() ? ref : wxString::Format( wxT( "%s — %s" ), ref, value );
-        item.m_detail   = _( "footprint" );
+        item.m_name = value.IsEmpty() ? ref : wxString::Format( wxT( "%s — %s" ), ref, value );
+        item.m_detail = _( "footprint" );
         item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
-        item.m_icon     = fpIcon;
+        item.m_icon = fpIcon;
 
-        item.m_run = [this, footprint]() { FocusOnItem( footprint ); };
+        item.m_run = [this, footprint]()
+        {
+            FocusOnItem( footprint );
+        };
 
         aItems.push_back( std::move( item ) );
     }
@@ -2303,10 +2306,10 @@ void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
             continue;
 
         COMMAND_PALETTE_ITEM item;
-        item.m_name     = net->GetNetname();
-        item.m_detail   = _( "net" );
+        item.m_name = net->GetNetname();
+        item.m_detail = _( "net" );
         item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
-        item.m_icon     = netIcon;
+        item.m_icon = netIcon;
 
         const int netcode = net->GetNetCode();
 

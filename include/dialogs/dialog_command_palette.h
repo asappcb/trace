@@ -64,15 +64,15 @@ private:
     void onActivate( wxActivateEvent& aEvent );
 
     TOOL_MANAGER* m_toolMgr;
-    bool          m_ready;      ///< True once shown; gates the close-on-deactivate.
-    bool          m_dismissed;  ///< Guards against dismissing/destroying twice.
+    bool          m_ready;     ///< True once shown; gates the close-on-deactivate.
+    bool          m_dismissed; ///< Guards against dismissing/destroying twice.
 
-    wxTextCtrl*          m_queryCtrl;
+    wxTextCtrl*           m_queryCtrl;
     COMMAND_PALETTE_LIST* m_resultsList;
 
-    std::vector<COMMAND_PALETTE_ITEM>        m_items;   ///< All eligible items (commands + nav).
-    std::vector<const COMMAND_PALETTE_ITEM*> m_shown;   ///< Displayed items, parallel to the rows.
-    std::vector<wxString>                    m_mru;     ///< MRU keys, most-recent first.
+    std::vector<COMMAND_PALETTE_ITEM>        m_items; ///< All eligible items (commands + nav).
+    std::vector<const COMMAND_PALETTE_ITEM*> m_shown; ///< Displayed items, parallel to the rows.
+    std::vector<wxString>                    m_mru;   ///< MRU keys, most-recent first.
 };
 
 #endif // DIALOG_COMMAND_PALETTE_H
