@@ -306,6 +306,7 @@ set( KICOMMON_SRCS
     increment.cpp
     json_conversions.cpp
     json_schema_validator.cpp
+    kicad_fuzzy_match.cpp
     kidialog.cpp
     kiid.cpp
     kiway.cpp
@@ -541,6 +542,7 @@ set( COMMON_DLG_SRCS
     dialogs/dialog_kicad_merge_3way_base.cpp
     dialogs/dialog_color_picker.cpp
     dialogs/dialog_color_picker_base.cpp
+    dialogs/dialog_command_palette.cpp
     dialogs/dialog_configure_paths.cpp
     dialogs/dialog_configure_paths_base.cpp
     dialogs/dialog_design_block_properties.cpp
