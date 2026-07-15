@@ -21,26 +21,28 @@
 #define DIALOG_COMMAND_PALETTE_H
 
 #include <vector>
-#include <wx/bmpbndl.h>
+#include <command_palette_item.h>
 #include <dialog_shim.h>
 
 class TOOL_MANAGER;
-class TOOL_ACTION;
 class COMMAND_PALETTE_LIST;
 class wxTextCtrl;
 
 /**
- * A searchable "command palette" (Ctrl/Cmd-K): type part of a command name, fuzzy-ranked results
- * appear, Enter runs the top hit. It is a search-and-run view over the existing action registry
- * (ACTION_MANAGER), so it inherits every editor's commands with no per-command wiring.
+ * A searchable "command palette" (Ctrl/Cmd-K): type part of a name, fuzzy-ranked results appear,
+ * Enter runs the top hit. Its items come from two sources merged into one list:
+ *   - every command in the action registry (ACTION_MANAGER), and
+ *   - editor-supplied "go to" targets (EDA_DRAW_FRAME::GetCommandPaletteItems() — nets, footprints,
+ *     sheets, …).
  *
- * Results show a per-command icon and hotkey, highlight the matched characters, and grey out
- * commands that are not valid in the current context (which are also ranked below valid ones).
- * Recently-run commands are remembered (persisted in COMMON_SETTINGS) and surfaced first.
+ * A leading sigil scopes the search: `>` to commands only, `@` to navigation only.
  *
- * It is shown modeless and chromeless (no title bar) and dismisses itself on Escape or when it
- * loses focus (a click anywhere outside), like a Spotlight/VS-Code command palette. It runs the
- * chosen action itself and then self-destroys, so the caller only needs to construct and Show() it.
+ * Results show an icon and hotkey, highlight the matched characters, and grey out items that are
+ * not valid in the current context (which also rank below valid ones). Recently-run commands are
+ * remembered (persisted in COMMON_SETTINGS) and surfaced first.
+ *
+ * Shown modeless and chromeless; dismisses on Escape or focus loss, runs the chosen item itself,
+ * and self-destroys.
  */
 class DIALOG_COMMAND_PALETTE : public DIALOG_SHIM
 {
@@ -49,19 +51,9 @@ public:
     ~DIALOG_COMMAND_PALETTE() override = default;
 
 private:
-    /// One selectable command plus its precomputed display data.
-    struct ENTRY
-    {
-        const TOOL_ACTION* m_action;
-        wxString           m_name;      ///< Friendly name (search target + primary label).
-        wxString           m_hotkey;    ///< Rendered shortcut, or empty.
-        wxBitmapBundle     m_icon;      ///< Command icon, or empty bundle.
-        bool               m_enabled;   ///< Valid in the current context.
-    };
-
-    void collectActions();
+    void collectItems();
     void loadMru();
-    void recordMru( const TOOL_ACTION* aAction );
+    void recordMru( const wxString& aMruKey );
     void rebuildList();
     void acceptSelection();
     void dismiss();
@@ -71,16 +63,16 @@ private:
     void onCharHook( wxKeyEvent& aEvent );
     void onActivate( wxActivateEvent& aEvent );
 
-    TOOL_MANAGER*      m_toolMgr;
-    bool               m_ready;     ///< True once shown; gates the close-on-deactivate.
-    bool               m_dismissed; ///< Guards against dismissing/destroying twice.
+    TOOL_MANAGER* m_toolMgr;
+    bool          m_ready;      ///< True once shown; gates the close-on-deactivate.
+    bool          m_dismissed;  ///< Guards against dismissing/destroying twice.
 
-    wxTextCtrl*           m_queryCtrl;
+    wxTextCtrl*          m_queryCtrl;
     COMMAND_PALETTE_LIST* m_resultsList;
 
-    std::vector<ENTRY>        m_entries;   ///< All eligible commands.
-    std::vector<const ENTRY*> m_shown;     ///< Entries currently displayed, parallel to the list rows.
-    std::vector<wxString>     m_mru;       ///< Action names, most-recent first (from COMMON_SETTINGS).
+    std::vector<COMMAND_PALETTE_ITEM>        m_items;   ///< All eligible items (commands + nav).
+    std::vector<const COMMAND_PALETTE_ITEM*> m_shown;   ///< Displayed items, parallel to the rows.
+    std::vector<wxString>                    m_mru;     ///< MRU keys, most-recent first.
 };
 
 #endif // DIALOG_COMMAND_PALETTE_H

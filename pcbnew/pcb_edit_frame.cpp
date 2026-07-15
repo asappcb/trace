@@ -2265,6 +2265,85 @@ void PCB_EDIT_FRAME::HardRedraw()
 }
 
 
+void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems )
+{
+    BOARD* board = GetBoard();
+
+    if( !board )
+        return;
+
+    const wxBitmapBundle fpIcon  = KiBitmapBundle( BITMAPS::module, 16 );
+    const wxBitmapBundle netIcon = KiBitmapBundle( BITMAPS::general_ratsnest, 16 );
+
+    // Footprints -> select and centre.
+    for( FOOTPRINT* footprint : board->Footprints() )
+    {
+        const wxString ref = footprint->GetReference();
+
+        if( ref.IsEmpty() )
+            continue;
+
+        const wxString value = footprint->GetValue();
+
+        COMMAND_PALETTE_ITEM item;
+        item.m_name     = value.IsEmpty() ? ref : wxString::Format( wxT( "%s — %s" ), ref, value );
+        item.m_detail   = _( "footprint" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon     = fpIcon;
+
+        item.m_run = [this, footprint]() { FocusOnItem( footprint ); };
+
+        aItems.push_back( std::move( item ) );
+    }
+
+    // Nets -> select and centre a representative item (first track, else first pad) on the net.
+    for( NETINFO_ITEM* net : board->GetNetInfo() )
+    {
+        if( !net || net->GetNetCode() <= 0 || net->GetNetname().IsEmpty() )
+            continue;
+
+        COMMAND_PALETTE_ITEM item;
+        item.m_name     = net->GetNetname();
+        item.m_detail   = _( "net" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon     = netIcon;
+
+        const int netcode = net->GetNetCode();
+
+        item.m_run = [this, netcode]()
+        {
+            BOARD* b = GetBoard();
+
+            if( !b )
+                return;
+
+            for( PCB_TRACK* track : b->Tracks() )
+            {
+                if( track->GetNetCode() == netcode )
+                {
+                    FocusOnItem( track );
+                    return;
+                }
+            }
+
+            for( FOOTPRINT* fp : b->Footprints() )
+            {
+                for( PAD* pad : fp->Pads() )
+                {
+                    if( pad->GetNetCode() == netcode )
+                    {
+                        FocusOnItem( pad );
+                        return;
+                    }
+                }
+            }
+        };
+
+        aItems.push_back( std::move( item ) );
+    }
+}
+
+
 void PCB_EDIT_FRAME::UpdateTitle()
 {
     wxFileName fn = GetBoard()->GetFileName();

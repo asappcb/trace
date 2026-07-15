@@ -98,6 +98,9 @@ public:
 
     void HardRedraw() override;
 
+    /// Supply footprints (by reference) and nets as command-palette "go to" targets.
+    void GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems ) override;
+
     /**
      * Execute a remote command send by Eeschema via a socket, port KICAD_PCB_PORT_SERVICE_NUMBER
      * (currently 4242).
