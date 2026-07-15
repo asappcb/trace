@@ -693,6 +693,9 @@ static bool fuseShapes( auto& aInputShapes, TopoDS_Shape& aOutShape, REPORTER* a
 
     try
     {
+        // Non-destructive mode keeps OCC from mutating the shared input TShapes (pcurve and
+        // tolerance writes), which is what lets these ops run on parallel worker threads.
+        mkFuse.SetNonDestructive( true );
         mkFuse.SetRunParallel( true );
         mkFuse.SetToFillHistory( false );
         mkFuse.SetArguments( shapeArguments );
@@ -750,6 +753,7 @@ static bool fuseShapes( auto& aInputShapes, TopoDS_Shape& aOutShape, REPORTER* a
         try
         {
             ShapeUpgrade_UnifySameDomain unify( fusedShape, true, true, false );
+            unify.SetSafeInputMode( true );
             unify.History() = nullptr;
             unify.Build();
 
@@ -855,7 +859,8 @@ static bool prefixNames( const TDF_Label&                  aLabel,
 
 
 STEP_PCB_MODEL::STEP_PCB_MODEL( const wxString& aPcbName, REPORTER* aReporter ) :
-        m_reporter( aReporter )
+        m_syncReporter( *aReporter ),
+        m_reporter( &m_syncReporter )
 {
     m_app = XCAFApp_Application::GetApplication();
     m_app->NewDocument( "MDTV-XCAF", m_doc );
@@ -2651,7 +2656,7 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
             };
 
     auto subtractShapesMap =
-            [&tp, this]( const wxString& aWhat, std::map<wxString, std::vector<TopoDS_Shape>>& aShapesMap,
+            [this, &tp]( const wxString& aWhat, std::map<wxString, std::vector<TopoDS_Shape>>& aShapesMap,
                          std::vector<TopoDS_Shape>& aHolesList, Bnd_BoundSortBox& aBSBHoles,
                          const std::vector<Bnd_Box>& aHoleBoxes )
             {
@@ -2660,6 +2665,10 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
 
                 for( auto& [netname, vec] : aShapesMap )
                 {
+                    // Cuts share the hole TShapes as tools across threads.  SetNonDestructive keeps
+                    // OCC from mutating those shared inputs, so the cuts are safe to run in parallel.
+                    // Bnd_BoundSortBox::Compare is not reentrant (it overwrites internal scratch and
+                    // returns a reference to it), so the hole lookup is serialized with a mutex.
                     std::mutex mutex;
 
                     auto subtractLoopFn = [&]( const int shapeId )
@@ -2701,7 +2710,10 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
 
                         BRepAlgoAPI_Cut cut;
 
-                        cut.SetRunParallel( true );
+                        // Non-destructive protects the shared hole tools.  Parallelism comes from the
+                        // outer thread pool, so this op runs single-threaded to avoid oversubscribing.
+                        cut.SetNonDestructive( true );
+                        cut.SetRunParallel( false );
                         cut.SetToFillHistory( false );
 
                         cut.SetArguments( cutArgs );
@@ -2715,7 +2727,13 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
                                                                     aWhat,
                                                                     UnescapeString( netname ) ),
                                                 RPT_SEVERITY_WARNING );
-                            shapeBbox.Dump();
+
+                            {
+                                // Dump writes to std::cout; serialize it so parallel cuts do not
+                                // interleave their output.
+                                std::unique_lock lock( mutex );
+                                shapeBbox.Dump();
+                            }
 
                             if( cut.HasErrors() )
                             {
@@ -2741,7 +2759,23 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
                         shape = cut.Shape();
                     };
 
-                    tp.submit_loop( 0, vec.size(), subtractLoopFn ).wait();
+                    // submit_loop can throw mid-submission after queueing some blocks.  Drain the
+                    // pool before unwinding so no queued block outlives the captured mutex and
+                    // vector.  get() then re-raises any worker exception.
+                    BS::multi_future<void> cutFutures;
+
+                    try
+                    {
+                        cutFutures = tp.submit_loop( 0, vec.size(), subtractLoopFn );
+                    }
+                    catch( ... )
+                    {
+                        tp.wait();
+                        throw;
+                    }
+
+                    cutFutures.wait();
+                    cutFutures.get();
                 }
             };
 
@@ -2798,32 +2832,55 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
 
         m_reporter->Report( wxT( "Fusing shapes" ), RPT_SEVERITY_DEBUG );
 
-        // Do fusing in parallel
-        std::mutex mutex;
+        // Fuse each net on the thread pool.  SetNonDestructive keeps the shared input TShapes
+        // immutable, so the parallel BRepAlgoAPI ops are heap-safe.  The member-map writes are the
+        // only shared mutable state and are guarded by the mutex.  Work items hold stable pointers
+        // into shapesToFuseMap so the workers never touch the map's non-const operator[].
+        std::vector<std::pair<wxString, const NCollection_List<TopoDS_Shape>*>> fuseWork;
+        fuseWork.reserve( shapesToFuseMap.size() );
 
-        auto fuseLoopFn = [&]( const wxString& aNetname )
-        {
-            auto&        toFuse = shapesToFuseMap[aNetname];
-            TopoDS_Shape fusedShape = fuseShapesOrCompound( toFuse, m_reporter );
+        for( const auto& [netname, toFuse] : shapesToFuseMap )
+            fuseWork.emplace_back( netname, &toFuse );
 
-            if( !fusedShape.IsNull() )
-            {
-                std::unique_lock lock( mutex );
-
-                m_board_copper_fused[aNetname].emplace_back( fusedShape );
-
-                m_board_copper[aNetname].clear();
-                m_board_copper_pads[aNetname].clear();
-                m_board_copper_vias[aNetname].clear();
-            }
-        };
-
+        std::mutex             mutex;
         BS::multi_future<void> mf;
+        mf.reserve( fuseWork.size() );
 
-        for( const auto& [netname, _] : shapesToFuseMap )
-            mf.push_back( tp.submit_task( [&, netname]() { fuseLoopFn( netname ); } ) );
+        // A submission can throw after queueing tasks (allocation failure).  Drain the pool before
+        // unwinding so no task outlives the captured mutex.
+        try
+        {
+            for( const auto& work : fuseWork )
+            {
+                const wxString                        netname = work.first;
+                const NCollection_List<TopoDS_Shape>* toFuse = work.second;
+
+                mf.push_back( tp.submit_task(
+                        [this, &mutex, netname, toFuse]()
+                        {
+                            TopoDS_Shape fusedShape = fuseShapesOrCompound( *toFuse, m_reporter );
+
+                            if( !fusedShape.IsNull() )
+                            {
+                                std::unique_lock lock( mutex );
+
+                                m_board_copper_fused[netname].emplace_back( fusedShape );
+
+                                m_board_copper[netname].clear();
+                                m_board_copper_pads[netname].clear();
+                                m_board_copper_vias[netname].clear();
+                            }
+                        } ) );
+            }
+        }
+        catch( ... )
+        {
+            tp.wait();
+            throw;
+        }
 
         mf.wait();
+        mf.get();
     }
 
     // push the board to the data structure

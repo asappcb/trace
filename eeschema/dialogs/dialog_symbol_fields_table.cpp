@@ -2794,7 +2794,7 @@ SCH_REFERENCE_LIST DIALOG_SYMBOL_FIELDS_TABLE::getSheetSymbolReferences( SCH_SHE
 
 void DIALOG_SYMBOL_FIELDS_TABLE::onAddVariant( wxCommandEvent& aEvent )
 {
-    if( !m_parent->ShowAddVariantDialog() )
+    if( !m_parent->ShowAddVariantDialog( this ) )
         return;
 
     wxArrayString ctrlContents;
@@ -2831,7 +2831,14 @@ void DIALOG_SYMBOL_FIELDS_TABLE::onDeleteVariant( wxCommandEvent& aEvent )
 
     wxString variantName = m_variantListBox->GetString( selection );
     m_variantListBox->Delete( selection );
-    m_parent->Schematic().DeleteVariant( variantName );
+
+    SCH_COMMIT commit( m_parent );
+
+    m_parent->Schematic().DeleteVariant( variantName, &commit );
+
+    if( !commit.Empty() )
+        commit.Push( wxString::Format( wxS( "Delete Variant '%s'" ), variantName ) );
+
     m_parent->OnModify();
 
     int newSelection = std::max( 0, selection - 1 );

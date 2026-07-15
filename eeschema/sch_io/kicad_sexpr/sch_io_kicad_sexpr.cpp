@@ -1038,6 +1038,12 @@ void SCH_IO_KICAD_SEXPR::saveSymbol( SCH_SYMBOL* aSymbol, const SCHEMATIC& aSche
                 }
             }
 
+            // The autosave timer serializes a live schematic whose symbol instances a concurrent
+            // edit can leave transiently pathless, so a size-checked source can still copy empty
+            // here.  Indexing an empty path dereferences null (Sentry KICAD-173B), so skip it.
+            if( pathToCheck.empty() )
+                continue;
+
             // Check if this instance is orphaned (no matching sheet path)
             // For virtual root, we check if the first real sheet matches one of the top-level sheets
             // For non-virtual root, we check if it matches the root sheet UUID
@@ -1096,6 +1102,11 @@ void SCH_IO_KICAD_SEXPR::saveSymbol( SCH_SYMBOL* aSymbol, const SCHEMATIC& aSche
                 {
                     for( const auto&[name, variant] : instance.m_Variants )
                     {
+                        // A variant without differentials resolves identically to no variant,
+                        // writing it only keeps deleted variants alive across sessions.
+                        if( !variant.HasDifferentials( *aSymbol ) )
+                            continue;
+
                         m_out->Print( "(variant (name %s)", m_out->Quotew( name ).c_str() );
 
                         if( variant.m_DNP != aSymbol->GetDNP() )
@@ -1356,6 +1367,11 @@ void SCH_IO_KICAD_SEXPR::saveSheet( SCH_SHEET* aSheet, const SCH_SHEET_LIST& aSh
             {
                 for( const auto&[name, variant] : sheetInstances[i].m_Variants )
                 {
+                    // A variant without differentials resolves identically to no variant,
+                    // writing it only keeps deleted variants alive across sessions.
+                    if( !variant.HasDifferentials( *aSheet ) )
+                        continue;
+
                     m_out->Print( "(variant (name %s)", m_out->Quotew( name ).c_str() );
 
                     if( variant.m_DNP != aSheet->GetDNP() )

@@ -91,6 +91,18 @@ BOARD* BOARD_ITEM::GetBoard()
 }
 
 
+BOARD_ITEM::~BOARD_ITEM()
+{
+    // Safety net for paths that free an item without ::Remove().  Gate on the flag so a never-indexed
+    // transient does not walk GetBoard()'s parent chain into an already-freed board.
+    if( m_indexedInBoard && Type() != PCB_T )
+    {
+        if( BOARD* board = GetBoard(); board && board->IsItemIndexedById( this ) )
+            board->UncacheItemByPtr( this );
+    }
+}
+
+
 FOOTPRINT* BOARD_ITEM::GetParentFootprint() const
 {
     return static_cast<FOOTPRINT*>( findParent( PCB_FOOTPRINT_T ) );
