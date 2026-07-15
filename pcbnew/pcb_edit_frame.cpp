@@ -2449,15 +2449,14 @@ void PCB_EDIT_FRAME::placeRecentFootprint( const LIB_ID& aLibId, const wxString&
     }
     catch( const IO_ERROR& e )
     {
-        ShowInfoBarError( wxString::Format( _( "Could not load footprint '%s': %s" ),
-                                            aLibId.Format().wx_str(), e.What() ) );
+        ShowInfoBarError(
+                wxString::Format( _( "Could not load footprint '%s': %s" ), aLibId.Format().wx_str(), e.What() ) );
         return;
     }
 
     if( !fp )
     {
-        ShowInfoBarError( wxString::Format( _( "Footprint '%s' not found." ),
-                                            aLibId.Format().wx_str() ) );
+        ShowInfoBarError( wxString::Format( _( "Footprint '%s' not found." ), aLibId.Format().wx_str() ) );
         return;
     }
 
@@ -2472,7 +2471,7 @@ void PCB_EDIT_FRAME::placeRecentFootprint( const LIB_ID& aLibId, const wxString&
     fp->SetFlags( IS_NEW );
 
     for( PAD* pad : fp->Pads() )
-        pad->SetNetCode( 0 );  // pads in the library carry orphaned nets; reset to unconnected
+        pad->SetNetCode( 0 ); // pads in the library carry orphaned nets; reset to unconnected
 
     if( fp->IsFlipped() )
         fp->Flip( fp->GetPosition(), GetPcbNewSettings()->m_FlipDirection );

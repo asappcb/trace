@@ -156,8 +156,7 @@ public:
 
     /// Push @a aKey to the front of an MRU list @a aList, de-duplicating and capping the size.
     /// Shared helper for the various session MRU lists (command palette, recently-placed parts).
-    static void UpdateMruList( std::vector<wxString>& aList, const wxString& aKey,
-                               size_t aLimit = 16 );
+    static void UpdateMruList( std::vector<wxString>& aList, const wxString& aKey, size_t aLimit = 16 );
 
     struct SYSTEM
     {

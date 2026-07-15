@@ -2263,7 +2263,10 @@ void SCH_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
             item.m_mruKey = key;
             item.m_icon = symbolIcon;
 
-            item.m_run = [this, libId, key]() { placeRecentSymbol( libId, key ); };
+            item.m_run = [this, libId, key]()
+            {
+                placeRecentSymbol( libId, key );
+            };
 
             aItems.push_back( std::move( item ) );
         }
@@ -2327,8 +2330,7 @@ void SCH_EDIT_FRAME::placeRecentSymbol( const LIB_ID& aLibId, const wxString& aM
 
     if( !libSymbol )
     {
-        ShowInfoBarError( wxString::Format( _( "Symbol '%s' not found." ),
-                                            aLibId.Format().wx_str() ) );
+        ShowInfoBarError( wxString::Format( _( "Symbol '%s' not found." ), aLibId.Format().wx_str() ) );
         return;
     }
 
@@ -2339,14 +2341,11 @@ void SCH_EDIT_FRAME::placeRecentSymbol( const LIB_ID& aLibId, const wxString& aM
     sel.LibId = aLibId;
     sel.Unit = 1;
 
-    SCH_SYMBOL* symbol = new SCH_SYMBOL( *libSymbol, &GetCurrentSheet(), sel, VECTOR2I( 0, 0 ),
-                                         &Schematic() );
+    SCH_SYMBOL* symbol = new SCH_SYMBOL( *libSymbol, &GetCurrentSheet(), sel, VECTOR2I( 0, 0 ), &Schematic() );
 
-    COMMON_SETTINGS::UpdateMruList( Pgm().GetCommonSettings()->m_Session.recently_placed_symbols,
-                                    aMruKey );
+    COMMON_SETTINGS::UpdateMruList( Pgm().GetCommonSettings()->m_Session.recently_placed_symbols, aMruKey );
 
-    GetToolManager()->RunAction( SCH_ACTIONS::placeSymbol,
-                                 SCH_ACTIONS::PLACE_SYMBOL_PARAMS{ symbol, true } );
+    GetToolManager()->RunAction( SCH_ACTIONS::placeSymbol, SCH_ACTIONS::PLACE_SYMBOL_PARAMS{ symbol, true } );
 }
 
 

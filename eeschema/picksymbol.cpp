@@ -87,8 +87,7 @@ PICKED_SYMBOL SCH_BASE_FRAME::PickSymbolFromLibrary( const SYMBOL_LIBRARY_FILTER
         // Also persist to the cross-session recently-placed list surfaced by the command palette.
         if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
         {
-            COMMON_SETTINGS::UpdateMruList( cfg->m_Session.recently_placed_symbols,
-                                            sel.LibId.Format().wx_str() );
+            COMMON_SETTINGS::UpdateMruList( cfg->m_Session.recently_placed_symbols, sel.LibId.Format().wx_str() );
         }
     }
 

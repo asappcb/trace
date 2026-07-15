@@ -425,10 +425,10 @@ COMMON_SETTINGS::COMMON_SETTINGS() :
             new PARAM_LIST<wxString>( "session.command_palette_mru", &m_Session.command_palette_mru, {} ) );
 
     m_params.emplace_back( new PARAM_LIST<wxString>( "session.recently_placed_footprints",
-            &m_Session.recently_placed_footprints, {} ) );
+                                                     &m_Session.recently_placed_footprints, {} ) );
 
-    m_params.emplace_back( new PARAM_LIST<wxString>( "session.recently_placed_symbols",
-            &m_Session.recently_placed_symbols, {} ) );
+    m_params.emplace_back(
+            new PARAM_LIST<wxString>( "session.recently_placed_symbols", &m_Session.recently_placed_symbols, {} ) );
 
     m_params.emplace_back( new PARAM<int>( "package_manager.sash_pos",
             &m_PackageManager.sash_pos, 380 ) );
