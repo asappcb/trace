@@ -473,7 +473,7 @@ void DIALOG_COMMAND_PALETTE::rebuildList()
 
             if( s > score )
             {
-                score   = s;
+                score = s;
                 matched = std::move( m );
             }
         }
