@@ -2327,7 +2327,10 @@ void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& 
         item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
         item.m_icon = layerIcon;
 
-        item.m_run = [this, layer]() { SetActiveLayer( layer ); };
+        item.m_run = [this, layer]()
+        {
+            SetActiveLayer( layer );
+        };
 
         aItems.push_back( std::move( item ) );
     }
