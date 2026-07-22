@@ -421,8 +421,8 @@ HANDLER_RESULT<ItemRequestStatus> API_HANDLER_BOARD::handleCreateUpdateItemsInte
                 if( !updated->Deserialize( anyItem ) )
                 {
                     e.set_status( ApiStatusCode::AS_BAD_REQUEST );
-                    e.set_error_message( fmt::format( "could not unpack {} from request",
-                                                      updated->GetClass().ToStdString() ) );
+                    e.set_error_message(
+                            fmt::format( "could not unpack {} from request", updated->GetClass().ToStdString() ) );
                     return tl::unexpected( e );
                 }
 
