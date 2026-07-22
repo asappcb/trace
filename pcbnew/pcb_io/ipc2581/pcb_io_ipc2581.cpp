@@ -2096,8 +2096,18 @@ void PCB_IO_IPC2581::addLayerAttributes( wxXmlNode* aNode, PCB_LAYER_ID aLayer )
                                          : aLayer == B_Cu ? "BOTTOM"
                                                           : "INTERNAL" );
         }
+        else
+        {
+            // A <Layer> node has already been created for this layer and the IPC-2581 schema makes
+            // layerFunction required. Any layer reaching here (e.g. an UNDEFINED_LAYER stackup item
+            // that is not a dielectric) would otherwise emit a schema-invalid <Layer>, so fall back
+            // to a generic documentation function rather than leaving the attribute unset.
+            addAttribute( aNode, "layerFunction", "DOCUMENT" );
+            addAttribute( aNode, "polarity", "POSITIVE" );
+            addAttribute( aNode, "side", "NONE" );
+        }
 
-        break; // Do not handle other layers
+        break;
     }
 }
 

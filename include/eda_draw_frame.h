@@ -23,6 +23,7 @@
 #define DRAW_FRAME_H_
 
 #include <api/plugin_action_scope.h>
+#include <command_palette_item.h>
 #include <eda_base_frame.h>
 #include <kiway_player.h>
 #include <gal/gal_display_options.h>
@@ -304,6 +305,12 @@ public:
     virtual void FocusOnItem( EDA_ITEM* aItem, bool aAllowScroll = true ) {}
 
     virtual void ClearFocus() { FocusOnItem( nullptr ); }
+
+    /**
+     * Contribute editor-specific "go to" targets (nets, footprints, sheets, …) to the command
+     * palette. The base implementation adds nothing; graphical editors override it.
+     */
+    virtual void GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems ) {}
 
     /**
      * Construct a "basic" menu for a tool, containing only items that apply to all tools

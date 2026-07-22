@@ -50,6 +50,9 @@
 
 #include "cli/command_jobset.h"
 #include "cli/command_jobset_run.h"
+#include "cli/command_release.h"
+#include "cli/command_release_create.h"
+#include "cli/command_release_verify.h"
 #include "cli/command_pcb.h"
 #include "cli/command_pcb_export.h"
 #include "cli/command_fp_diff.h"
@@ -80,6 +83,7 @@
 #include "cli/command_sch_export_netlist.h"
 #include "cli/command_sch_export_plot.h"
 #include "cli/command_pcb_upgrade.h"
+#include "cli/command_pcb_optimize_swaps.h"
 #include "cli/command_pcb_import.h"
 #include "cli/command_sch_import.h"
 #include "cli/command_import.h"
@@ -141,6 +145,9 @@ struct COMMAND_ENTRY
 
 static CLI::JOBSET_COMMAND               jobsetCmd{};
 static CLI::JOBSET_RUN_COMMAND           jobsetRunCmd{};
+static CLI::RELEASE_COMMAND              releaseCmd{};
+static CLI::RELEASE_CREATE_COMMAND       releaseCreateCmd{};
+static CLI::RELEASE_VERIFY_COMMAND       releaseVerifyCmd{};
 static CLI::PCB_COMMAND                  pcbCmd{};
 static CLI::PCB_DIFF_COMMAND             pcbDiffCmd{};
 static CLI::PCB_DRC_COMMAND              pcbDrcCmd{};
@@ -148,6 +155,7 @@ static CLI::MERGETOOL_COMMAND            mergetoolCmd{};
 static CLI::GIT_MERGEDRIVER_COMMAND      gitMergeDriverCmd{};
 static CLI::PCB_RENDER_COMMAND           pcbRenderCmd{};
 static CLI::PCB_UPGRADE_COMMAND          pcbUpgradeCmd{};
+static CLI::PCB_OPTIMIZE_SWAPS_COMMAND   pcbOptimizeSwapsCmd{};
 static CLI::PCB_IMPORT_COMMAND           pcbImportCmd{};
 static CLI::SCH_IMPORT_COMMAND           schImportCmd{};
 static CLI::IMPORT_COMMAND               importCmd{};
@@ -235,6 +243,17 @@ static std::vector<COMMAND_ENTRY> commandStack = {
         }
     },
     {
+        &releaseCmd,
+        {
+            {
+                &releaseCreateCmd
+            },
+            {
+                &releaseVerifyCmd
+            }
+        }
+    },
+    {
         &fpCmd,
         {
             {
@@ -297,6 +316,9 @@ static std::vector<COMMAND_ENTRY> commandStack = {
             },
             {
                 &pcbUpgradeCmd
+            },
+            {
+                &pcbOptimizeSwapsCmd
             }
         }
     },

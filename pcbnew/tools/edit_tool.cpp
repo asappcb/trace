@@ -626,6 +626,77 @@ static std::shared_ptr<ACTION_MENU> makeGateSwapMenu( TOOL_INTERACTIVE* aTool )
 };
 
 
+// A one-item submenu for swapping the nets of the selected pads, whose label previews the
+// resulting change in ratsnest length so the user can see whether the swap shortens routing.
+class PIN_SWAP_MENU : public ACTION_MENU
+{
+public:
+    PIN_SWAP_MENU() :
+            ACTION_MENU( true )
+    {
+        SetIcon( BITMAPS::swap );
+        SetTitle( _( "Swap Pad Nets..." ) );
+    }
+
+protected:
+    ACTION_MENU* create() const override { return new PIN_SWAP_MENU(); }
+
+private:
+    void update() override
+    {
+        Clear();
+
+        PCB_SELECTION_TOOL* selTool = getToolManager()->GetTool<PCB_SELECTION_TOOL>();
+        const SELECTION&    sel = selTool->GetSelection();
+
+        std::vector<PAD*> pads;
+
+        // Use selection (click) order -- the cyclic rotation depends on it, and SwapPadNets orders
+        // the same way, so the preview must match to score the swap the user will actually get.
+        for( EDA_ITEM* it : sel.GetItemsSortedBySelectionOrder() )
+        {
+            if( it->Type() != PCB_PAD_T )
+                return;
+
+            pads.push_back( static_cast<PAD*>( static_cast<BOARD_ITEM*>( it ) ) );
+        }
+
+        if( pads.size() < 2 )
+            return;
+
+        // SwapPadNets rotates each pad's net forward: pad[i] receives pad[(i+1) % n]'s net.
+        std::map<const PAD*, int> swap;
+
+        for( size_t i = 0; i < pads.size(); ++i )
+            swap[pads[i]] = pads[( i + 1 ) % pads.size()]->GetNetCode();
+
+        double   delta = EstimateSwapRatsnestDelta( pads.front()->GetBoard(), swap );
+        wxString label = _( "Swap Pad Nets" );
+
+        if( delta != 0.0 )
+            label += wxString::Format( wxT( " (%+.2f mm)" ), delta / pcbIUScale.IU_PER_MM );
+
+        Append( ID_POPUP_PCB_SWAP_PADS, label );
+    }
+
+    OPT_TOOL_EVENT eventHandler( const wxMenuEvent& aEvent ) override
+    {
+        if( aEvent.GetId() == ID_POPUP_PCB_SWAP_PADS )
+            return OPT_TOOL_EVENT( PCB_ACTIONS::swapPadNets.MakeEvent() );
+
+        return OPT_TOOL_EVENT();
+    }
+};
+
+
+static std::shared_ptr<ACTION_MENU> makePinSwapMenu( TOOL_INTERACTIVE* aTool )
+{
+    auto menu = std::make_shared<PIN_SWAP_MENU>();
+    menu->SetTool( aTool );
+    return menu;
+};
+
+
 bool EDIT_TOOL::Init()
 {
     // Find the selection tool, so they can cooperate
@@ -645,6 +716,9 @@ bool EDIT_TOOL::Init()
 
     std::shared_ptr<ACTION_MENU> gateSwapSubMenu = makeGateSwapMenu( this );
     m_selectionTool->GetToolMenu().RegisterSubMenu( gateSwapSubMenu );
+
+    std::shared_ptr<ACTION_MENU> pinSwapSubMenu = makePinSwapMenu( this );
+    m_selectionTool->GetToolMenu().RegisterSubMenu( pinSwapSubMenu );
 
     auto fpAttributesMenu = std::make_shared<CONDITIONAL_MENU>( this );
     fpAttributesMenu->SetUntranslatedTitle( _HKI( "Attributes" ) );
@@ -873,7 +947,7 @@ bool EDIT_TOOL::Init()
     menu.AddItem( PCB_ACTIONS::flip,              SELECTION_CONDITIONS::NotEmpty );
 
     menu.AddItem( PCB_ACTIONS::swap,              SELECTION_CONDITIONS::MoreThan( 1 ) );
-    menu.AddItem( PCB_ACTIONS::swapPadNets,       SELECTION_CONDITIONS::MoreThan( 1 )
+    menu.AddMenu( pinSwapSubMenu.get(),           SELECTION_CONDITIONS::MoreThan( 1 )
                                                       && SELECTION_CONDITIONS::OnlyTypes( padTypes ) );
     menu.AddItem( PCB_ACTIONS::swapGateNets,      gateSwapMultipleUnitsOnOneFootprint );
     menu.AddMenu( gateSwapSubMenu.get(),          gateSwapSingleUnitOnOneFootprint );

@@ -302,6 +302,13 @@ public:
     ACTION_MANAGER* GetActionManager() const { return m_actionMgr; }
 
     /**
+     * @return true if some registered tool has a transition that would handle @p aAction in this
+     *         tool manager (i.e. the action can actually run in this editor). Used to keep the
+     *         command palette from offering commands that belong to a different editor.
+     */
+    bool HasHandlerForAction( const TOOL_ACTION& aAction ) const;
+
+    /**
      * Search for a tool with given ID.
      *
      * @param aId is the ID number of the requested tool.

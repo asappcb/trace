@@ -60,6 +60,7 @@ set( QA_PCBNEW_SRCS
     test_headless_pcb_context.cpp
     test_history_autosave.cpp
     test_footprint.cpp
+    test_footprint_ipc_nonproto_roundtrip.cpp
     test_footprint_editor_tabs.cpp
     test_footprint_library_adapter.cpp
     test_footprint_load_save.cpp
@@ -149,6 +150,7 @@ set( QA_PCBNEW_SRCS
     drc/test_drc_error_limit.cpp
     drc/test_footprint_courtyard_index.cpp
     drc/test_drc_regressions.cpp
+    drc/test_drc_item_registration.cpp
     drc/test_drc_issue23469.cpp
     drc/test_drc_issue24525.cpp
     drc/test_drc_arc_arc_edge_clearance.cpp

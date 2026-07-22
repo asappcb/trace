@@ -24,6 +24,7 @@
 #include <gal/painter.h>
 #include <bitmaps.h>
 #include <class_draw_panel_gal.h>
+#include <dialogs/dialog_command_palette.h>
 #include <dialogs/dialog_configure_paths.h>
 #include <dialogs/dialog_unit_entry.h>
 #include <eda_draw_frame.h>
@@ -97,6 +98,16 @@ int COMMON_TOOLS::SelectionTool( const TOOL_EVENT& aEvent )
     // just a cancel of whatever other tools might be running.
 
     m_toolMgr->ProcessEvent( TOOL_EVENT( TC_COMMAND, TA_CANCEL_TOOL ) );
+    return 0;
+}
+
+
+int COMMON_TOOLS::CommandPalette( const TOOL_EVENT& aEvent )
+{
+    // Modeless, chromeless, self-destroying popup that runs the chosen action itself (gating it on
+    // its ACTION_CONDITIONS) and dismisses on Escape or focus loss.
+    DIALOG_COMMAND_PALETTE* dlg = new DIALOG_COMMAND_PALETTE( m_frame, m_toolMgr );
+    dlg->Show( true );
     return 0;
 }
 
@@ -771,6 +782,7 @@ int COMMON_TOOLS::ToggleBoundingBoxes( const TOOL_EVENT& aEvent )
 void COMMON_TOOLS::setTransitions()
 {
     Go( &COMMON_TOOLS::SelectionTool,       ACTIONS::selectionTool.MakeEvent() );
+    Go( &COMMON_TOOLS::CommandPalette, ACTIONS::commandPalette.MakeEvent() );
 
     // Cursor control
     Go( &COMMON_TOOLS::CursorControl,       ACTIONS::cursorUp.MakeEvent() );

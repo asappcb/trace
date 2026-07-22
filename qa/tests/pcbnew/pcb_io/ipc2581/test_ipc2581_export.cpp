@@ -758,6 +758,13 @@ BOOST_AUTO_TEST_CASE( BackdrillSpecEncoding )
     BOOST_CHECK_MESSAGE(
             FileContainsPattern( tempPath, wxT( "comment=\"post-machining=COUNTERSINK\"" ) ),
             "OTHER Backdrill should carry the post-machining comment" );
+
+    // Regression for #51: a minimal synthetic board (no fully-populated stackup) must still export
+    // schema-valid IPC-2581. Previously a <Layer> for an UNDEFINED_LAYER stackup item was emitted
+    // without the schema-required layerFunction, so this validation failed.
+    wxString schemaError;
+    BOOST_CHECK_MESSAGE( ExportAndValidate( &board, 'C', schemaError ),
+                         "Synthetic backdrill board must export schema-valid IPC-2581: " + schemaError );
 }
 
 
