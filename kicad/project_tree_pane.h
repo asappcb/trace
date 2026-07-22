@@ -172,6 +172,9 @@ private:
     */
     void onGitCommit( wxCommandEvent& event );
 
+    /// Open the git-native review of two refs (base/head), with a per-file board/schematic diff.
+    void onGitReview( wxCommandEvent& event );
+
     /**
      * Amend (rewrite) the last commit on the current branch
     */
