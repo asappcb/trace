@@ -50,7 +50,11 @@ wxString RenderBoardToSvg( BOARD* aBoard, const LSEQ& aLayers, REPORTER& aReport
     // Plot to a temporary file, then read it back. A true in-memory target (open_memstream into
     // the plotter's FILE*) is a follow-up; the temp file keeps this PR a pure, testable core with
     // no PLOTTER changes.
-    const wxString tempPath = wxFileName::CreateTempFileName( wxT( "kicad-render-" ) ) + wxT( ".svg" );
+    // CreateTempFileName() creates the file it hands back, so the reserved name has to be removed
+    // as well as the .svg the plotter actually writes -- otherwise every render leaks an empty
+    // file into the temp directory.
+    const wxString reservedPath = wxFileName::CreateTempFileName( wxT( "kicad-render-" ) );
+    const wxString tempPath = reservedPath + wxT( ".svg" );
 
     PCB_PLOTTER           plotter( aBoard, &aReporter, plotOpts );
     std::vector<wxString> outputFiles;
@@ -78,6 +82,9 @@ wxString RenderBoardToSvg( BOARD* aBoard, const LSEQ& aLayers, REPORTER& aReport
 
     if( written != tempPath && wxFileExists( tempPath ) )
         wxRemoveFile( tempPath );
+
+    if( wxFileExists( reservedPath ) )
+        wxRemoveFile( reservedPath );
 
     return svg;
 }
