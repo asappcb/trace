@@ -97,6 +97,15 @@ jobs:
             echo "ctest_re=${RESULT##*|}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install qa_cli Python dependencies
+        # qa_cli is `python -m pytest qa/tests/cli`, and the Fedora CI image ships no pytest -- so
+        # with qa_cli re-enabled (#68) the test aborted in 0.5s with "No module named pytest"
+        # instead of running.  Installed before Configure so CMake's pytest-xdist probe sees the
+        # finished environment.  The bare retry covers pip builds without --break-system-packages.
+        run: |
+          python3 -m pip install --break-system-packages -r qa/tests/requirements.txt \
+            || python3 -m pip install -r qa/tests/requirements.txt
+
       - name: Configure (QABUILD)
         run: |
           cmake -S . -B build -G Ninja \
