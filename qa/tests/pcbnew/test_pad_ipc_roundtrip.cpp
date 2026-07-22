@@ -26,6 +26,8 @@
 
 #include <google/protobuf/any.pb.h>
 
+#include <memory>
+
 /**
  * IPC round-trip guardrail for field-bearing board items (issue #55 / #53 finding 4).
  *
@@ -37,11 +39,10 @@
  * drops a currently-carried field from the proto (or from Serialize/Deserialize) then shows up
  * as a failing assertion.
  *
- * Scope note: a pure Serialize/Deserialize round-trip can only guard fields the proto already
- * carries -- it cannot, on its own, detect a *newly added* persisted field that no proto field
- * covers (nothing at the serialize layer can restore what was never packed).  The modify path
- * itself is hardened against that case separately by seeding Deserialize from a clone of the
- * live item (see api_handler_board.cpp).  Start with PAD; extend to other field-bearing types.
+ * A pure Serialize/Deserialize round-trip can only guard fields the proto already carries, so the
+ * second test drives the actual modify sequence the handler performs (Clone -> Deserialize ->
+ * CopyFrom) against a persisted field that has *no* proto field, which is the #55 bug proper.
+ * Start with PAD; extend to other field-bearing types.
  */
 
 BOOST_AUTO_TEST_SUITE( PadIpcRoundTrip )
@@ -83,6 +84,64 @@ BOOST_AUTO_TEST_CASE( PersistedProtoFieldsSurviveSerializeDeserialize )
     BOOST_CHECK_EQUAL( *restored.GetLocalClearance(), *pad->GetLocalClearance() );
 
     BOOST_CHECK_EQUAL( restored.GetPinFunction(), pad->GetPinFunction() );
+}
+
+
+/**
+ * The #55 bug proper: a persisted field with no proto field must survive an API modify.
+ *
+ * Teardrop parameters are written to the board file but have no field in the Pad proto, so they
+ * are the exact shape of the hazard: a client that knows nothing about them sends a Pad proto
+ * carrying only a new pad number, and the handler must not wipe them.  This drives the same
+ * sequence api_handler_board.cpp performs -- Clone -> Deserialize -> CopyFrom -- rather than a
+ * plain round-trip, because only that sequence exercises the fix.
+ */
+BOOST_AUTO_TEST_CASE( PersistedNonProtoFieldSurvivesModify )
+{
+    BOARD      board;
+    FOOTPRINT* fp = new FOOTPRINT( &board );
+    board.Add( fp );
+
+    PAD* live = new PAD( fp );
+    fp->Add( live );
+
+    live->SetNumber( wxT( "7" ) );
+    live->GetTeardropParams().m_Enabled = true;
+    live->GetTeardropParams().m_TdMaxLen = pcbIUScale.mmToIU( 3.5 );
+
+    // The incoming request: a pad proto that only changes the number.  It is built from a
+    // default-constructed PAD, exactly as a client that has no concept of teardrops would send.
+    PAD request( fp );
+    request.SetNumber( wxT( "42" ) );
+
+    google::protobuf::Any anyItem;
+    request.Serialize( anyItem );
+
+    // The modify path as the handler runs it: seed from a clone of the live item so members the
+    // proto does not carry keep their current value.
+    std::unique_ptr<BOARD_ITEM> updated( static_cast<BOARD_ITEM*>( live->Clone() ) );
+    BOOST_REQUIRE( updated->Deserialize( anyItem ) );
+    live->CopyFrom( updated.get() );
+
+    // The proto-carried field is applied...
+    BOOST_CHECK_EQUAL( live->GetNumber(), wxT( "42" ) );
+
+    // ...and the persisted field the proto knows nothing about is preserved.
+    BOOST_CHECK( live->GetTeardropParams().m_Enabled );
+    BOOST_CHECK_EQUAL( live->GetTeardropParams().m_TdMaxLen, pcbIUScale.mmToIU( 3.5 ) );
+
+    // Pin that the assertions above actually discriminate: seeding from a freshly constructed
+    // item -- the pre-fix behaviour -- drops the teardrop settings.  If this ever stops holding,
+    // the guard above has become vacuous and needs rebuilding on a different field.
+    PAD legacy( fp );
+    legacy.SetNumber( wxT( "7" ) );
+    legacy.GetTeardropParams().m_Enabled = true;
+
+    PAD seededFromDefaults( fp );
+    BOOST_REQUIRE( seededFromDefaults.Deserialize( anyItem ) );
+    legacy.CopyFrom( &seededFromDefaults );
+
+    BOOST_CHECK( !legacy.GetTeardropParams().m_Enabled );
 }
 
 
