@@ -82,8 +82,7 @@ struct DRC_RE_FIELD_POSITION
     {
     }
 
-    DRC_RE_FIELD_POSITION( int aXStart, int aXEnd, int aYTop, int aTabOrder,
-                           const wxString& aLabelText = wxEmptyString,
+    DRC_RE_FIELD_POSITION( int aXStart, int aXEnd, int aYTop, int aTabOrder, const wxString& aLabelText = wxEmptyString,
                            LABEL_POSITION  aLabelPos = LABEL_POSITION::NONE,
                            const wxString& aPrefixText = wxEmptyString ) :
             xStart( aXStart ),

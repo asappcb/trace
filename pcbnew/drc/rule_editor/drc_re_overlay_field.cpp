@@ -28,8 +28,7 @@
 #include <wx/window.h>
 
 
-DRC_RE_OVERLAY_FIELD::DRC_RE_OVERLAY_FIELD( wxWindow* aParent, const wxString& aFieldId,
-                                            wxControl* aControl,
+DRC_RE_OVERLAY_FIELD::DRC_RE_OVERLAY_FIELD( wxWindow* aParent, const wxString& aFieldId, wxControl* aControl,
                                             const DRC_RE_FIELD_POSITION& aPosition ) :
         m_parent( aParent ),
         m_fieldId( aFieldId ),

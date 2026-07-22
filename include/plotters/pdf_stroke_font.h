@@ -58,9 +58,8 @@ public:
     };
 
 public:
-    PDF_STROKE_FONT_SUBSET( const KIFONT::STROKE_FONT* aFont, double aUnitsPerEm,
-                            unsigned aSubsetIndex, bool aBold, bool aItalic,
-                            double aStrokeWidthFactor, double aAspectRatio );
+    PDF_STROKE_FONT_SUBSET( const KIFONT::STROKE_FONT* aFont, double aUnitsPerEm, unsigned aSubsetIndex, bool aBold,
+                            bool aItalic, double aStrokeWidthFactor, double aAspectRatio );
 
     bool Contains( wxUniChar aCode ) const;
 
@@ -169,6 +168,6 @@ private:
     std::unique_ptr<KIFONT::STROKE_FONT>               m_font;
     double                                             m_unitsPerEm;
     unsigned                                           m_nextSubsetIndex; // global counter for unique resource names
-    std::map<STYLE_KEY, STYLE_GROUP>                     m_styleGroups; // all style groups including default
+    std::map<STYLE_KEY, STYLE_GROUP>                   m_styleGroups;     // all style groups including default
 };
 

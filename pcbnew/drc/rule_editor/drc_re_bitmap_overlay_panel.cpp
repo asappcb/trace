@@ -215,7 +215,7 @@ void DRC_RE_BITMAP_OVERLAY_PANEL::PositionPrefixLabel( DRC_RE_OVERLAY_FIELD* aFi
 
     wxPoint ctrlPos = ctrl->GetPosition();
     wxSize  ctrlSize = ctrl->GetSize();
-    wxSize prefixSize = prefix->GetBestSize();
+    wxSize  prefixSize = prefix->GetBestSize();
 
     int GAP = FromDIP( 4 );
 

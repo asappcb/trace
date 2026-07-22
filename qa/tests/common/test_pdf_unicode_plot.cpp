@@ -284,8 +284,8 @@ BOOST_AUTO_TEST_CASE( GlyphBBoxIncludesOffsetAndStrokeWidth )
     const ADVANCED_CFG& cfg = ADVANCED_CFG::GetCfg();
     double unitsPerEm = 1000.0;
     double expectedXOffset = cfg.m_PDFStrokeFontXOffset * unitsPerEm;
-    double widthFactor = 300.0 / 3000.0;
-    double expectedHalfStroke = unitsPerEm * widthFactor / 2.0;
+    double              widthFactor = 300.0 / 3000.0;
+    double              expectedHalfStroke = unitsPerEm * widthFactor / 2.0;
 
     // Find all d1 operators (skip .notdef which has all-zero bbox)
     std::string::size_type pos = 0;
@@ -712,7 +712,7 @@ BOOST_AUTO_TEST_CASE( StrokeFontVerticalAlignmentMatchesScreen )
 
     BOOST_CHECK_MESSAGE( matrices[0].f < matrices[1].f && matrices[1].f < matrices[2].f,
                          "Expected ctm_f_TOP < ctm_f_CENTER < ctm_f_BOTTOM, got "
-                             << matrices[0].f << ", " << matrices[1].f << ", " << matrices[2].f );
+                                 << matrices[0].f << ", " << matrices[1].f << ", " << matrices[2].f );
 
     // The uncorrected StringBoundaryLimits formula (pre-fix) would give
     // 0.5 * (size + 3*thickness) for the V_TOP to V_CENTER delta.

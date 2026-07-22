@@ -175,7 +175,7 @@ private:
 protected:
     wxBitmap                                        m_bitmap;       ///< Current background bitmap
     BITMAPS                                         m_bitmapId;     ///< BITMAPS enum value
-    wxSize                                          m_logicalBitmapSize; ///< Bitmap size in logical pixels
+    wxSize                                             m_logicalBitmapSize; ///< Bitmap size in logical pixels
     std::vector<std::unique_ptr<DRC_RE_OVERLAY_FIELD>> m_fields;    ///< All overlay fields
     std::map<wxString, DRC_RE_OVERLAY_FIELD*>       m_fieldIdMap;   ///< Field ID to field lookup
 };
