@@ -49,6 +49,8 @@ using namespace std::placeholders;
 #include <dialog_pad_properties.h>
 #include <project_pcb.h>
 #include <locale_io.h>
+#include <pgm_base.h>
+#include <settings/common_settings.h>
 
 
 static wxArrayString s_FootprintHistoryList;
@@ -178,6 +180,10 @@ FOOTPRINT* PCB_BASE_FRAME::SelectFootprintFromLibrary( LIB_ID aPreselect )
     {
         lastComponentName = footprintName;
         AddFootprintToHistory( footprintName );
+
+        // Also persist to the cross-session recently-placed list surfaced by the command palette.
+        if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+            COMMON_SETTINGS::UpdateMruList( cfg->m_Session.recently_placed_footprints, footprintName );
     }
 
     return footprint;

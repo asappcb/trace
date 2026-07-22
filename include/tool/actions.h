@@ -108,6 +108,9 @@ public:
     static TOOL_ACTION editTable;
     static TOOL_ACTION exportTableCSV;
 
+    // Command palette (searchable action launcher)
+    static TOOL_ACTION commandPalette;
+
     // Find and Replace
     static TOOL_ACTION showSearch;
     static TOOL_ACTION find;

@@ -448,6 +448,10 @@ public:
      */
     void HardRedraw() override;
 
+    /// Instantiate @a aLibId from the symbol libraries and start interactive placement. Backs the
+    /// command palette's recently-used-part quick-place items.
+    void placeRecentSymbol( const LIB_ID& aLibId, const wxString& aMruKey );
+
     /**
      * Draw the current sheet on the display.
      */
@@ -821,6 +825,9 @@ public:
     const BOX2I GetDocumentExtents( bool aIncludeAllVisible = true ) const override;
 
     void FocusOnItem( EDA_ITEM* aItem, bool aAllowScroll = true ) override;
+
+    /// Supply symbols (by reference) and sheets as command-palette "go to" targets.
+    void GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems ) override;
 
     bool IsSyncingSelection() { return m_syncingPcbToSchSelection; }
 

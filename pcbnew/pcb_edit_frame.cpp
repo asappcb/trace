@@ -49,9 +49,13 @@
 #include <api/api_utils.h>
 #include <geometry/geometry_utils.h>
 #include <bitmaps.h>
+#include <board_commit.h>
 #include <confirm.h>
 #include <footprint.h>
+#include <footprint_library_adapter.h>
 #include <footprint_utils.h>
+#include <project_pcb.h>
+#include <tools/pcb_actions.h>
 #include <lset.h>
 #include <trace_helpers.h>
 #include <pcbnew_id.h>
@@ -1133,6 +1137,48 @@ void PCB_EDIT_FRAME::setupUIConditions()
 
     mgr->SetConditions( ACTIONS::group,        ENABLE( SELECTION_CONDITIONS::MoreThan( 1 ) ) );
     mgr->SetConditions( ACTIONS::ungroup,      ENABLE( SELECTION_CONDITIONS::HasTypes( groupTypes ) ) );
+
+    // "Add Items" / "Remove Items" need a group context; without conditions they defaulted to
+    // always-enabled and no-op'd (e.g. when reached from the command palette).
+    auto addToGroupCond =
+            []( const SELECTION& aSel )
+            {
+                int  groups = 0;
+                bool hasUngrouped = false;
+
+                for( EDA_ITEM* item : aSel )
+                {
+                    if( item->Type() == PCB_GROUP_T )
+                        ++groups;
+                    else if( !item->GetParentGroup() )
+                        hasUngrouped = true;
+                }
+
+                return groups == 1 && hasUngrouped;
+            };
+
+    auto inGroupCond =
+            []( const SELECTION& aSel )
+            {
+                for( EDA_ITEM* item : aSel )
+                {
+                    if( item->GetParentGroup() )
+                        return true;
+                }
+
+                return false;
+            };
+
+    mgr->SetConditions( ACTIONS::addToGroup,      ENABLE( addToGroupCond ) );
+    mgr->SetConditions( ACTIONS::removeFromGroup, ENABLE( inGroupCond ) );
+
+    // A bare pad can't be placed on the board, but with a single footprint selected "Add Pad"
+    // opens that footprint in the footprint editor (see PAD_TOOL::PlacePad); enable it then, and
+    // keep it disabled otherwise instead of offering an inert command.
+    static const std::vector<KICAD_T> fpType = { PCB_FOOTPRINT_T };
+    mgr->SetConditions( PCB_ACTIONS::placePad,
+                        ENABLE( SELECTION_CONDITIONS::Count( 1 )
+                                && SELECTION_CONDITIONS::OnlyTypes( fpType ) ) );
     mgr->SetConditions( PCB_ACTIONS::lock,     ENABLE( PCB_SELECTION_CONDITIONS::HasUnlockedItems ) );
     mgr->SetConditions( PCB_ACTIONS::unlock,   ENABLE( PCB_SELECTION_CONDITIONS::HasLockedItems ) );
 
@@ -2262,6 +2308,185 @@ void PCB_EDIT_FRAME::HardRedraw()
     std::vector<MSG_PANEL_ITEM> msg_list;
     GetBoard()->GetMsgPanelInfo( this, msg_list );
     SetMsgPanel( msg_list );
+}
+
+
+void PCB_EDIT_FRAME::GetCommandPaletteItems( std::vector<COMMAND_PALETTE_ITEM>& aItems )
+{
+    BOARD* board = GetBoard();
+
+    if( !board )
+        return;
+
+    const wxBitmapBundle fpIcon = KiBitmapBundle( BITMAPS::module, 16 );
+    const wxBitmapBundle netIcon = KiBitmapBundle( BITMAPS::general_ratsnest, 16 );
+    const wxBitmapBundle layerIcon = KiBitmapBundle( BITMAPS::show_all_layers, 16 );
+
+    // Layers -> make the active layer.
+    for( PCB_LAYER_ID layer : board->GetEnabledLayers().UIOrder() )
+    {
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = board->GetLayerName( layer );
+        item.m_detail = _( "layer" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon = layerIcon;
+
+        item.m_run = [this, layer]()
+        {
+            SetActiveLayer( layer );
+        };
+
+        aItems.push_back( std::move( item ) );
+    }
+
+    // Footprints -> select and centre.
+    for( FOOTPRINT* footprint : board->Footprints() )
+    {
+        const wxString ref = footprint->GetReference();
+
+        if( ref.IsEmpty() )
+            continue;
+
+        const wxString value = footprint->GetValue();
+
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = value.IsEmpty() ? ref : wxString::Format( wxT( "%s — %s" ), ref, value );
+        item.m_detail = _( "footprint" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon = fpIcon;
+
+        item.m_run = [this, footprint]()
+        {
+            FocusOnItem( footprint );
+        };
+
+        aItems.push_back( std::move( item ) );
+    }
+
+    // Nets -> select and centre a representative item (first track, else first pad) on the net.
+    for( NETINFO_ITEM* net : board->GetNetInfo() )
+    {
+        if( !net || net->GetNetCode() <= 0 || net->GetNetname().IsEmpty() )
+            continue;
+
+        COMMAND_PALETTE_ITEM item;
+        item.m_name = net->GetNetname();
+        item.m_detail = _( "net" );
+        item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::NAVIGATE;
+        item.m_icon = netIcon;
+
+        const int netcode = net->GetNetCode();
+
+        item.m_run = [this, netcode]()
+        {
+            BOARD* b = GetBoard();
+
+            if( !b )
+                return;
+
+            for( PCB_TRACK* track : b->Tracks() )
+            {
+                if( track->GetNetCode() == netcode )
+                {
+                    FocusOnItem( track );
+                    return;
+                }
+            }
+
+            for( FOOTPRINT* fp : b->Footprints() )
+            {
+                for( PAD* pad : fp->Pads() )
+                {
+                    if( pad->GetNetCode() == netcode )
+                    {
+                        FocusOnItem( pad );
+                        return;
+                    }
+                }
+            }
+        };
+
+        aItems.push_back( std::move( item ) );
+    }
+
+    // Recently-used footprints -> quick-place the part at the cursor. These are eager, cheap
+    // (bounded MRU list, no library scan) and modelled as COMMAND items so they surface in the
+    // default (no-sigil) palette view and are re-ranked by the palette's own MRU machinery.
+    if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+    {
+        for( const wxString& key : cfg->m_Session.recently_placed_footprints )
+        {
+            LIB_ID libId;
+
+            if( libId.Parse( key ) >= 0 || !libId.IsValid() )
+                continue;
+
+            COMMAND_PALETTE_ITEM item;
+            item.m_name = libId.GetUniStringLibItemName();
+            item.m_detail = _( "recent footprint" );
+            item.m_category = COMMAND_PALETTE_ITEM::CATEGORY::COMMAND;
+            item.m_mruKey = key;
+            item.m_icon = fpIcon;
+
+            item.m_run = [this, libId, key]()
+            {
+                placeRecentFootprint( libId, key );
+            };
+
+            aItems.push_back( std::move( item ) );
+        }
+    }
+}
+
+
+void PCB_EDIT_FRAME::placeRecentFootprint( const LIB_ID& aLibId, const wxString& aMruKey )
+{
+    FOOTPRINT* fp = nullptr;
+
+    try
+    {
+        fp = LoadFootprint( aLibId );
+    }
+    catch( const IO_ERROR& e )
+    {
+        ShowInfoBarError(
+                wxString::Format( _( "Could not load footprint '%s': %s" ), aLibId.Format().wx_str(), e.What() ) );
+        return;
+    }
+
+    if( !fp )
+    {
+        ShowInfoBarError( wxString::Format( _( "Footprint '%s' not found." ), aLibId.Format().wx_str() ) );
+        return;
+    }
+
+    // Insert the footprint on the board, then hand it to the Place Footprint tool for interactive
+    // positioning. This mirrors the sanctioned insert path in footprint_libraries_utils.cpp /
+    // footprint_viewer_frame.cpp: the caller must Add()+Push() the footprint before the tool takes
+    // over (the tool's parameterised entry provides only the re-drag, not the initial commit).
+    BOARD_COMMIT commit( this );
+
+    fp->SetParent( GetBoard() );
+    fp->SetLink( niluuid );
+    fp->SetFlags( IS_NEW );
+
+    for( PAD* pad : fp->Pads() )
+        pad->SetNetCode( 0 ); // pads in the library carry orphaned nets; reset to unconnected
+
+    if( fp->IsFlipped() )
+        fp->Flip( fp->GetPosition(), GetPcbNewSettings()->m_FlipDirection );
+
+    fp->SetOrientation( ANGLE_0 );
+
+    commit.Add( fp );
+    PlaceFootprint( fp );
+    commit.Push( _( "Place Footprint" ) );
+
+    // Refresh recency so repeated quick-places keep the part at the top of the list.
+    if( COMMON_SETTINGS* cfg = Pgm().GetCommonSettings() )
+        COMMON_SETTINGS::UpdateMruList( cfg->m_Session.recently_placed_footprints, aMruKey );
+
+    GetToolManager()->PostAction( PCB_ACTIONS::placeFootprint, fp );
 }
 
 
