@@ -54,6 +54,11 @@ jobs:
       CCACHE_COMPILERCHECK: "content"
       CTEST_OUTPUT_ON_FAILURE: "1"
       BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+      # The container has no locale set, so wx aborts on any non-ASCII output with
+      # "trying to encode undefined Unicode character" (strconv.cpp:1165) -- 8 qa_cli
+      # tests hit this once the upstream merge brought in refreshed translations.
+      LC_ALL: "C.UTF-8"
+      LANG: "C.UTF-8"
 
     steps:
       - name: Checkout
@@ -97,6 +102,15 @@ jobs:
             echo "ctest_re=${RESULT##*|}" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Install qa_cli Python dependencies
+        # qa_cli is `python -m pytest qa/tests/cli`, and the Fedora CI image ships no pytest -- so
+        # with qa_cli re-enabled (#68) the test aborted in 0.5s with "No module named pytest"
+        # instead of running.  Installed before Configure so CMake's pytest-xdist probe sees the
+        # finished environment.  The bare retry covers pip builds without --break-system-packages.
+        run: |
+          python3 -m pip install --break-system-packages -r qa/tests/requirements.txt \
+            || python3 -m pip install -r qa/tests/requirements.txt
+
       - name: Configure (QABUILD)
         run: |
           cmake -S . -B build -G Ninja \
@@ -129,8 +143,17 @@ jobs:
         run: ccache -s -v || true
 
       - name: Run QA tests
-        # qa_cli (SIGSEGV in this container, issue #68) and qa_diff_merge_mergetool_workflow_e2e
-        # (interactive mergetool under xvfb) are excluded; both stay covered by upstream GitLab CI.
+        # Excluded: qa_diff_merge_mergetool_workflow_e2e (interactive mergetool under xvfb), and
+        # qa_cli. Both stay covered by upstream GitLab CI.
+        #
+        # qa_cli was run for real here (it had been failing in 0.5s on a missing pytest, proving
+        # nothing). Result: #68's SIGSEGV is real and *nondeterministic* -- three runs produced
+        # three different victim sets among the export tests, so it cannot be pinned down with an
+        # xfail list. It is ~15 of 140 tests, in `pcb export svg/png/drill` and most `sch export`
+        # subcommands, and does not reproduce outside this container.
+        #
+          # Re-enable by deleting qa_cli from the regexes below once #68 is fixed; the deps and
+        # locale this job now sets are what qa_cli needs to run at all. See #140.
         run: |
           cd build/qa
           if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
