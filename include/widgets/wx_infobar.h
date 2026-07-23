@@ -23,6 +23,7 @@
 
 #include <functional>
 #include <optional>
+#include <vector>
 #include <wx/event.h>
 #include <wx/infobar.h>
 #include <wx/timer.h>
@@ -255,6 +256,10 @@ protected:
     wxAuiManager* m_auiManager;     ///< The AUI manager that contains this infobar
     MESSAGE_TYPE  m_type;           ///< The type of message being displayed
     wxString      m_message;        ///< The original message without wrapping
+
+    /// Controls created by wxInfoBarGeneric that it keeps raw pointers to; these are hidden
+    /// rather than destroyed by RemoveAllButtons() to avoid dangling base class pointers.
+    std::vector<wxWindow*> m_baseControls;
 
     std::optional<std::function<void(void)>> m_callback;   ///< Optional callback made when closing infobar
 
