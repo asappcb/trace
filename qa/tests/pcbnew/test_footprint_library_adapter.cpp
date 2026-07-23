@@ -176,8 +176,8 @@ BOOST_AUTO_TEST_CASE( ConcurrentPluginAccessIsSerialized )
     // Writable copy so the writer can churn the library and force concurrent cache rebuilds.
     KI_TEST::TEMPORARY_DIRECTORY tmpLib( "kicad_qa_adapter_concurrent", ".pretty" );
 
-    for( const auto& entry :
-         std::filesystem::directory_iterator( std::filesystem::path( getResistorLibPath().ToStdString() ) ) )
+    for( const auto& entry : std::filesystem::directory_iterator(
+                 std::filesystem::path( getResistorLibPath().ToStdString() ) ) )
     {
         if( entry.is_regular_file() )
             std::filesystem::copy_file( entry.path(), tmpLib.GetPath() / entry.path().filename() );
@@ -195,7 +195,7 @@ BOOST_AUTO_TEST_CASE( ConcurrentPluginAccessIsSerialized )
     BOOST_REQUIRE( adapter.FootprintExists( nickname, stableFp ) );
 
     constexpr int readerCount = 6;
-    constexpr int iterations = 40;
+    constexpr int iterations  = 40;
 
     std::atomic<bool> sawMissing{ false };
     std::atomic<bool> sawNullLoad{ false };

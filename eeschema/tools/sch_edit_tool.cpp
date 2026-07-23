@@ -2833,6 +2833,9 @@ void SCH_EDIT_TOOL::EditProperties( EDA_ITEM* aItem )
             }
             else
             {
+                // The sheet file change invalidated the undo/redo list.
+                m_frame->ClearUndoRedoList();
+
                 std::vector<SCH_ITEM*> items;
 
                 items.emplace_back( sheet );
@@ -2842,12 +2845,6 @@ void SCH_EDIT_TOOL::EditProperties( EDA_ITEM* aItem )
                 m_frame->Schematic().RefreshHierarchy();
                 m_frame->UpdateHierarchyNavigator();
             }
-        }
-        else
-        {
-            // If we are renaming files, the undo/redo list becomes invalid and must be cleared.
-            m_frame->ClearUndoRedoList();
-            m_frame->OnModify();
         }
 
         // If the sheet file is changed and new sheet contents are loaded then we have to
@@ -3682,6 +3679,10 @@ wxString SCH_EDIT_TOOL::FixERCErrorMenuText( const std::shared_ptr<RC_ITEM>& aER
     {
         return _( "Edit Netclasses..." );
     }
+    else if( aERCItem->GetErrorCode() == ERCE_EMPTY_LABEL_NAME )
+    {
+        return _( "Remove Empty Label" );
+    }
 
     return wxEmptyString;
 }
@@ -3722,6 +3723,20 @@ void SCH_EDIT_TOOL::FixERCError( const std::shared_ptr<RC_ITEM>& aERCItem )
     else if( aERCItem->GetErrorCode() == ERCE_UNDEFINED_NETCLASS )
     {
         frame->ShowSchematicSetupDialog( _( "Net Classes" ) );
+    }
+    else if( aERCItem->GetErrorCode() == ERCE_EMPTY_LABEL_NAME )
+    {
+        SCH_SHEET_PATH sheetPath;
+        SCH_ITEM*      item = frame->Schematic().ResolveItem( aERCItem->GetMainItemID(), &sheetPath, true );
+
+        if( SCH_LABEL_BASE* label = dynamic_cast<SCH_LABEL_BASE*>( item ) )
+        {
+            m_toolMgr->RunAction( ACTIONS::selectionClear );
+
+            SCH_COMMIT commit( m_toolMgr );
+            commit.Remove( label, sheetPath.LastScreen() );
+            commit.Push( _( "Remove Empty Label" ) );
+        }
     }
 }
 

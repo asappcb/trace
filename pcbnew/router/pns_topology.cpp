@@ -85,7 +85,7 @@ const TOPOLOGY::JOINT_SET TOPOLOGY::ConnectedJoints( const JOINT* aStart )
 
         for( ITEM* item : current->LinkList() )
         {
-            if( item->OfKind( ITEM::SEGMENT_T ) )
+            if( item->OfKind( ITEM::SEGMENT_T | ITEM::ARC_T ) )
             {
                 const JOINT* a = m_world->FindJoint( item->Anchor( 0 ), item );;
                 const JOINT* b = m_world->FindJoint( item->Anchor( 1 ), item );;
@@ -123,12 +123,27 @@ bool TOPOLOGY::NearestUnconnectedAnchorPoint( const LINE* aTrack, VECTOR2I& aPoi
     if( !jt || m_world->GetRuleResolver()->NetCode( jt->Net() ) <= 0 )
        return false;
 
+    ITEM* connected = nullptr;
+
     if( ( !track.EndsWithVia() && jt->LinkCount() >= 2 )
             || ( track.EndsWithVia() && jt->LinkCount() >= 3 ) ) // we got something connected
     {
+        // tmpNode's own track is freed on return, skip it to avoid a dangling anchor item
+        for( ITEM* link : jt->LinkList() )
+        {
+            if( !link->BelongsTo( tmpNode.get() ) )
+            {
+                connected = link;
+                break;
+            }
+        }
+    }
+
+    if( connected )
+    {
         end = jt->Pos();
         aLayers = jt->Layers();
-        aItem = jt->LinkList()[0];
+        aItem = connected;
     }
     else
     {
@@ -1027,7 +1042,7 @@ bool TOPOLOGY::AssembleDiffPair( ITEM* aStart, DIFF_PAIR& aPair )
     if( !coupledNet || !startItem )
         return false;
 
-    LINE lp = m_world->AssembleLine( startItem );
+    LINE lp = m_world->AssembleLine( startItem, nullptr, false, false, false );
 
     std::vector<ITEM*> pItems;
     std::vector<ITEM*> nItems;
@@ -1140,7 +1155,7 @@ bool TOPOLOGY::AssembleDiffPair( ITEM* aStart, DIFF_PAIR& aPair )
     if( !coupledItem )
         return false;
 
-    LINE ln = m_world->AssembleLine( coupledItem );
+    LINE ln = m_world->AssembleLine( coupledItem, nullptr, false, false, false );
 
     if( m_world->GetRuleResolver()->DpNetPolarity( refNet ) < 0 )
         std::swap( lp, ln );

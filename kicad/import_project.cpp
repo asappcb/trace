@@ -212,6 +212,7 @@ void KICAD_MANAGER_FRAME::OnImportEasyEdaFiles( wxCommandEvent& event )
 
 void KICAD_MANAGER_FRAME::OnImportEasyEdaProFiles( wxCommandEvent& event )
 {
+    // Keep a single menu entry and route to v2 or v3 after file selection.
     ImportNonKiCadProject( _( "Import EasyEDA Pro Project" ), FILEEXT::EasyEdaProFileWildcard(), { "INPUT" },
                            { "INPUT" }, SCH_IO_MGR::SCH_EASYEDAPRO, PCB_IO_MGR::EASYEDAPRO );
 }
@@ -238,4 +239,14 @@ void KICAD_MANAGER_FRAME::OnImportDipTraceFiles( wxCommandEvent& event )
     ImportNonKiCadProject( _( "Import DipTrace Project Files" ),
                            FILEEXT::DipTraceFilesWildcard(), { "dch" }, { "dip" },
                            SCH_IO_MGR::SCH_DIPTRACE, PCB_IO_MGR::DIPTRACE );
+}
+
+
+void KICAD_MANAGER_FRAME::OnImportOrcadFiles( wxCommandEvent& event )
+{
+    // OrCAD handler imports .dsn schematic then offers associated Allegro board, so no
+    // PCB extension registered here
+    ImportNonKiCadProject( _( "Import OrCAD Project Files" ),
+                           FILEEXT::OrCadSchematicFilesWildcard(), { "dsn" }, {},
+                           SCH_IO_MGR::SCH_ORCAD, PCB_IO_MGR::FILE_TYPE_NONE );
 }

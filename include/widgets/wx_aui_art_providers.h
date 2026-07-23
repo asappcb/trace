@@ -71,7 +71,10 @@ public:
     {
     }
 
-    wxAuiTabArt* Clone() override { return new WX_AUI_TAB_ART(); }
+    wxAuiTabArt* Clone() override
+    {
+        return new WX_AUI_TAB_ART();
+    }
 
     void SetSizingInfo( const wxSize& tabCtrlSize, size_t tabCount, wxWindow* wnd = nullptr ) override;
 };

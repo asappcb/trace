@@ -418,8 +418,9 @@ void PDF_STROKE_FONT_MANAGER::Reset()
 }
 
 
-PDF_STROKE_FONT_MANAGER::STYLE_KEY PDF_STROKE_FONT_MANAGER::styleKey( bool aBold, bool aItalic, int aStrokeWidth,
-                                                                      int aFontWidth, int aFontHeight )
+PDF_STROKE_FONT_MANAGER::STYLE_KEY PDF_STROKE_FONT_MANAGER::styleKey( bool aBold, bool aItalic,
+                                                                      int aStrokeWidth, int aFontWidth,
+                                                                      int aFontHeight )
 {
     int strokeWidth = std::abs( aStrokeWidth );
     int fontWidth = std::abs( aFontWidth );
@@ -445,8 +446,8 @@ void PDF_STROKE_FONT_MANAGER::EncodeString( const wxString& aText, std::vector<P
 
     for( wxUniChar ch : aText )
     {
-        PDF_STROKE_FONT_SUBSET* subset =
-                ensureSubsetForGlyph( ch, aStrokeWidth, aFontWidth, aFontHeight, aBold, aItalic );
+        PDF_STROKE_FONT_SUBSET* subset = ensureSubsetForGlyph( ch, aStrokeWidth, aFontWidth, aFontHeight,
+                                                               aBold, aItalic );
 
         if( !subset )
             continue;
@@ -473,8 +474,8 @@ void PDF_STROKE_FONT_MANAGER::EncodeString( const wxString& aText, std::vector<P
 }
 
 PDF_STROKE_FONT_SUBSET* PDF_STROKE_FONT_MANAGER::ensureSubsetForGlyph( wxUniChar aCode, int aStrokeWidth,
-                                                                       int aFontWidth, int aFontHeight, bool aBold,
-                                                                       bool aItalic )
+                                                                       int aFontWidth, int aFontHeight,
+                                                                       bool aBold, bool aItalic )
 {
     int strokeWidth = std::abs( aStrokeWidth );
     int fontWidth = std::abs( aFontWidth );

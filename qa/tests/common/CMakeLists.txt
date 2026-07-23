@@ -43,6 +43,7 @@ set( QA_COMMON_SRCS
     test_coroutine.cpp
     test_design_block_io.cpp
     test_desktop_app_id.cpp
+    test_dialog_shim.cpp
     test_eda_shape.cpp
     test_eda_text.cpp
     test_editor_tabs_panel.cpp
@@ -63,6 +64,7 @@ set( QA_COMMON_SRCS
     test_item_realignment.cpp
     test_ki_any.cpp
     test_library_tables.cpp
+    test_local_history_autosave_walk.cpp
     test_lockfile.cpp
     test_loop_safe_collect.cpp
     test_markup_parser.cpp
@@ -165,6 +167,7 @@ set( QA_COMMON_SRCS
     test_project_file.cpp
     test_settings_manager.cpp
     test_nested_settings_release.cpp
+    test_nested_settings.cpp
     test_net_settings.cpp
     test_component_class_settings.cpp
     test_project_local_settings.cpp

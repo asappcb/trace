@@ -21,6 +21,8 @@
 #pragma once
 
 
+#include <map>
+
 #include <core/mirror.h>
 #include <eda_item.h>
 #include <geometry/approximation.h>
@@ -245,6 +247,13 @@ public:
 
     void SetUuid( const KIID& aUuid );
     void ResetUuid() { SetUuid( KIID() ); }
+
+    /**
+     * Remap KIIDs this item stores to reference other items (e.g. constraint members) through
+     * @p aIdMap (old -> new), after a paste/duplicate has re-UUIDed the referenced items.  KIIDs
+     * absent from the map are left unchanged.  The default does nothing.
+     */
+    virtual void RemapKIIDs( const std::map<KIID, KIID>& aIdMap ) {}
 
     VECTOR2I GetFPRelativePosition() const;
     void SetFPRelativePosition( const VECTOR2I& aPos );
@@ -515,7 +524,7 @@ protected:
 
     // Mirrors BOARD identity-cache membership so ~BOARD_ITEM can evict without walking a parent
     // chain that may already be freed.  Maintained by BOARD; clones start detached.
-    mutable bool m_indexedInBoard = false;
+    mutable bool    m_indexedInBoard = false;
 
     friend class BOARD;
 };

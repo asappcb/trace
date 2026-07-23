@@ -172,8 +172,7 @@ class KICOMMON_API SYNC_REPORTER : public REPORTER
 public:
     SYNC_REPORTER( REPORTER& aReporter ) :
             m_reporter( aReporter )
-    {
-    }
+    { }
 
     REPORTER& Report( const wxString& aText, SEVERITY aSeverity = RPT_SEVERITY_UNDEFINED ) override;
 

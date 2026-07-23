@@ -212,6 +212,9 @@ COLOR4D PCB_RENDER_SETTINGS::GetColor( const BOARD_ITEM* aItem, int aLayer ) con
     if( aLayer == LAYER_LOCKED_ITEM_SHADOW )
         return m_layerColors.at( aLayer );
 
+    if( aLayer == LAYER_CONSTRAINT_SHADOW )
+        return m_layerColors.at( aLayer );
+
     // SMD pads use the copper netname layer
     if( aLayer == LAYER_PAD_FR_NETNAMES )
         aLayer = GetNetnameLayer( F_Cu );
@@ -1124,8 +1127,7 @@ void PCB_PAINTER::draw( const PCB_VIA* aVia, int aLayer )
     COLOR4D      color = m_pcbSettings.GetColor( aVia, aLayer );
     VECTOR2D     center( aVia->GetStart() );
 
-    if( color == COLOR4D::CLEAR )
-        return;
+    // draw hidden vias transparent not skipped so a recolour restores them without re-tessellating
 
     // Chain highlight colour override for copper/hole layers.
     if( board && !m_pcbSettings.m_highlightedNetChain.IsEmpty()
@@ -2177,6 +2179,22 @@ void PCB_PAINTER::draw( const PCB_SHAPE* aShape, int aLayer )
 
         // Note: on LAYER_LOCKED_ITEM_SHADOW always draw shadow shapes as continuous lines
         // otherwise the look is very strange and ugly
+        lineStyle = LINE_STYLE::SOLID;
+    }
+
+    if( aLayer == LAYER_CONSTRAINT_SHADOW )
+    {
+        color = m_pcbSettings.GetColor( aShape, aLayer );
+        int margin = m_lockedShadowMargin;
+
+        // Selected constraint members drawn brighter and thicker
+        if( m_pcbSettings.GetHighlightedConstraintMembers().count( aShape->m_Uuid ) )
+        {
+            color = color.Brightened( 0.5 );
+            margin *= 2;
+        }
+
+        thickness = thickness + margin;
         lineStyle = LINE_STYLE::SOLID;
     }
 
@@ -3269,15 +3287,24 @@ void PCB_PAINTER::draw( const PCB_BARCODE* aBarcode, int aLayer )
 
 void PCB_PAINTER::draw( const PCB_DIMENSION_BASE* aDimension, int aLayer )
 {
-    const COLOR4D& color = m_pcbSettings.GetColor( aDimension, aLayer );
+    COLOR4D color = m_pcbSettings.GetColor( aDimension, aLayer );
 
-    if( aLayer == LAYER_LOCKED_ITEM_SHADOW )
+    if( aLayer == LAYER_LOCKED_ITEM_SHADOW || aLayer == LAYER_CONSTRAINT_SHADOW )
     {
+        int margin = m_lockedShadowMargin;
+
+        if( aLayer == LAYER_CONSTRAINT_SHADOW
+            && m_pcbSettings.GetHighlightedConstraintMembers().count( aDimension->m_Uuid ) )
+        {
+            color = color.Brightened( 0.5 );
+            margin *= 2;
+        }
+
         m_gal->SetIsFill( true );
         m_gal->SetIsStroke( true );
         m_gal->SetFillColor( color );
         m_gal->SetStrokeColor( color );
-        m_gal->SetLineWidth( m_lockedShadowMargin );
+        m_gal->SetLineWidth( margin );
 
         for( const std::shared_ptr<SHAPE>& shape : aDimension->GetShapes() )
         {
@@ -3286,7 +3313,7 @@ void PCB_PAINTER::draw( const PCB_DIMENSION_BASE* aDimension, int aLayer )
             case SH_SEGMENT:
             {
                 const SEG& seg = static_cast<const SHAPE_SEGMENT*>( shape.get() )->GetSeg();
-                m_gal->DrawSegment( seg.A, seg.B, m_lockedShadowMargin );
+                m_gal->DrawSegment( seg.A, seg.B, margin );
                 break;
             }
 

@@ -61,6 +61,7 @@ class ACTION_MENU;
 class TOOL_ACTION;
 class DIALOG_BOARD_SETUP;
 class PCB_DESIGN_BLOCK_PANE;
+class PANEL_CONSTRAINTS;
 class WX_INFOBAR;
 
 class KICAD_API_SERVER;
@@ -126,6 +127,13 @@ public:
      * @return the name of the wxAuiPaneInfo managing the Search panel
      */
     static const wxString SearchPaneName() { return wxT( "Search" ); }
+    static const wxString ConstraintsPaneName() { return wxT( "Constraints" ); }
+
+    /// Show/hide the dockable geometric-constraint list pane, refreshing it when shown (#2329).
+    void ToggleConstraintsPanel();
+
+    /// The dockable geometric-constraint list pane (#2329), or nullptr.
+    PANEL_CONSTRAINTS* GetConstraintsPanel() const { return m_constraintsPanel; }
 
     /**
      * Show the Find dialog.
@@ -287,10 +295,6 @@ public:
      *                     layer is the same as the previous one
      */
     void SetActiveLayer( PCB_LAYER_ID aLayer, bool aForceRedraw );
-
-    /// View update flags an item needs when the active layer changes. Static for testing.
-    static int activeLayerUpdateFlags( const BOARD_ITEM* aItem, PCB_LAYER_ID aOldLayer,
-                                       PCB_LAYER_ID aNewLayer, HIGH_CONTRAST_MODE aContrastMode );
 
     void OnDisplayOptionsChanged() override;
 
@@ -505,8 +509,11 @@ public:
     bool ExportSpecctraFile( const wxString& aFullFilename );
 
     /**
-     * Import a specctra *.ses file and use it to relocate MODULEs and to replace all vias and
+     * Import a specctra *.ses file and use it to relocate footprints and to replace all vias and
      * tracks in an existing and loaded #BOARD.
+     *
+     * Changes are committed through #BOARD_COMMIT so they participate in undo/redo and refresh
+     * the canvas view (including moved footprints).
      *
      * See http://www.autotraxeda.com/docs/SPECCTRA/SPECCTRA.pdf for the specification.
      */
@@ -745,6 +752,18 @@ protected:
                      const std::map<std::string, UTF8>* aProperties = nullptr );
 
     /**
+     * Reconcile the footprint-library references of a freshly imported non-KiCad board so that
+     * every board footprint FPID resolves to a registered project library.  Reads the generated
+     * cache nickname and provenance source libraries from m_importProperties, falling back to a
+     * nickname derived from the board filename for a standalone import.
+     *
+     * @param aDefinitions are the importer's caller-owned cached library footprints, captured
+     *                     during load before the plugin was destroyed.
+     */
+    void reconcileImportedFootprintLibraries(
+            std::vector<std::unique_ptr<FOOTPRINT>> aDefinitions, const wxString& aBoardPath );
+
+    /**
      * @brief Save a board object to a file
      *
      * @param aBoard The board object to save
@@ -831,6 +850,8 @@ private:
 
     std::vector<LIB_ID>    m_designBlockHistoryList;
     PCB_DESIGN_BLOCK_PANE* m_designBlocksPane;
+    // Tool Reset() reads this before the ctor creates the panel.
+    PANEL_CONSTRAINTS* m_constraintsPanel = nullptr; ///< Dockable geometric-constraint list (#2329).
 
     /// Secondary infobar that stacks above the main one; reserved for load-time
     /// notices (currently the WRL -> STEP migration prompt) that must not be

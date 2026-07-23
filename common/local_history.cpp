@@ -35,6 +35,7 @@
 #include <kiplatform/io.h>
 
 #include <git2.h>
+#include <gestfich.h>
 #include <wx/filename.h>
 #include <wx/filefn.h>
 #include <wx/ffile.h>
@@ -505,60 +506,75 @@ bool LOCAL_HISTORY::RunRegisteredSaversAsAutosaveFiles( const wxString& aProject
 // (the recovery-prompt path) apply that filter themselves; cleanup callers want the
 // full list so they can remove leftover autosave files even when the source has been
 // re-saved and is newer.
-static std::vector<std::pair<wxString, wxString>>
-findAutosaveFilePairs( const wxString& aProjectPath )
+std::vector<std::pair<wxString, wxString>>
+LOCAL_HISTORY::CollectAutosaveFilePairs( const wxString& aAutosaveRoot, const wxString& aProjectPath,
+                                         BACKUP_LOCATION aLocation )
 {
     std::vector<std::pair<wxString, wxString>> results;
 
+    if( !wxDirExists( aAutosaveRoot ) )
+        return results;
+
+    DIR_LOOP_GUARD guard( aAutosaveRoot );
+
+    if( !guard.IsRooted() )
+        return results;
+
+    std::function<void( const wxString& )> walk =
+            [&]( const wxString& aDir )
+            {
+                wxDir d( aDir );
+
+                if( !d.IsOpened() )
+                    return;
+
+                wxString name;
+                bool cont = d.GetFirst( &name );
+
+                while( cont )
+                {
+                    wxFileName fn( aDir, name );
+                    wxString fullPath = fn.GetFullPath();
+
+                    if( wxDirExists( fullPath ) )
+                    {
+                        if( aLocation == BACKUP_LOCATION::PROJECT_DIR
+                            && ( name == wxS( ".history" ) || name.EndsWith( wxS( "-backups" ) ) ) )
+                        {
+                            cont = d.GetNext( &name );
+                            continue;
+                        }
+
+                        if( guard.ShouldDescend( fullPath ) )
+                            walk( fullPath );
+                    }
+                    else if( aLocation != BACKUP_LOCATION::PROJECT_DIR
+                             || fn.GetFullName().StartsWith( AUTOSAVE_PREFIX ) )
+                    {
+                        wxString src = sourceForAutosaveFile( fullPath, aProjectPath, aAutosaveRoot,
+                                                             aLocation );
+
+                        if( !src.IsEmpty() )
+                            results.emplace_back( fullPath, src );
+                    }
+
+                    cont = d.GetNext( &name );
+                }
+            };
+
+    walk( aAutosaveRoot );
+    return results;
+}
+
+
+static std::vector<std::pair<wxString, wxString>>
+findAutosaveFilePairs( const wxString& aProjectPath )
+{
     SETTINGS_MANAGER& mgr = Pgm().GetSettingsManager();
     BACKUP_LOCATION   location = mgr.GetCommonSettings()->m_Backup.location;
     wxString          autosaveRoot = mgr.GetAutosaveRootForProject( mgr.GetProjectForPath( aProjectPath ) );
 
-    if( !wxDirExists( autosaveRoot ) )
-        return results;
-
-    std::function<void( const wxString& )> walk = [&]( const wxString& aDir )
-    {
-        wxDir d( aDir );
-
-        if( !d.IsOpened() )
-            return;
-
-        wxString name;
-        bool cont = d.GetFirst( &name );
-
-        while( cont )
-        {
-            wxFileName fn( aDir, name );
-            wxString fullPath = fn.GetFullPath();
-
-            if( wxDirExists( fullPath ) )
-            {
-                if( location == BACKUP_LOCATION::PROJECT_DIR
-                    && ( name == wxS( ".history" ) || name.EndsWith( wxS( "-backups" ) ) ) )
-                {
-                    cont = d.GetNext( &name );
-                    continue;
-                }
-
-                walk( fullPath );
-            }
-            else if( location != BACKUP_LOCATION::PROJECT_DIR
-                     || fn.GetFullName().StartsWith( AUTOSAVE_PREFIX ) )
-            {
-                wxString src = sourceForAutosaveFile( fullPath, aProjectPath, autosaveRoot,
-                                                     location );
-
-                if( !src.IsEmpty() )
-                    results.emplace_back( fullPath, src );
-            }
-
-            cont = d.GetNext( &name );
-        }
-    };
-
-    walk( autosaveRoot );
-    return results;
+    return LOCAL_HISTORY::CollectAutosaveFilePairs( autosaveRoot, aProjectPath, location );
 }
 
 
@@ -944,6 +960,8 @@ bool LOCAL_HISTORY::Init( const wxString& aProjectPath )
 
     if( !wxDirExists( hist ) )
     {
+        wxLogNull suppressSysErrorPopups;
+
         // EnsurePathExists creates intermediate directories as needed, which is required
         // for USER_DIR mode where the parent (e.g., ~/.config/kicad/<ver>/local_history/)
         // may not yet exist.  In PROJECT_DIR mode it falls back to a single mkdir.
@@ -1211,49 +1229,57 @@ static void collectProjectFiles( const wxString& aProjectPath, std::vector<wxStr
     if( !dir.IsOpened() )
         return;
 
+    // Same loop hazard as the autosave scan: a project directory holding a root-escape
+    // symlink would otherwise recurse across the whole filesystem.
+    DIR_LOOP_GUARD guard( aProjectPath );
+
+    if( !guard.IsRooted() )
+        return;
+
     // Collect recursively. Flag top-level to avoid hitting the same logic for nested projects
     std::function<void( const wxString&, bool )> collect =
             [&]( const wxString& path, bool topLevel )
-    {
-        if( !topLevel && isProjectDirectory( path ) )
-        {
-            wxLogTrace( traceAutoSave,
-                        wxS( "[history] collectProjectFiles: Skipping nested project at %s" ),
-                        path );
-            return;
-        }
-
-        wxString name;
-        wxDir    d( path );
-
-        if( !d.IsOpened() )
-            return;
-
-        bool cont = d.GetFirst( &name );
-
-        while( cont )
-        {
-            if( topLevel && isRestoreProtectedEntry( name ) )
             {
-                cont = d.GetNext( &name );
-                continue;
-            }
+                if( !topLevel && isProjectDirectory( path ) )
+                {
+                    wxLogTrace( traceAutoSave,
+                                wxS( "[history] collectProjectFiles: Skipping nested project at %s" ),
+                                path );
+                    return;
+                }
 
-            wxFileName fn( path, name );
-            wxString   fullPath = fn.GetFullPath();
+                wxString name;
+                wxDir    d( path );
 
-            if( wxFileName::DirExists( fullPath ) )
-            {
-                collect( fullPath, false );
-            }
-            else if( fn.FileExists() && fn.GetFullName() != wxS( "fp-info-cache" ) && isKiCadProjectFile( fn ) )
-            {
-                aFiles.push_back( fn.GetFullPath() );
-            }
+                if( !d.IsOpened() )
+                    return;
 
-            cont = d.GetNext( &name );
-        }
-    };
+                bool cont = d.GetFirst( &name );
+
+                while( cont )
+                {
+                    if( topLevel && isRestoreProtectedEntry( name ) )
+                    {
+                        cont = d.GetNext( &name );
+                        continue;
+                    }
+
+                    wxFileName fn( path, name );
+                    wxString   fullPath = fn.GetFullPath();
+
+                    if( wxFileName::DirExists( fullPath ) )
+                    {
+                        if( guard.ShouldDescend( fullPath ) )
+                            collect( fullPath, false );
+                    }
+                    else if( fn.FileExists() && fn.GetFullName() != wxS( "fp-info-cache" ) && isKiCadProjectFile( fn ) )
+                    {
+                        aFiles.push_back( fn.GetFullPath() );
+                    }
+
+                    cont = d.GetNext( &name );
+                }
+            };
 
     collect( aProjectPath, true );
 }
@@ -1720,44 +1746,45 @@ bool LOCAL_HISTORY::EnforceSizeLimit( const wxString& aProjectPath, size_t aMaxB
     git_odb* odb = nullptr;
     git_repository_odb( &odb, repo );
 
-    std::function<size_t( git_tree* )> accountTree = [&]( git_tree* tree )
-    {
-        size_t added = 0;
-        size_t cnt = git_tree_entrycount( tree );
-
-        for( size_t i = 0; i < cnt; ++i )
-        {
-            const git_tree_entry* entry = git_tree_entry_byindex( tree, i );
-
-            if( git_tree_entry_type( entry ) == GIT_OBJECT_BLOB )
+    std::function<size_t( git_tree* )> accountTree =
+            [&]( git_tree* tree )
             {
-                const git_oid* bid = git_tree_entry_id( entry );
+                size_t added = 0;
+                size_t cnt = git_tree_entrycount( tree );
 
-                if( seenBlobs.find( *bid ) == seenBlobs.end() )
+                for( size_t i = 0; i < cnt; ++i )
                 {
-                    size_t         len = 0;
-                    git_object_t   type = GIT_OBJECT_ANY;
+                    const git_tree_entry* entry = git_tree_entry_byindex( tree, i );
 
-                    if( odb && git_odb_read_header( &len, &type, odb, bid ) == 0 )
-                        added += len;
+                    if( git_tree_entry_type( entry ) == GIT_OBJECT_BLOB )
+                    {
+                        const git_oid* bid = git_tree_entry_id( entry );
 
-                    seenBlobs.insert( *bid );
+                        if( seenBlobs.find( *bid ) == seenBlobs.end() )
+                        {
+                            size_t         len = 0;
+                            git_object_t   type = GIT_OBJECT_ANY;
+
+                            if( odb && git_odb_read_header( &len, &type, odb, bid ) == 0 )
+                                added += len;
+
+                            seenBlobs.insert( *bid );
+                        }
+                    }
+                    else if( git_tree_entry_type( entry ) == GIT_OBJECT_TREE )
+                    {
+                        git_tree* sub = nullptr;
+
+                        if( git_tree_lookup( &sub, repo, git_tree_entry_id( entry ) ) == 0 )
+                        {
+                            added += accountTree( sub );
+                            git_tree_free( sub );
+                        }
+                    }
                 }
-            }
-            else if( git_tree_entry_type( entry ) == GIT_OBJECT_TREE )
-            {
-                git_tree* sub = nullptr;
 
-                if( git_tree_lookup( &sub, repo, git_tree_entry_id( entry ) ) == 0 )
-                {
-                    added += accountTree( sub );
-                    git_tree_free( sub );
-                }
-            }
-        }
-
-        return added;
-    };
+                return added;
+            };
 
     for( const git_oid& cOid : commits )
     {
@@ -2022,51 +2049,52 @@ namespace
  */
 bool checkForLockedFiles( const wxString& aProjectPath, std::vector<wxString>& aLockedFiles )
 {
-    std::function<void( const wxString& )> findLocks = [&]( const wxString& dirPath )
-    {
-        wxDir dir( dirPath );
-        if( !dir.IsOpened() )
-            return;
-
-        wxString filename;
-        bool cont = dir.GetFirst( &filename );
-
-        while( cont )
-        {
-            wxFileName fullPath( dirPath, filename );
-
-            // Skip special directories
-            if( filename == wxS(".history") || filename == wxS(".git") )
+    std::function<void( const wxString& )> findLocks =
+            [&]( const wxString& dirPath )
             {
-                cont = dir.GetNext( &filename );
-                continue;
-            }
+                wxDir dir( dirPath );
+                if( !dir.IsOpened() )
+                    return;
 
-            if( fullPath.DirExists() )
-            {
-                findLocks( fullPath.GetFullPath() );
-            }
-            else if( fullPath.FileExists()
-                     && filename.StartsWith( FILEEXT::LockFilePrefix )
-                     && filename.EndsWith( wxString( wxS( "." ) ) + FILEEXT::LockFileExtension ) )
-            {
-                // Reconstruct the original filename from the lock file name
-                // Lock files are: ~<original>.<ext>.lck -> need to get <original>.<ext>
-                wxString baseName = filename.Mid( FILEEXT::LockFilePrefix.length() );
-                baseName = baseName.BeforeLast( '.' );  // Remove .lck
-                wxFileName originalFile( dirPath, baseName );
+                wxString filename;
+                bool cont = dir.GetFirst( &filename );
 
-                // Check if this is a valid LOCKFILE (not stale and not ours)
-                LOCKFILE testLock( originalFile.GetFullPath() );
-                if( testLock.Valid() && !testLock.IsLockedByMe() )
+                while( cont )
                 {
-                    aLockedFiles.push_back( fullPath.GetFullPath() );
-                }
-            }
+                    wxFileName fullPath( dirPath, filename );
 
-            cont = dir.GetNext( &filename );
-        }
-    };
+                    // Skip special directories
+                    if( filename == wxS(".history") || filename == wxS(".git") )
+                    {
+                        cont = dir.GetNext( &filename );
+                        continue;
+                    }
+
+                    if( fullPath.DirExists() )
+                    {
+                        findLocks( fullPath.GetFullPath() );
+                    }
+                    else if( fullPath.FileExists()
+                             && filename.StartsWith( FILEEXT::LockFilePrefix )
+                             && filename.EndsWith( wxString( wxS( "." ) ) + FILEEXT::LockFileExtension ) )
+                    {
+                        // Reconstruct the original filename from the lock file name
+                        // Lock files are: ~<original>.<ext>.lck -> need to get <original>.<ext>
+                        wxString baseName = filename.Mid( FILEEXT::LockFilePrefix.length() );
+                        baseName = baseName.BeforeLast( '.' );  // Remove .lck
+                        wxFileName originalFile( dirPath, baseName );
+
+                        // Check if this is a valid LOCKFILE (not stale and not ours)
+                        LOCKFILE testLock( originalFile.GetFullPath() );
+                        if( testLock.Valid() && !testLock.IsLockedByMe() )
+                        {
+                            aLockedFiles.push_back( fullPath.GetFullPath() );
+                        }
+                    }
+
+                    cont = dir.GetNext( &filename );
+                }
+            };
 
     findLocks( aProjectPath );
     return aLockedFiles.empty();
@@ -2081,70 +2109,73 @@ bool extractCommitToTemp( git_repository* aRepo, git_tree* aTree, const wxString
     bool extractSuccess = true;
 
     std::function<void( git_tree*, const wxString& )> extractTree =
-        [&]( git_tree* t, const wxString& prefix )
-    {
-        if( !extractSuccess )
-            return;
-
-        size_t cnt = git_tree_entrycount( t );
-        for( size_t i = 0; i < cnt; ++i )
-        {
-            const git_tree_entry* entry = git_tree_entry_byindex( t, i );
-            wxString name = wxString::FromUTF8( git_tree_entry_name( entry ) );
-            wxString fullPath = prefix.IsEmpty() ? name : prefix + wxS("/") + name;
-
-            if( git_tree_entry_type( entry ) == GIT_OBJECT_TREE )
+            [&]( git_tree* t, const wxString& prefix )
             {
-                wxFileName dirPath( aTempPath + wxFileName::GetPathSeparator() + fullPath,
-                                   wxEmptyString );
-                if( !wxFileName::Mkdir( dirPath.GetPath(), 0777, wxPATH_MKDIR_FULL ) )
-                {
-                    wxLogTrace( traceAutoSave,
-                               wxS( "[history] extractCommitToTemp: Failed to create directory '%s'" ),
-                               dirPath.GetPath() );
-                    extractSuccess = false;
+                if( !extractSuccess )
                     return;
-                }
 
-                git_tree* sub = nullptr;
-                if( git_tree_lookup( &sub, aRepo, git_tree_entry_id( entry ) ) == 0 )
+                size_t cnt = git_tree_entrycount( t );
+                for( size_t i = 0; i < cnt; ++i )
                 {
-                    extractTree( sub, fullPath );
-                    git_tree_free( sub );
-                }
-            }
-            else if( git_tree_entry_type( entry ) == GIT_OBJECT_BLOB )
-            {
-                git_blob* blob = nullptr;
-                if( git_blob_lookup( &blob, aRepo, git_tree_entry_id( entry ) ) == 0 )
-                {
-                    wxFileName dst( aTempPath + wxFileName::GetPathSeparator() + fullPath );
+                    const git_tree_entry* entry = git_tree_entry_byindex( t, i );
+                    wxString name = wxString::FromUTF8( git_tree_entry_name( entry ) );
+                    wxString fullPath = prefix.IsEmpty() ? name : prefix + wxS("/") + name;
 
-                    wxFileName dstDir( dst );
-                    dstDir.SetFullName( wxEmptyString );
-                    wxFileName::Mkdir( dstDir.GetPath(), 0777, wxPATH_MKDIR_FULL );
-
-                    wxFFile f( dst.GetFullPath(), wxT( "wb" ) );
-                    if( f.IsOpened() )
+                    if( git_tree_entry_type( entry ) == GIT_OBJECT_TREE )
                     {
-                        f.Write( git_blob_rawcontent( blob ), git_blob_rawsize( blob ) );
-                        f.Close();
-                    }
-                    else
-                    {
-                        wxLogTrace( traceAutoSave,
-                                   wxS( "[history] extractCommitToTemp: Failed to write '%s'" ),
-                                   dst.GetFullPath() );
-                        extractSuccess = false;
-                        git_blob_free( blob );
-                        return;
-                    }
+                        wxFileName dirPath( aTempPath + wxFileName::GetPathSeparator() + fullPath, wxEmptyString );
 
-                    git_blob_free( blob );
+                        if( !wxFileName::Mkdir( dirPath.GetPath(), 0777, wxPATH_MKDIR_FULL ) )
+                        {
+                            wxLogTrace( traceAutoSave,
+                                        wxS( "[history] extractCommitToTemp: Failed to create directory '%s'" ),
+                                        dirPath.GetPath() );
+                            extractSuccess = false;
+                            return;
+                        }
+
+                        git_tree* sub = nullptr;
+
+                        if( git_tree_lookup( &sub, aRepo, git_tree_entry_id( entry ) ) == 0 )
+                        {
+                            extractTree( sub, fullPath );
+                            git_tree_free( sub );
+                        }
+                    }
+                    else if( git_tree_entry_type( entry ) == GIT_OBJECT_BLOB )
+                    {
+                        git_blob* blob = nullptr;
+
+                        if( git_blob_lookup( &blob, aRepo, git_tree_entry_id( entry ) ) == 0 )
+                        {
+                            wxFileName dst( aTempPath + wxFileName::GetPathSeparator() + fullPath );
+
+                            wxFileName dstDir( dst );
+                            dstDir.SetFullName( wxEmptyString );
+                            wxFileName::Mkdir( dstDir.GetPath(), 0777, wxPATH_MKDIR_FULL );
+
+                            wxFFile f( dst.GetFullPath(), wxT( "wb" ) );
+
+                            if( f.IsOpened() )
+                            {
+                                f.Write( git_blob_rawcontent( blob ), git_blob_rawsize( blob ) );
+                                f.Close();
+                            }
+                            else
+                            {
+                                wxLogTrace( traceAutoSave,
+                                           wxS( "[history] extractCommitToTemp: Failed to write '%s'" ),
+                                           dst.GetFullPath() );
+                                extractSuccess = false;
+                                git_blob_free( blob );
+                                return;
+                            }
+
+                            git_blob_free( blob );
+                        }
+                    }
                 }
-            }
-        }
-    };
+            };
 
     extractTree( aTree, wxEmptyString );
     return extractSuccess;

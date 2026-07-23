@@ -2655,127 +2655,129 @@ bool STEP_PCB_MODEL::CreatePCB( SHAPE_POLY_SET& aOutline, const VECTOR2D& aOrigi
                 bsbHoles.Initialize( brdWithHolesBndBox, holeBoxSet );
             };
 
-    auto subtractShapesMap = [this, &tp]( const wxString&                                aWhat,
-                                          std::map<wxString, std::vector<TopoDS_Shape>>& aShapesMap,
-                                          std::vector<TopoDS_Shape>& aHolesList, Bnd_BoundSortBox& aBSBHoles,
-                                          const std::vector<Bnd_Box>& aHoleBoxes )
-    {
-        m_reporter->Report( wxString::Format( _( "Subtracting holes for %s" ), aWhat ), RPT_SEVERITY_DEBUG );
-
-        for( auto& [netname, vec] : aShapesMap )
-        {
-            // Cuts share the hole TShapes as tools across threads.  SetNonDestructive keeps
-            // OCC from mutating those shared inputs, so the cuts are safe to run in parallel.
-            // Bnd_BoundSortBox::Compare is not reentrant (it overwrites internal scratch and
-            // returns a reference to it), so the hole lookup is serialized with a mutex.
-            std::mutex mutex;
-
-            auto subtractLoopFn = [&]( const int shapeId )
+    auto subtractShapesMap =
+            [this, &tp]( const wxString& aWhat, std::map<wxString, std::vector<TopoDS_Shape>>& aShapesMap,
+                         std::vector<TopoDS_Shape>& aHolesList, Bnd_BoundSortBox& aBSBHoles,
+                         const std::vector<Bnd_Box>& aHoleBoxes )
             {
-                TopoDS_Shape& shape = vec[shapeId];
+                m_reporter->Report( wxString::Format( _( "Subtracting holes for %s" ), aWhat ),
+                                    RPT_SEVERITY_DEBUG );
 
-                Bnd_Box shapeBbox;
-                BRepBndLib::Add( shape, shapeBbox );
-
-                NCollection_List<TopoDS_Shape> holelist;
-
+                for( auto& [netname, vec] : aShapesMap )
                 {
-                    std::unique_lock lock( mutex );
+                    // Cuts share the hole TShapes as tools across threads.  SetNonDestructive keeps
+                    // OCC from mutating those shared inputs, so the cuts are safe to run in parallel.
+                    // Bnd_BoundSortBox::Compare is not reentrant (it overwrites internal scratch and
+                    // returns a reference to it), so the hole lookup is serialized with a mutex.
+                    std::mutex mutex;
 
-                    const NCollection_List<int>& indices = aBSBHoles.Compare( shapeBbox );
-
-                    for( const int& index : indices )
-                        holelist.Append( aHolesList[index] );
-
-                    // Workaround for OCCT bug (https://github.com/Open-Cascade-SAS/OCCT/issues/506)
-                    // Bnd_BoundSortBox::Compare can fail to detect intersections in certain edge
-                    // cases (e.g., single item). Fall back to direct bounding box intersection
-                    // checks when Compare returns empty but intersections may exist.
-                    if( holelist.IsEmpty() )
+                    auto subtractLoopFn = [&]( const int shapeId )
                     {
-                        for( size_t i = 0; i < aHoleBoxes.size(); i++ )
+                        TopoDS_Shape& shape = vec[shapeId];
+
+                        Bnd_Box shapeBbox;
+                        BRepBndLib::Add( shape, shapeBbox );
+
+                        NCollection_List<TopoDS_Shape> holelist;
+
                         {
-                            if( !shapeBbox.IsOut( aHoleBoxes[i] ) )
-                                holelist.Append( aHolesList[i] );
+                            std::unique_lock lock( mutex );
+
+                            const NCollection_List<int>& indices = aBSBHoles.Compare( shapeBbox );
+
+                            for( const int& index : indices )
+                                holelist.Append( aHolesList[index] );
+
+                            // Workaround for OCCT bug (https://github.com/Open-Cascade-SAS/OCCT/issues/506)
+                            // Bnd_BoundSortBox::Compare can fail to detect intersections in certain edge
+                            // cases (e.g., single item). Fall back to direct bounding box intersection
+                            // checks when Compare returns empty but intersections may exist.
+                            if( holelist.IsEmpty() )
+                            {
+                                for( size_t i = 0; i < aHoleBoxes.size(); i++ )
+                                {
+                                    if( !shapeBbox.IsOut( aHoleBoxes[i] ) )
+                                        holelist.Append( aHolesList[i] );
+                                }
+                            }
                         }
+
+                        if( holelist.IsEmpty() )
+                            return; // nothing to cut for this shape
+
+                        NCollection_List<TopoDS_Shape> cutArgs;
+                        cutArgs.Append( shape );
+
+                        BRepAlgoAPI_Cut cut;
+
+                        // Non-destructive protects the shared hole tools.  Parallelism comes from the
+                        // outer thread pool, so this op runs single-threaded to avoid oversubscribing.
+                        cut.SetNonDestructive( true );
+                        cut.SetRunParallel( false );
+                        cut.SetToFillHistory( false );
+
+                        cut.SetArguments( cutArgs );
+                        cut.SetTools( holelist );
+                        cut.Build();
+
+                        if( cut.HasErrors() || cut.HasWarnings() )
+                        {
+                            m_reporter->Report( wxString::Format( _( "** Got problems while cutting "
+                                                                        "%s net '%s' **" ),
+                                                                    aWhat,
+                                                                    UnescapeString( netname ) ),
+                                                RPT_SEVERITY_WARNING );
+
+                            {
+                                // Dump writes to std::cout; serialize it so parallel cuts do not
+                                // interleave their output.
+                                std::unique_lock lock( mutex );
+                                shapeBbox.Dump();
+                            }
+
+                            if( cut.HasErrors() )
+                            {
+                                wxString             msg = _( "Errors:\n" );
+                                wxStringOutputStream os_stream( &msg );
+                                wxStdOutputStream    out( os_stream );
+
+                                cut.DumpErrors( out );
+                                m_reporter->Report( msg, RPT_SEVERITY_WARNING);
+                            }
+
+                            if( cut.HasWarnings() )
+                            {
+                                wxString             msg = _( "Warnings:\n" );
+                                wxStringOutputStream os_stream( &msg );
+                                wxStdOutputStream    out( os_stream );
+
+                                cut.DumpWarnings( out );
+                                m_reporter->Report( msg, RPT_SEVERITY_WARNING );
+                            }
+                        }
+
+                        shape = cut.Shape();
+                    };
+
+                    // submit_loop can throw mid-submission after queueing some blocks.  Drain the
+                    // pool before unwinding so no queued block outlives the captured mutex and
+                    // vector.  get() then re-raises any worker exception.
+                    BS::multi_future<void> cutFutures;
+
+                    try
+                    {
+                        cutFutures = tp.submit_loop( 0, vec.size(), subtractLoopFn );
                     }
+                    catch( ... )
+                    {
+                        tp.wait();
+                        throw;
+                    }
+
+                    cutFutures.wait();
+                    cutFutures.get();
                 }
-
-                if( holelist.IsEmpty() )
-                    return; // nothing to cut for this shape
-
-                NCollection_List<TopoDS_Shape> cutArgs;
-                cutArgs.Append( shape );
-
-                BRepAlgoAPI_Cut cut;
-
-                // Non-destructive protects the shared hole tools.  Parallelism comes from the
-                // outer thread pool, so this op runs single-threaded to avoid oversubscribing.
-                cut.SetNonDestructive( true );
-                cut.SetRunParallel( false );
-                cut.SetToFillHistory( false );
-
-                cut.SetArguments( cutArgs );
-                cut.SetTools( holelist );
-                cut.Build();
-
-                if( cut.HasErrors() || cut.HasWarnings() )
-                {
-                    m_reporter->Report( wxString::Format( _( "** Got problems while cutting "
-                                                             "%s net '%s' **" ),
-                                                          aWhat, UnescapeString( netname ) ),
-                                        RPT_SEVERITY_WARNING );
-
-                    {
-                        // Dump writes to std::cout; serialize it so parallel cuts do not
-                        // interleave their output.
-                        std::unique_lock lock( mutex );
-                        shapeBbox.Dump();
-                    }
-
-                    if( cut.HasErrors() )
-                    {
-                        wxString             msg = _( "Errors:\n" );
-                        wxStringOutputStream os_stream( &msg );
-                        wxStdOutputStream    out( os_stream );
-
-                        cut.DumpErrors( out );
-                        m_reporter->Report( msg, RPT_SEVERITY_WARNING );
-                    }
-
-                    if( cut.HasWarnings() )
-                    {
-                        wxString             msg = _( "Warnings:\n" );
-                        wxStringOutputStream os_stream( &msg );
-                        wxStdOutputStream    out( os_stream );
-
-                        cut.DumpWarnings( out );
-                        m_reporter->Report( msg, RPT_SEVERITY_WARNING );
-                    }
-                }
-
-                shape = cut.Shape();
             };
-
-            // submit_loop can throw mid-submission after queueing some blocks.  Drain the
-            // pool before unwinding so no queued block outlives the captured mutex and
-            // vector.  get() then re-raises any worker exception.
-            BS::multi_future<void> cutFutures;
-
-            try
-            {
-                cutFutures = tp.submit_loop( 0, vec.size(), subtractLoopFn );
-            }
-            catch( ... )
-            {
-                tp.wait();
-                throw;
-            }
-
-            cutFutures.wait();
-            cutFutures.get();
-        }
-    };
 
     auto subtractShapes =
             [subtractShapesMap]( const wxString& aWhat, std::vector<TopoDS_Shape>& aShapesList,

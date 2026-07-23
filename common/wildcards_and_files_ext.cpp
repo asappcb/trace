@@ -351,13 +351,25 @@ wxString FILEEXT::EasyEdaArchiveWildcard()
 
 wxString FILEEXT::EasyEdaProFileWildcard()
 {
-    return _( "EasyEDA (JLCEDA) Pro files" ) + AddFileExtListToFilter( { "epro", "zip" } );
+    return _( "EasyEDA (JLCEDA) Pro files" ) + AddFileExtListToFilter( { "epro", "epro2", "zip" } );
 }
 
 
 wxString FILEEXT::DipTraceFilesWildcard()
 {
     return _( "DipTrace files" ) + AddFileExtListToFilter( { "dch", "dip" } );
+}
+
+
+wxString FILEEXT::OrCadSchematicFilesWildcard()
+{
+    return _( "OrCAD Capture schematic files" ) + AddFileExtListToFilter( { "dsn" } );
+}
+
+
+wxString FILEEXT::AllegroPcbFilesWildcard()
+{
+    return _( "Allegro PCB files" ) + AddFileExtListToFilter( { "brd" } );
 }
 
 

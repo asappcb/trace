@@ -65,12 +65,14 @@ public:
         SCH_EAGLE,            ///< Autodesk Eagle file format
         SCH_EASYEDA,          ///< EasyEDA Std schematic file
         SCH_EASYEDAPRO,       ///< EasyEDA Pro archive
+        SCH_EASYEDAPRO_V3,    ///< EasyEDA Pro v3 archive
         SCH_GEDA,             ///< gEDA/gschem schematic format
         SCH_LTSPICE,          ///< LtSpice Schematic format
         SCH_HTTP,             ///< KiCad HTTP library
         SCH_PADS,             ///< PADS Logic schematic format
         SCH_DIPTRACE,         ///< DipTrace schematic format
         SCH_PCAD,             ///< P-CAD 2006 ASCII schematic format
+        SCH_ORCAD,            ///< OrCAD Capture schematic format
 
         // Add your schematic type here.
         SCH_FILE_UNKNOWN,

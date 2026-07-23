@@ -2196,7 +2196,7 @@ void PDF_PLOTTER::Text( const VECTOR2I&        aPos,
         wxLogTrace( tracePdfPlotter, "PDF_PLOTTER::Text: Markup parsing failed, falling back to plain text." );
         // Fallback to simple text rendering if parsing fails
         wxStringTokenizer str_tok( text, " ", wxTOKEN_RET_DELIMS );
-        VECTOR2I          pos = computeAlignedStartPos();
+        VECTOR2I pos = computeAlignedStartPos();
 
         while( str_tok.HasMoreTokens() )
         {
@@ -2580,8 +2580,8 @@ VECTOR2I PDF_PLOTTER::renderWord( const wxString& aWord, const VECTOR2I& aPositi
             // Aspect ratio is baked into the Type3 glyph charprocs; Tz only mirrors when needed.
             const double tzFactor = wideningFactor < 0 ? -100.0 : 100.0;
 
-            fmt::print( m_workFile, "q {:f} {:f} {:f} {:f} {:f} {:f} cm BT {} Tr {} Tz ", ctm_a, ctm_b, adj_c, adj_d,
-                        adj_ctm_e, adj_ctm_f,
+            fmt::print( m_workFile, "q {:f} {:f} {:f} {:f} {:f} {:f} cm BT {} Tr {} Tz ",
+                        ctm_a, ctm_b, adj_c, adj_d, adj_ctm_e, adj_ctm_f,
                         0, // render_mode
                         encodeDoubleForPlotter( tzFactor ) );
 
