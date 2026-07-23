@@ -139,8 +139,9 @@ jobs:
 
       - name: Run QA tests
         # qa_diff_merge_mergetool_workflow_e2e (interactive mergetool under xvfb) is excluded; it
-        # stays covered by upstream GitLab CI. qa_cli was re-enabled (issue #68) to verify the
-        # SIGSEGV no longer reproduces on this container.
+        # stays covered by upstream GitLab CI. qa_cli now runs: the #68 SIGSEGV is real and still
+        # reproduces, but it is 9 specific tests, not the whole suite, so those are marked xfail
+        # in qa/tests/cli/conftest.py and the other 126 CLI tests gate PRs from here on.
         run: |
           cd build/qa
           if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
