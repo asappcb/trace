@@ -88,7 +88,9 @@ set( QA_PCBNEW_SRCS
     test_custom_drc_diff_merge.cpp
     test_lib_table_diff_merge.cpp
     test_applier_helpers.cpp
+    test_render_board.cpp
     test_fp_lib_differ.cpp
+    test_pad_ipc_roundtrip.cpp
     test_pad_size_setters.cpp
     test_pad_swap_positions.cpp
     test_pad_tenting.cpp

@@ -406,7 +406,27 @@ HANDLER_RESULT<ItemRequestStatus> API_HANDLER_BOARD::handleCreateUpdateItemsInte
             else
             {
                 commit->Modify( boardItem );
-                boardItem->CopyFrom( item.get() );
+
+                // Deserialize onto a clone of the existing item rather than the freshly
+                // constructed `item`.  `item` starts from construction defaults and Deserialize
+                // only writes members that have a matching proto field, so any persisted member
+                // absent from the proto would be reset to its default and then blitted over the
+                // live item by the whole-object CopyFrom below.  Seeding from a clone of
+                // boardItem means such members keep their current value; the proto still
+                // overwrites everything it does carry.  (Without this, adding a new persisted
+                // pad/board field without a matching proto field silently wipes it on every API
+                // modify round-trip.)
+                std::unique_ptr<BOARD_ITEM> updated( static_cast<BOARD_ITEM*>( boardItem->Clone() ) );
+
+                if( !updated->Deserialize( anyItem ) )
+                {
+                    e.set_status( ApiStatusCode::AS_BAD_REQUEST );
+                    e.set_error_message(
+                            fmt::format( "could not unpack {} from request", updated->GetClass().ToStdString() ) );
+                    return tl::unexpected( e );
+                }
+
+                boardItem->CopyFrom( updated.get() );
                 boardItem->Serialize( newItem );
             }
         }

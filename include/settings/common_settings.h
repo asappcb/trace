@@ -144,7 +144,19 @@ public:
         std::vector<wxString> pinned_fp_libs;
         std::vector<wxString> pinned_design_block_libs;
         std::vector<wxString> command_palette_mru; ///< Recently-run command-palette actions, MRU first.
+
+        /// Recently-placed footprints (LIB_ID strings), MRU first. Surfaced by the command
+        /// palette as a "recently-used part" quick-place list.
+        std::vector<wxString> recently_placed_footprints;
+
+        /// Recently-placed symbols (LIB_ID strings), MRU first. Surfaced by the command palette
+        /// as a "recently-used part" quick-place list.
+        std::vector<wxString> recently_placed_symbols;
     };
+
+    /// Push @a aKey to the front of an MRU list @a aList, de-duplicating and capping the size.
+    /// Shared helper for the various session MRU lists (command palette, recently-placed parts).
+    static void UpdateMruList( std::vector<wxString>& aList, const wxString& aKey, size_t aLimit = 16 );
 
     struct SYSTEM
     {
