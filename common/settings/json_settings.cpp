@@ -550,15 +550,13 @@ bool JSON_SETTINGS::SaveToFile( const wxString& aDirectory, bool aForce )
 
             if( existing )
             {
-                std::string current( ( std::istreambuf_iterator<char>( existing ) ),
-                                     std::istreambuf_iterator<char>() );
+                std::string current( ( std::istreambuf_iterator<char>( existing ) ), std::istreambuf_iterator<char>() );
 
                 // Only trust an equal comparison from a clean read; on any read error fall through
                 // and write, preferring data safety over avoiding a rewrite.
                 if( !existing.bad() && current == payload )
                 {
-                    wxLogTrace( traceSettings,
-                                wxT( "%s on-disk contents match payload, skipping write" ),
+                    wxLogTrace( traceSettings, wxT( "%s on-disk contents match payload, skipping write" ),
                                 GetFullFilename() );
 
                     m_modified = false;

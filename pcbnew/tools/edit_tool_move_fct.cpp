@@ -741,7 +741,10 @@ int EDIT_TOOL::Move( const TOOL_EVENT& aEvent )
             if( !constraintShapes.empty() && BoardHasConstraints( board() ) )
             {
                 ReSolveShapeClusters( board(), constraintShapes, nullptr,
-                                      [&]( BOARD_ITEM* aItem ) { localCommit.Modify( aItem ); } );
+                                      [&]( BOARD_ITEM* aItem )
+                                      {
+                                          localCommit.Modify( aItem );
+                                      } );
 
                 localCommit.Push( _( "Move" ) );
 
@@ -1210,15 +1213,15 @@ bool EDIT_TOOL::doMoveSelection( const TOOL_EVENT& aEvent, BOARD_COMMIT* aCommit
                     std::vector<BOARD_ITEM*> dimensions;
 
                     ReSolveShapeClusters( board, *aConstraintShapes, &solved,
-                            [&]( BOARD_ITEM* aItem )
-                            {
-                                aCommit->Modify( aItem );
+                                          [&]( BOARD_ITEM* aItem )
+                                          {
+                                              aCommit->Modify( aItem );
 
-                                // A remeasured dimension is not returned in solved so refresh it here
-                                // or it looks frozen until the drag ends
-                                if( aItem->Type() != PCB_SHAPE_T )
-                                    dimensions.push_back( aItem );
-                            } );
+                                              // A remeasured dimension is not returned in solved so refresh it here
+                                              // or it looks frozen until the drag ends
+                                              if( aItem->Type() != PCB_SHAPE_T )
+                                                  dimensions.push_back( aItem );
+                                          } );
 
                     for( PCB_SHAPE* neighbor : solved )
                         view()->Update( neighbor, KIGFX::GEOMETRY );

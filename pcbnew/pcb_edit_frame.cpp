@@ -411,15 +411,18 @@ PCB_EDIT_FRAME::PCB_EDIT_FRAME( KIWAY* aKiway, wxWindow* aParent ) :
                       .DestroyOnClose( false )
                       .CloseButton( true ) );
 
-    m_auimgr.AddPane( m_constraintsPanel, EDA_PANE().Name( ConstraintsPaneName() )
-                      .Bottom().Layer( 1 )
-                      .Caption( _( "Geometric Constraints" ) ).PaneBorder( false )
-                      .MinSize( FromDIP( wxSize( 360, 120 ) ) )
-                      .BestSize( FromDIP( wxSize( 600, 200 ) ) )
-                      .FloatingSize( FromDIP( wxSize( 600, 240 ) ) )
-                      .DestroyOnClose( false )
-                      .CloseButton( true )
-                      .Hide() );
+    m_auimgr.AddPane( m_constraintsPanel, EDA_PANE()
+                                                  .Name( ConstraintsPaneName() )
+                                                  .Bottom()
+                                                  .Layer( 1 )
+                                                  .Caption( _( "Geometric Constraints" ) )
+                                                  .PaneBorder( false )
+                                                  .MinSize( FromDIP( wxSize( 360, 120 ) ) )
+                                                  .BestSize( FromDIP( wxSize( 600, 200 ) ) )
+                                                  .FloatingSize( FromDIP( wxSize( 600, 240 ) ) )
+                                                  .DestroyOnClose( false )
+                                                  .CloseButton( true )
+                                                  .Hide() );
 
     RestoreAuiLayout();
 

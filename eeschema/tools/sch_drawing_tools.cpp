@@ -108,17 +108,15 @@ bool SCH_DRAWING_TOOLS::Init()
             };
 
     // some interactive drawing tools can undo the last point
-    auto canUndoPoint =
-            [this]( const SELECTION& aSel )
-            {
-                return ( m_mode == MODE::RULE_AREA );
-            };
+    auto canUndoPoint = [this]( const SELECTION& aSel )
+    {
+        return ( m_mode == MODE::RULE_AREA );
+    };
 
-    auto inDrawingRuleArea =
-            [this]( const SELECTION& aSel )
-            {
-                return m_mode == MODE::RULE_AREA;
-            };
+    auto inDrawingRuleArea = [this]( const SELECTION& aSel )
+    {
+        return m_mode == MODE::RULE_AREA;
+    };
 
     CONDITIONAL_MENU& ctxMenu = m_menu->GetMenu();
 
@@ -2522,9 +2520,9 @@ int SCH_DRAWING_TOOLS::DrawRuleArea( const TOOL_EVENT& aEvent )
                 }
             }
         }
-        else if( started && (   evt->IsAction( &ACTIONS::deleteLastPoint )
-                             || evt->IsAction( &ACTIONS::doDelete )
-                             || evt->IsAction( &ACTIONS::undo ) ) )
+        else if( started
+                 && ( evt->IsAction( &ACTIONS::deleteLastPoint ) || evt->IsAction( &ACTIONS::doDelete )
+                      || evt->IsAction( &ACTIONS::undo ) ) )
         {
             if( std::optional<VECTOR2I> last = polyGeomMgr.DeleteLastCorner() )
             {

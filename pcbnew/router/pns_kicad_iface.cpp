@@ -1305,17 +1305,15 @@ bool PNS_KICAD_IFACE_BASE::ImportSizes( PNS::SIZES_SETTINGS& aSizes, PNS::ITEM* 
 
     // A net-scoped rule may bind the two vias asymmetrically, so query both orderings the way
     // the DRC copper-clearance provider tests each hole in turn.
-    for( PNS::CONSTRAINT_TYPE type : { PNS::CONSTRAINT_TYPE::CT_HOLE_CLEARANCE,
-                                       PNS::CONSTRAINT_TYPE::CT_PHYSICAL_HOLE_CLEARANCE } )
+    for( PNS::CONSTRAINT_TYPE type :
+         { PNS::CONSTRAINT_TYPE::CT_HOLE_CLEARANCE, PNS::CONSTRAINT_TYPE::CT_PHYSICAL_HOLE_CLEARANCE } )
     {
-        if( m_ruleResolver->QueryConstraint( type, &dummyVia, &coupledVia, UNDEFINED_LAYER,
-                                             &constraint ) )
+        if( m_ruleResolver->QueryConstraint( type, &dummyVia, &coupledVia, UNDEFINED_LAYER, &constraint ) )
         {
             copperToHole = std::max( copperToHole, constraint.m_Value.Min() );
         }
 
-        if( m_ruleResolver->QueryConstraint( type, &coupledVia, &dummyVia, UNDEFINED_LAYER,
-                                             &constraint ) )
+        if( m_ruleResolver->QueryConstraint( type, &coupledVia, &dummyVia, UNDEFINED_LAYER, &constraint ) )
         {
             copperToHole = std::max( copperToHole, constraint.m_Value.Min() );
         }

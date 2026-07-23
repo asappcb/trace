@@ -163,122 +163,121 @@ wxString SCH_TABLECELL::GetShownText( const RENDER_SETTINGS* aSettings, const SC
     // - @{expression} - math expression evaluation
     // - ${CELL("A1")} or ${CELL(row,col)} - reference to another cell's evaluated text
     // - \${...} and \@{...} - escape sequences for literal display
-    std::function<bool( wxString* )> tableCellResolver =
-            [&]( wxString* token ) -> bool
+    std::function<bool( wxString* )> tableCellResolver = [&]( wxString* token ) -> bool
+    {
+        if( token->IsSameAs( wxT( "ROW" ) ) )
+        {
+            *token = wxString::Format( wxT( "%d" ), GetRow() ); // 0-based
+            return true;
+        }
+        else if( token->IsSameAs( wxT( "COL" ) ) )
+        {
+            *token = wxString::Format( wxT( "%d" ), GetColumn() ); // 0-based
+            return true;
+        }
+        else if( token->IsSameAs( wxT( "ADDR" ) ) )
+        {
+            *token = GetAddr();
+            return true;
+        }
+        else if( token->StartsWith( wxT( "CELL(" ) ) && token->EndsWith( wxT( ")" ) ) )
+        {
+            // Handle CELL("A0") or CELL(0, 1) syntax
+            wxString args = token->Mid( 5, token->Length() - 6 ); // Extract arguments
+            args.Trim( true ).Trim( false );                      // Remove whitespace
+
+            SCH_TABLE* table = static_cast<SCH_TABLE*>( GetParent() );
+            if( !table )
             {
-                if( token->IsSameAs( wxT( "ROW" ) ) )
+                *token = wxT( "<Unresolved: CELL() requires table context>" );
+                return true;
+            }
+
+            int targetRow = -1;
+            int targetCol = -1;
+
+            // Check if it's cell("A1") format (string argument with quotes)
+            if( args.StartsWith( wxT( "\"" ) ) && args.EndsWith( wxT( "\"" ) ) )
+            {
+                wxString addr = args.Mid( 1, args.Length() - 2 ); // Remove quotes
+                if( !parseCellAddress( addr, targetRow, targetCol ) )
                 {
-                    *token = wxString::Format( wxT( "%d" ), GetRow() ); // 0-based
+                    *token = wxString::Format( wxT( "<Unresolved: Invalid cell address: %s>" ), addr );
                     return true;
                 }
-                else if( token->IsSameAs( wxT( "COL" ) ) )
+            }
+            // Check if it's cell(row, col) format (two numeric arguments)
+            else if( args.Find( ',' ) != wxNOT_FOUND )
+            {
+                wxString rowStr = args.BeforeFirst( ',' ).Trim( true ).Trim( false );
+                wxString colStr = args.AfterFirst( ',' ).Trim( true ).Trim( false );
+
+                long rowNum, colNum;
+                if( !rowStr.ToLong( &rowNum ) || !colStr.ToLong( &colNum ) )
                 {
-                    *token = wxString::Format( wxT( "%d" ), GetColumn() ); // 0-based
+                    *token = wxString::Format( wxT( "<Unresolved: Invalid cell coordinates: %s>" ), args );
                     return true;
                 }
-                else if( token->IsSameAs( wxT( "ADDR" ) ) )
+
+                // Arguments are already 0-based
+                targetRow = rowNum;
+                targetCol = colNum;
+            }
+            else
+            {
+                *token = wxString::Format( wxT( "<Unresolved: Invalid CELL() syntax: %s>" ), args );
+                return true;
+            }
+
+            // Check bounds
+            if( targetRow < 0 || targetRow >= table->GetRowCount() || targetCol < 0
+                || targetCol >= table->GetColCount() )
+            {
+                wxString cellAddr;
+                if( targetRow >= 0 && targetCol >= 0 )
                 {
-                    *token = GetAddr();
+                    char colLetter = 'A' + ( targetCol % 26 );
+                    cellAddr = wxString::Format( wxT( "%c%d" ), colLetter, targetRow );
+                }
+                else
+                {
+                    cellAddr = args;
+                }
+                *token = wxString::Format( wxT( "<Unresolved: Cell %s not found>" ), cellAddr );
+                return true;
+            }
+
+            // Get the target cell and return its evaluated text
+            SCH_TABLECELL* targetCell = table->GetCell( targetRow, targetCol );
+            if( targetCell )
+            {
+                // Check for excessive recursion depth (circular references)
+                const int maxDepth = ADVANCED_CFG::GetCfg().m_ResolveTextRecursionDepth;
+                if( aDepth >= maxDepth )
+                {
+                    *token = wxT( "<Circular reference>" );
                     return true;
                 }
-                else if( token->StartsWith( wxT( "CELL(" ) ) && token->EndsWith( wxT( ")" ) ) )
-                {
-                    // Handle CELL("A0") or CELL(0, 1) syntax
-                    wxString args = token->Mid( 5, token->Length() - 6 ); // Extract arguments
-                    args.Trim( true ).Trim( false );                      // Remove whitespace
 
-                    SCH_TABLE* table = static_cast<SCH_TABLE*>( GetParent() );
-                    if( !table )
-                    {
-                        *token = wxT( "<Unresolved: CELL() requires table context>" );
-                        return true;
-                    }
+                *token = targetCell->GetShownText( aSettings, aPath, aAllowExtraText, aDepth + 1 );
+                return true;
+            }
+            else
+            {
+                *token = wxT( "<Unresolved: Cell not found>" );
+                return true;
+            }
+        }
 
-                    int targetRow = -1;
-                    int targetCol = -1;
+        // Fall back to sheet variables
+        if( sheet )
+        {
+            if( sheet->ResolveTextVar( aPath, token, depth + 1 ) )
+                return true;
+        }
 
-                    // Check if it's cell("A1") format (string argument with quotes)
-                    if( args.StartsWith( wxT( "\"" ) ) && args.EndsWith( wxT( "\"" ) ) )
-                    {
-                        wxString addr = args.Mid( 1, args.Length() - 2 ); // Remove quotes
-                        if( !parseCellAddress( addr, targetRow, targetCol ) )
-                        {
-                            *token = wxString::Format( wxT( "<Unresolved: Invalid cell address: %s>" ), addr );
-                            return true;
-                        }
-                    }
-                    // Check if it's cell(row, col) format (two numeric arguments)
-                    else if( args.Find( ',' ) != wxNOT_FOUND )
-                    {
-                        wxString rowStr = args.BeforeFirst( ',' ).Trim( true ).Trim( false );
-                        wxString colStr = args.AfterFirst( ',' ).Trim( true ).Trim( false );
-
-                        long rowNum, colNum;
-                        if( !rowStr.ToLong( &rowNum ) || !colStr.ToLong( &colNum ) )
-                        {
-                            *token = wxString::Format( wxT( "<Unresolved: Invalid cell coordinates: %s>" ), args );
-                            return true;
-                        }
-
-                        // Arguments are already 0-based
-                        targetRow = rowNum;
-                        targetCol = colNum;
-                    }
-                    else
-                    {
-                        *token = wxString::Format( wxT( "<Unresolved: Invalid CELL() syntax: %s>" ), args );
-                        return true;
-                    }
-
-                    // Check bounds
-                    if( targetRow < 0 || targetRow >= table->GetRowCount() || targetCol < 0
-                        || targetCol >= table->GetColCount() )
-                    {
-                        wxString cellAddr;
-                        if( targetRow >= 0 && targetCol >= 0 )
-                        {
-                            char colLetter = 'A' + ( targetCol % 26 );
-                            cellAddr = wxString::Format( wxT( "%c%d" ), colLetter, targetRow );
-                        }
-                        else
-                        {
-                            cellAddr = args;
-                        }
-                        *token = wxString::Format( wxT( "<Unresolved: Cell %s not found>" ), cellAddr );
-                        return true;
-                    }
-
-                    // Get the target cell and return its evaluated text
-                    SCH_TABLECELL* targetCell = table->GetCell( targetRow, targetCol );
-                    if( targetCell )
-                    {
-                        // Check for excessive recursion depth (circular references)
-                        const int maxDepth = ADVANCED_CFG::GetCfg().m_ResolveTextRecursionDepth;
-                        if( aDepth >= maxDepth )
-                        {
-                            *token = wxT( "<Circular reference>" );
-                            return true;
-                        }
-
-                        *token = targetCell->GetShownText( aSettings, aPath, aAllowExtraText, aDepth + 1 );
-                        return true;
-                    }
-                    else
-                    {
-                        *token = wxT( "<Unresolved: Cell not found>" );
-                        return true;
-                    }
-                }
-
-                // Fall back to sheet variables
-                if( sheet )
-                {
-                    if( sheet->ResolveTextVar( aPath, token, depth + 1 ) )
-                        return true;
-                }
-
-                return false;
-            };
+        return false;
+    };
 
     wxString text = EDA_TEXT::GetShownText( aAllowExtraText, depth );
 

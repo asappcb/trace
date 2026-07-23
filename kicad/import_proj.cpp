@@ -680,8 +680,7 @@ static wxFileName findSiblingByExt( const wxFileName& aBase, const wxString& aEx
     {
         wxString found;
 
-        for( bool more = dir.GetFirst( &found, wxEmptyString, wxDIR_FILES ); more;
-             more = dir.GetNext( &found ) )
+        for( bool more = dir.GetFirst( &found, wxEmptyString, wxDIR_FILES ); more; more = dir.GetNext( &found ) )
         {
             wxFileName fn( aBase.GetPath(), found );
 
@@ -705,8 +704,7 @@ void IMPORT_PROJ_HELPER::OrcadProjectHandler()
     bool       haveSibling = brdFile.FileExists();
 
     wxString msg = haveSibling
-                           ? wxString::Format( _( "Import the associated Allegro board '%s'?" ),
-                                               brdFile.GetFullName() )
+                           ? wxString::Format( _( "Import the associated Allegro board '%s'?" ), brdFile.GetFullName() )
                            : _( "Import an associated Allegro board file?" );
 
     KIDIALOG dlg( m_frame, msg, _( "Import Allegro Board" ), wxOK | wxCANCEL | wxICON_QUESTION );
@@ -717,9 +715,8 @@ void IMPORT_PROJ_HELPER::OrcadProjectHandler()
 
     if( !haveSibling )
     {
-        wxFileDialog fileDlg( m_frame, _( "Locate Allegro Board" ), m_InputFile.GetPath(),
-                              wxEmptyString, FILEEXT::AllegroPcbFilesWildcard(),
-                              wxFD_OPEN | wxFD_FILE_MUST_EXIST );
+        wxFileDialog fileDlg( m_frame, _( "Locate Allegro Board" ), m_InputFile.GetPath(), wxEmptyString,
+                              FILEEXT::AllegroPcbFilesWildcard(), wxFD_OPEN | wxFD_FILE_MUST_EXIST );
 
         if( fileDlg.ShowModal() != wxID_OK )
             return;

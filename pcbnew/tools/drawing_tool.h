@@ -278,8 +278,7 @@ private:
      * @return true if the shape was completed, false if cancelled.
      */
     bool drawManagedShape( const TOOL_EVENT& aTool, std::unique_ptr<PCB_SHAPE>& aGraphic,
-                           SHAPE_DRAW_BEHAVIOR& aBehavior,
-                           const std::vector<VECTOR2D>& aInitialPts );
+                           SHAPE_DRAW_BEHAVIOR& aBehavior, const std::vector<VECTOR2D>& aInitialPts );
 
     /**
      * Draw a polygon, that is added as a zone or a keepout area.

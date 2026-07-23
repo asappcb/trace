@@ -44,10 +44,7 @@ public:
 
     BITMAPS GetOverlayBitmap() const override { return BITMAPS::constraint_minimum_track_width; }
 
-    std::vector<DRC_RE_FIELD_POSITION> GetFieldPositions() const override
-    {
-        return { { 20, 55, 32, 1 } };
-    }
+    std::vector<DRC_RE_FIELD_POSITION> GetFieldPositions() const override { return { { 20, 55, 32, 1 } }; }
 
     std::vector<wxString> GetConstraintClauses( const RULE_GENERATION_CONTEXT& aContext ) const override
     {

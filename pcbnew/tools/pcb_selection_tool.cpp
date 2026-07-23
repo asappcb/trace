@@ -452,8 +452,7 @@ int PCB_SELECTION_TOOL::Main( const TOOL_EVENT& aEvent )
                 // A click on a geometric-constraint badge selects that constraint instead of a
                 // board item (the badges have no selectable geometry of their own); a click that
                 // misses every badge clears any badge selection.
-                if( CONSTRAINT_EDIT_TOOL* constraintTool =
-                            m_toolMgr->GetTool<CONSTRAINT_EDIT_TOOL>() )
+                if( CONSTRAINT_EDIT_TOOL* constraintTool = m_toolMgr->GetTool<CONSTRAINT_EDIT_TOOL>() )
                 {
                     if( constraintTool->SelectConstraintAt( evt->Position() ) )
                     {
@@ -1557,9 +1556,8 @@ int PCB_SELECTION_TOOL::SelectPolyArea( const TOOL_EVENT& aEvent )
             evt->SetPassEvent( false );
             break;
         }
-        else if(   evt->IsAction( &ACTIONS::deleteLastPoint )
-                || evt->IsAction( &ACTIONS::doDelete )
-                || evt->IsAction( &ACTIONS::undo ) )
+        else if( evt->IsAction( &ACTIONS::deleteLastPoint ) || evt->IsAction( &ACTIONS::doDelete )
+                 || evt->IsAction( &ACTIONS::undo ) )
         {
             if( points.GetPointCount() > 0 )
             {
@@ -4143,7 +4141,7 @@ bool PCB_SELECTION_TOOL::Selectable( const BOARD_ITEM* aItem, bool checkVisibili
 
     // These are not selectable
     case PCB_NETINFO_T:
-    case PCB_CONSTRAINT_T:   // geometry-free, never rendered or hit-tested (#2329)
+    case PCB_CONSTRAINT_T: // geometry-free, never rendered or hit-tested (#2329)
     case NOT_USED:
     case TYPE_NOT_INIT:
         return false;

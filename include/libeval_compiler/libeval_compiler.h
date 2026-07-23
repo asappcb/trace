@@ -324,7 +324,6 @@ private:
     bool                         m_stringIsWildcard;
     mutable bool                 m_isDeferredDbl;
     mutable bool                 m_isDeferredStr;
-
 };
 
 class KICOMMON_API VAR_REF

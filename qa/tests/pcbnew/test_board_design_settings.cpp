@@ -289,8 +289,7 @@ BOOST_AUTO_TEST_CASE( SeededBoardValueSurvivesRoundTrip )
 {
     BDS_TEST_PARENT parent;
 
-    ( *parent.Internals() )["/board/design_settings"_json_pointer] =
-            nlohmann::json{ { "meta", { { "version", 2 } } } };
+    ( *parent.Internals() )["/board/design_settings"_json_pointer] = nlohmann::json{ { "meta", { { "version", 2 } } } };
 
     const int negativeValue = pcbIUScale.mmToIU( -0.1 );
 

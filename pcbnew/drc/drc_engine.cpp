@@ -734,8 +734,8 @@ void DRC_ENGINE::compileRules()
             engineConstraint->constraint = constraint;
             engineConstraint->parentRule = rule;
 
-            if( rule->IsImplicit() && constraint.m_Type == DISALLOW_CONSTRAINT
-                && rule->m_ImplicitItem && rule->m_ImplicitItem->Type() == PCB_ZONE_T )
+            if( rule->IsImplicit() && constraint.m_Type == DISALLOW_CONSTRAINT && rule->m_ImplicitItem
+                && rule->m_ImplicitItem->Type() == PCB_ZONE_T )
             {
                 // Duplicate zone UUIDs make an item-by-id lookup return the wrong same-UUID
                 // zone and defeat self-exclusion, so use the rule's own zone pointer
@@ -2924,9 +2924,7 @@ std::vector<BOARD_ITEM*> DRC_ENGINE::GetItemsMatchingCondition( const wxString& 
         case PCB_NETINFO_T:
         case PCB_GENERATOR_T:
         case PCB_GROUP_T:
-        case PCB_CONSTRAINT_T:
-            skippedItems++;
-            continue;
+        case PCB_CONSTRAINT_T: skippedItems++; continue;
 
         default:
             break;

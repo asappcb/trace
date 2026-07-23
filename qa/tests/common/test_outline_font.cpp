@@ -147,8 +147,7 @@ BOOST_AUTO_TEST_CASE( InterlineIgnoresFaceHeightRatio )
     const double           glyphHeight = 10000.0;
     const KIFONT::METRICS& metrics = KIFONT::METRICS::Default();
 
-    BOOST_CHECK_CLOSE( outline->GetInterline( glyphHeight, metrics ),
-                       metrics.GetInterline( glyphHeight ), 1e-6 );
+    BOOST_CHECK_CLOSE( outline->GetInterline( glyphHeight, metrics ), metrics.GetInterline( glyphHeight ), 1e-6 );
 }
 
 

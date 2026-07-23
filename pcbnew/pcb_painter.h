@@ -150,10 +150,7 @@ public:
     void SetConstrainedItems( std::unordered_set<KIID> aItems ) { m_constrainedItems = std::move( aItems ); }
 
     // Members of badge-selected constraint shadows drawn brighter and thicker
-    const std::unordered_set<KIID>& GetHighlightedConstraintMembers() const
-    {
-        return m_highlightedConstraintMembers;
-    }
+    const std::unordered_set<KIID>& GetHighlightedConstraintMembers() const { return m_highlightedConstraintMembers; }
 
     void SetHighlightedConstraintMembers( std::unordered_set<KIID> aItems )
     {

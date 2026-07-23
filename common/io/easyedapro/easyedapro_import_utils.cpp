@@ -693,7 +693,7 @@ wxString EASYEDAPRO::KeywordsFromV3Tags( const nlohmann::json& aTags )
 }
 
 
-wxString EASYEDAPRO::ResolveDeviceFieldVariables( const wxString&                      aInput,
+wxString EASYEDAPRO::ResolveDeviceFieldVariables( const wxString&                     aInput,
                                                   const std::map<wxString, wxString>& aDeviceAttributes )
 {
     wxString inputText = aInput;
@@ -734,8 +734,7 @@ wxString EASYEDAPRO::ResolveDeviceFieldVariables( const wxString&               
                 if( !endFound )
                     return inputText;
 
-                wxString varValue =
-                        get_def( aDeviceAttributes, varName, wxString::Format( wxS( "{%s!}" ), varName ) );
+                wxString varValue = get_def( aDeviceAttributes, varName, wxString::Format( wxS( "{%s!}" ), varName ) );
 
                 resolvedText << varValue;
                 variableCount++;
@@ -776,9 +775,9 @@ wxString EASYEDAPRO::MakeUniqueLibName( std::set<wxString>& aUsedNames, const wx
 }
 
 
-std::map<wxString, wxString> EASYEDAPRO::BuildV3DeviceLibNames( nlohmann::json& aProject,
-                                                               const std::map<wxString, PRJ_DEVICE>& aDevices,
-                                                               std::set<wxString>* aUsedNames )
+std::map<wxString, wxString> EASYEDAPRO::BuildV3DeviceLibNames( nlohmann::json&                       aProject,
+                                                                const std::map<wxString, PRJ_DEVICE>& aDevices,
+                                                                std::set<wxString>*                   aUsedNames )
 {
     std::map<wxString, wxString> deviceLibNames;
     std::set<wxString>           localUsedNames;
@@ -815,8 +814,7 @@ wxString EASYEDAPRO::LookupV3DeviceLibName( const nlohmann::json& aProject, cons
 }
 
 
-EASYEDAPRO::V3_DEVICE_DATA EASYEDAPRO::GetV3DeviceData( const nlohmann::json& aProject,
-                                                        const wxString&       aDeviceUuid )
+EASYEDAPRO::V3_DEVICE_DATA EASYEDAPRO::GetV3DeviceData( const nlohmann::json& aProject, const wxString& aDeviceUuid )
 {
     V3_DEVICE_DATA data;
 
@@ -868,8 +866,7 @@ void EASYEDAPRO::ForEachImportedDeviceField(
         if( !valOpt || valOpt->empty() )
             continue;
 
-        aCallback( attrKey,
-                   NormalizeEasyEDAText( ResolveDeviceFieldVariables( *valOpt, aDeviceAttributes ) ) );
+        aCallback( attrKey, NormalizeEasyEDAText( ResolveDeviceFieldVariables( *valOpt, aDeviceAttributes ) ) );
     }
 }
 

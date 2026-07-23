@@ -635,21 +635,20 @@ SCH_EASYEDAPRO_PARSER::ParseSymbol( const std::vector<nlohmann::json>&  aLines,
             ksymbol->GetReferenceField().SetText( symbolPrefix );
         }
 
-        EASYEDAPRO::ForEachImportedDeviceField(
-                aDeviceAttributes, true,
-                [&]( const wxString& attrName, const wxString& value )
-                {
-                    SCH_FIELD* fd = ksymbol->FindFieldCaseInsensitive( attrName );
+        EASYEDAPRO::ForEachImportedDeviceField( aDeviceAttributes, true,
+                                                [&]( const wxString& attrName, const wxString& value )
+                                                {
+                                                    SCH_FIELD* fd = ksymbol->FindFieldCaseInsensitive( attrName );
 
-                    if( !fd )
-                    {
-                        fd = new SCH_FIELD( ksymbol, FIELD_T::USER, attrName );
-                        ksymbol->AddField( fd );
-                    }
+                                                    if( !fd )
+                                                    {
+                                                        fd = new SCH_FIELD( ksymbol, FIELD_T::USER, attrName );
+                                                        ksymbol->AddField( fd );
+                                                    }
 
-                    fd->SetText( value );
-                    fd->SetVisible( false );
-                } );
+                                                    fd->SetText( value );
+                                                    fd->SetVisible( false );
+                                                } );
     }
 
     for( auto& [unitId, parentedLines] : unitParentedLines )

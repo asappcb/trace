@@ -102,7 +102,9 @@ static bool dimensionBindingIsDuplicate( BOARD* aBoard, const PCB_CONSTRAINT* aC
     {
         return std::ranges::any_of( aList,
                                     [&]( const PCB_CONSTRAINT* aExisting )
-                                    { return ConstraintsAreDuplicate( *aExisting, *aConstraint ); } );
+                                    {
+                                        return ConstraintsAreDuplicate( *aExisting, *aConstraint );
+                                    } );
     };
 
     if( scan( aBoard->Constraints() ) )
@@ -112,7 +114,9 @@ static bool dimensionBindingIsDuplicate( BOARD* aBoard, const PCB_CONSTRAINT* aC
     // so every footprint constraints must be scanned to find where bindings are stored
     return std::ranges::any_of( aBoard->Footprints(),
                                 [&]( FOOTPRINT* aFootprint )
-                                { return scan( aFootprint->Constraints() ); } );
+                                {
+                                    return scan( aFootprint->Constraints() );
+                                } );
 }
 
 
@@ -130,15 +134,14 @@ static void bindDimensionEndpoints( BOARD* aBoard, PCB_DIMENSION_BASE* aDimensio
     // uses coincident centre plus point on circumference rim not generic both ends coincidence
     if( aDimension->Type() == PCB_DIM_RADIAL_T )
     {
-        std::optional<KIID> arc = SelectRadialDimensionTarget( aBoard, aDimension->m_Uuid,
-                                                               aDimension->GetStart(),
+        std::optional<KIID> arc = SelectRadialDimensionTarget( aBoard, aDimension->m_Uuid, aDimension->GetStart(),
                                                                aDimension->GetEnd(), tol );
 
         if( !arc )
             return;
 
-        auto addBinding = [&]( PCB_CONSTRAINT_TYPE aType, CONSTRAINT_ANCHOR aDimAnchor,
-                               CONSTRAINT_ANCHOR aTargetAnchor )
+        auto addBinding =
+                [&]( PCB_CONSTRAINT_TYPE aType, CONSTRAINT_ANCHOR aDimAnchor, CONSTRAINT_ANCHOR aTargetAnchor )
         {
             auto constraint = std::make_unique<PCB_CONSTRAINT>( aParent, aType );
             constraint->AddMember( aDimension->m_Uuid, aDimAnchor );
@@ -159,12 +162,9 @@ static void bindDimensionEndpoints( BOARD* aBoard, PCB_DIMENSION_BASE* aDimensio
     switch( aDimension->Type() )
     {
     case PCB_DIM_ALIGNED_T:
-    case PCB_DIM_ORTHOGONAL_T:
-        end = aDimension->GetEnd();
-        break;
+    case PCB_DIM_ORTHOGONAL_T: end = aDimension->GetEnd(); break;
 
-    default:
-        break;
+    default: break;
     }
 
     std::vector<DIMENSION_ENDPOINT_BINDING> bindings =
@@ -361,8 +361,8 @@ bool DRAWING_TOOL::Init()
 
     // tool-specific actions
     ctxMenu.AddItem( PCB_ACTIONS::closeOutline,          canCloseOutline, 200 );
-    ctxMenu.AddItem( ACTIONS::deleteLastPoint,           canUndoPoint, 200 );
-    ctxMenu.AddItem( ACTIONS::arcPosture,                arcToolActive, 200 );
+    ctxMenu.AddItem( ACTIONS::deleteLastPoint, canUndoPoint, 200 );
+    ctxMenu.AddItem( ACTIONS::arcPosture, arcToolActive, 200 );
     ctxMenu.AddItem( PCB_ACTIONS::spacingIncrease,       tuningToolActive, 200 );
     ctxMenu.AddItem( PCB_ACTIONS::spacingDecrease,       tuningToolActive, 200 );
     ctxMenu.AddItem( PCB_ACTIONS::amplIncrease,          tuningToolActive, 200 );
@@ -593,7 +593,7 @@ int DRAWING_TOOL::DrawArc( const TOOL_EVENT& aEvent )
     std::unique_ptr<PCB_SHAPE> arc = std::make_unique<PCB_SHAPE>( parent );
     BOARD_COMMIT            commit( m_frame );
     SCOPED_DRAW_MODE        scopedDrawMode( m_mode, MODE::ARC );
-    std::vector<VECTOR2D>   initialPts;
+    std::vector<VECTOR2D>      initialPts;
 
     arc->SetShape( SHAPE_T::ARC );
     arc->SetFlags( IS_NEW );
@@ -638,10 +638,10 @@ int DRAWING_TOOL::DrawEllipseArc( const TOOL_EVENT& aEvent )
 
     REENTRANCY_GUARD guard( &m_inDrawingTool );
 
-    BOARD_ITEM*             parent = m_frame->GetModel();
+    BOARD_ITEM*                parent = m_frame->GetModel();
     std::unique_ptr<PCB_SHAPE> arc = std::make_unique<PCB_SHAPE>( parent );
     BOARD_COMMIT            commit( m_frame );
-    std::vector<VECTOR2D>   initialPts;
+    std::vector<VECTOR2D>      initialPts;
 
     arc->SetShape( SHAPE_T::ELLIPSE_ARC );
     arc->SetFlags( IS_NEW );
@@ -686,11 +686,11 @@ int DRAWING_TOOL::DrawBezier( const TOOL_EVENT& aEvent )
 
     REENTRANCY_GUARD guard( &m_inDrawingTool );
 
-    BOARD_ITEM*               parent = m_frame->GetModel();
+    BOARD_ITEM*                parent = m_frame->GetModel();
     std::unique_ptr<PCB_SHAPE> bezier = std::make_unique<PCB_SHAPE>( parent );
-    BOARD_COMMIT              commit( m_frame );
-    SCOPED_DRAW_MODE          scopedDrawMode( m_mode, MODE::BEZIER );
-    std::vector<VECTOR2D>     initialPts;
+    BOARD_COMMIT               commit( m_frame );
+    SCOPED_DRAW_MODE           scopedDrawMode( m_mode, MODE::BEZIER );
+    std::vector<VECTOR2D>      initialPts;
 
     bezier->SetShape( SHAPE_T::BEZIER );
     bezier->SetFlags( IS_NEW );
@@ -714,8 +714,7 @@ int DRAWING_TOOL::DrawBezier( const TOOL_EVENT& aEvent )
             // If the last control arm is non-zero, mirror it for tangent continuity
             if( bezier->GetEnd() != bezier->GetBezierC2() )
             {
-                VECTOR2D mirroredC1 = bezier->GetEnd()
-                                      - ( bezier->GetBezierC2() - bezier->GetEnd() );
+                VECTOR2D mirroredC1 = bezier->GetEnd() - ( bezier->GetBezierC2() - bezier->GetEnd() );
                 initialPts.push_back( mirroredC1 );
             }
 
@@ -2913,8 +2912,7 @@ bool DRAWING_TOOL::drawShape( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
                 m_view->Update( &twoPointAsst );
             }
         }
-        else if( started && (   evt->IsAction( &PCB_ACTIONS::doDelete )
-                             || evt->IsAction( &ACTIONS::deleteLastPoint ) ) )
+        else if( started && ( evt->IsAction( &PCB_ACTIONS::doDelete ) || evt->IsAction( &ACTIONS::deleteLastPoint ) ) )
         {
             if( aCommittedGraphics && !aCommittedGraphics->empty() )
             {
@@ -3015,8 +3013,7 @@ bool DRAWING_TOOL::drawShape( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
 
 
 bool DRAWING_TOOL::drawManagedShape( const TOOL_EVENT& aTool, std::unique_ptr<PCB_SHAPE>& aGraphic,
-                                     SHAPE_DRAW_BEHAVIOR& aBehavior,
-                                     const std::vector<VECTOR2D>& aInitialPts )
+                                     SHAPE_DRAW_BEHAVIOR& aBehavior, const std::vector<VECTOR2D>& aInitialPts )
 {
     if( !aGraphic )
         return false;
@@ -3326,8 +3323,6 @@ bool DRAWING_TOOL::drawManagedShape( const TOOL_EVENT& aTool, std::unique_ptr<PC
 }
 
 
-
-
 bool DRAWING_TOOL::getSourceZoneForAction( ZONE_MODE aMode, ZONE** aZone )
 {
     bool clearSelection = false;
@@ -3559,9 +3554,9 @@ int DRAWING_TOOL::DrawZone( const TOOL_EVENT& aEvent )
                 }
             }
         }
-        else if( started && (   evt->IsAction( &ACTIONS::deleteLastPoint )
-                             || evt->IsAction( &ACTIONS::doDelete )
-                             || evt->IsAction( &ACTIONS::undo ) ) )
+        else if( started
+                 && ( evt->IsAction( &ACTIONS::deleteLastPoint ) || evt->IsAction( &ACTIONS::doDelete )
+                      || evt->IsAction( &ACTIONS::undo ) ) )
         {
             // Snap guides persist in the grid helper until the tool exits, so dropping a corner
             // must clear them or they linger on screen.

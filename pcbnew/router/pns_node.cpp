@@ -1071,10 +1071,9 @@ void NODE::Remove( LINE& aLine )
 }
 
 
-void NODE::followLine( LINKED_ITEM* aCurrent, bool aScanDirection, int& aPos, int aLimit,
-                       VECTOR2I* aCorners, LINKED_ITEM** aSegments, bool* aArcReversed,
-                       bool& aGuardHit, bool aStopAtLockedJoints, bool aFollowLockedSegments,
-                       bool aAllowSegmentSizeMismatch )
+void NODE::followLine( LINKED_ITEM* aCurrent, bool aScanDirection, int& aPos, int aLimit, VECTOR2I* aCorners,
+                       LINKED_ITEM** aSegments, bool* aArcReversed, bool& aGuardHit, bool aStopAtLockedJoints,
+                       bool aFollowLockedSegments, bool aAllowSegmentSizeMismatch )
 {
     bool prevReversed = false;
 
@@ -1151,13 +1150,13 @@ const LINE NODE::AssembleLine( LINKED_ITEM* aSeg, int* aOriginSegmentIndex, bool
     pl.SetSourceItem( aSeg->GetSourceItem() );
     pl.SetOwner( this );
 
-    followLine( aSeg, false, i_start, MaxVerts, corners.data(), segs.data(), arcReversed.data(),
-                guardHit, aStopAtLockedJoints, aFollowLockedSegments, aAllowSegmentSizeMismatch );
+    followLine( aSeg, false, i_start, MaxVerts, corners.data(), segs.data(), arcReversed.data(), guardHit,
+                aStopAtLockedJoints, aFollowLockedSegments, aAllowSegmentSizeMismatch );
 
     if( !guardHit )
     {
-        followLine( aSeg, true, i_end, MaxVerts, corners.data(), segs.data(), arcReversed.data(),
-                    guardHit, aStopAtLockedJoints, aFollowLockedSegments, aAllowSegmentSizeMismatch );
+        followLine( aSeg, true, i_end, MaxVerts, corners.data(), segs.data(), arcReversed.data(), guardHit,
+                    aStopAtLockedJoints, aFollowLockedSegments, aAllowSegmentSizeMismatch );
     }
 
     int n = 0;

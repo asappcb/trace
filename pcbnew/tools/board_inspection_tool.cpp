@@ -1208,108 +1208,105 @@ void BOARD_INSPECTION_TOOL::reportClearance( BOARD_ITEM* aItemA, BOARD_ITEM* aIt
                 layers.push_back( layer );
         }
 
-        auto fillReport =
-                [&]( PCB_LAYER_ID layer, REPORTER* rep )
-                {
-                    reportHeader( _( "Clearance resolution for:" ), a, b, layer, rep );
+        auto fillReport = [&]( PCB_LAYER_ID layer, REPORTER* rep )
+        {
+            reportHeader( _( "Clearance resolution for:" ), a, b, layer, rep );
 
-                    if( sameNet )
-                    {
-                        rep->Report( _( "Items belong to the same net. Min clearance is 0." ) );
-                        return;
-                    }
-
-                    constraint = drcEngine->EvalRules( CLEARANCE_CONSTRAINT, a, b, layer, rep );
-                    clearance = constraint.m_Value.Min();
-
-                    if( compileError )
-                        reportCompileError( rep );
-
-                    rep->Report( "" );
-
-                    if( constraint.IsNull() )
-                    {
-                        rep->Report( _( "Min clearance is 0." ) );
-                    }
-                    else if( clearance < 0 )
-                    {
-                        rep->Report( wxString::Format( _( "Resolved clearance: %s; clearance will "
-                                                          "not be tested." ),
-                                                       m_frame->StringFromValue( clearance, true ) ) );
-                    }
-                    else
-                    {
-                        rep->Report( wxString::Format( _( "Resolved min clearance: %s." ),
-                                                       m_frame->StringFromValue( clearance, true ) ) );
-                    }
-                };
-
-                if( layers.size() == 1 )
-                {
-                    PCB_LAYER_ID layer = layers.front();
-
-                    r = dialog->AddHTMLPage( m_frame->GetBoard()->GetLayerName( layer ) );
-                    fillReport( layer, r );
-                    r->Flush();
-                }
-                else
-                {
-                    auto perLayerMessages = std::make_shared<std::vector<std::vector<wxString>>>();
-                    perLayerMessages->reserve( layers.size() );
-
-                    for( PCB_LAYER_ID layer : layers )
-                    {
-                        VECTOR_REPORTER tmp;
-                        fillReport( layer, &tmp );
-                        perLayerMessages->push_back( std::move( tmp.m_messages ) );
-                    }
-
-                    wxPanel*    panel = dialog->AddBlankPage( _( "Clearance" ) );
-                    wxBoxSizer* vbox = new wxBoxSizer( wxVERTICAL );
-
-                    wxChoice* choice = new wxChoice( panel, wxID_ANY );
-
-                    for( PCB_LAYER_ID layer : layers )
-                        choice->Append( m_frame->GetBoard()->GetLayerName( layer ) );
-
-                    choice->SetSelection( 0 );
-
-                    WX_HTML_REPORT_BOX* reportBox = new WX_HTML_REPORT_BOX( panel, wxID_ANY, wxDefaultPosition,
-                                                                            wxDefaultSize,
-                                                                            wxHW_SCROLLBAR_AUTO | wxBORDER_SIMPLE );
-                    reportBox->SetUnits( m_frame->GetUserUnits() );
-
-                    wxStaticText* layerLabel = new wxStaticText( panel, wxID_ANY, _( "Layer:" ) );
-
-                    vbox->Add( layerLabel, 0, wxLEFT | wxRIGHT | wxTOP, 5 );
-                    vbox->Add( choice, 0, wxEXPAND | wxALL, 5 );
-                    vbox->Add( reportBox, 1, wxEXPAND | wxALL, 5 );
-                    panel->SetSizer( vbox );
-                    panel->Layout();
-
-                    auto refresh =
-                            [reportBox, perLayerMessages]( int sel )
-                            {
-                                reportBox->Clear();
-
-                                if( sel >= 0 && sel < (int) perLayerMessages->size() )
-                                {
-                                    for( const wxString& line : ( *perLayerMessages )[sel] )
-                                        reportBox->Report( line );
-                                }
-
-                                reportBox->Flush();
-                            };
-
-                            choice->Bind( wxEVT_CHOICE,
-                                          [refresh]( wxCommandEvent& evt )
-                                          {
-                                              refresh( evt.GetSelection() );
-                                          } );
-
-                            refresh( 0 );
-                        }
+            if( sameNet )
+            {
+                rep->Report( _( "Items belong to the same net. Min clearance is 0." ) );
+                return;
             }
+
+            constraint = drcEngine->EvalRules( CLEARANCE_CONSTRAINT, a, b, layer, rep );
+            clearance = constraint.m_Value.Min();
+
+            if( compileError )
+                reportCompileError( rep );
+
+            rep->Report( "" );
+
+            if( constraint.IsNull() )
+            {
+                rep->Report( _( "Min clearance is 0." ) );
+            }
+            else if( clearance < 0 )
+            {
+                rep->Report( wxString::Format( _( "Resolved clearance: %s; clearance will "
+                                                  "not be tested." ),
+                                               m_frame->StringFromValue( clearance, true ) ) );
+            }
+            else
+            {
+                rep->Report( wxString::Format( _( "Resolved min clearance: %s." ),
+                                               m_frame->StringFromValue( clearance, true ) ) );
+            }
+        };
+
+        if( layers.size() == 1 )
+        {
+            PCB_LAYER_ID layer = layers.front();
+
+            r = dialog->AddHTMLPage( m_frame->GetBoard()->GetLayerName( layer ) );
+            fillReport( layer, r );
+            r->Flush();
+        }
+        else
+        {
+            auto perLayerMessages = std::make_shared<std::vector<std::vector<wxString>>>();
+            perLayerMessages->reserve( layers.size() );
+
+            for( PCB_LAYER_ID layer : layers )
+            {
+                VECTOR_REPORTER tmp;
+                fillReport( layer, &tmp );
+                perLayerMessages->push_back( std::move( tmp.m_messages ) );
+            }
+
+            wxPanel*    panel = dialog->AddBlankPage( _( "Clearance" ) );
+            wxBoxSizer* vbox = new wxBoxSizer( wxVERTICAL );
+
+            wxChoice* choice = new wxChoice( panel, wxID_ANY );
+
+            for( PCB_LAYER_ID layer : layers )
+                choice->Append( m_frame->GetBoard()->GetLayerName( layer ) );
+
+            choice->SetSelection( 0 );
+
+            WX_HTML_REPORT_BOX* reportBox = new WX_HTML_REPORT_BOX( panel, wxID_ANY, wxDefaultPosition, wxDefaultSize,
+                                                                    wxHW_SCROLLBAR_AUTO | wxBORDER_SIMPLE );
+            reportBox->SetUnits( m_frame->GetUserUnits() );
+
+            wxStaticText* layerLabel = new wxStaticText( panel, wxID_ANY, _( "Layer:" ) );
+
+            vbox->Add( layerLabel, 0, wxLEFT | wxRIGHT | wxTOP, 5 );
+            vbox->Add( choice, 0, wxEXPAND | wxALL, 5 );
+            vbox->Add( reportBox, 1, wxEXPAND | wxALL, 5 );
+            panel->SetSizer( vbox );
+            panel->Layout();
+
+            auto refresh = [reportBox, perLayerMessages]( int sel )
+            {
+                reportBox->Clear();
+
+                if( sel >= 0 && sel < (int) perLayerMessages->size() )
+                {
+                    for( const wxString& line : ( *perLayerMessages )[sel] )
+                        reportBox->Report( line );
+                }
+
+                reportBox->Flush();
+            };
+
+            choice->Bind( wxEVT_CHOICE,
+                          [refresh]( wxCommandEvent& evt )
+                          {
+                              refresh( evt.GetSelection() );
+                          } );
+
+            refresh( 0 );
+        }
+    }
 
     if( ac && bc )
     {
@@ -2010,35 +2007,34 @@ PCB_DIFF_VIEW buildPcbDiffView( BOARD* aLive, BOARD* aOther, const wxString& aOt
     std::map<KIID, KIGFX::COLOR4D>       compOverrides;
     std::map<KIID, KICAD_DIFF::CATEGORY> kiidCategories;
 
-    std::function<void( const KICAD_DIFF::ITEM_CHANGE& )> collect =
-            [&]( const KICAD_DIFF::ITEM_CHANGE& aChange )
+    std::function<void( const KICAD_DIFF::ITEM_CHANGE& )> collect = [&]( const KICAD_DIFF::ITEM_CHANGE& aChange )
+    {
+        if( !aChange.id.empty() )
+        {
+            const KIID& kiid = aChange.id.back();
+            kiidCategories[kiid] = KICAD_DIFF::CategoryFor( aChange.kind );
+
+            switch( aChange.kind )
             {
-                if( !aChange.id.empty() )
-                {
-                    const KIID& kiid = aChange.id.back();
-                    kiidCategories[kiid] = KICAD_DIFF::CategoryFor( aChange.kind );
+            case KICAD_DIFF::CHANGE_KIND::ADDED: compOverrides[kiid] = theme.added; break;
+            case KICAD_DIFF::CHANGE_KIND::REMOVED:
+                refOverrides[kiid] = theme.removed;
+                compOverrides[kiid] = theme.removed;
+                break;
+            case KICAD_DIFF::CHANGE_KIND::MODIFIED:
+                refOverrides[kiid] = theme.modified;
+                compOverrides[kiid] = theme.modified;
+                break;
+            default:
+                refOverrides[kiid] = theme.conflict;
+                compOverrides[kiid] = theme.conflict;
+                break;
+            }
+        }
 
-                    switch( aChange.kind )
-                    {
-                    case KICAD_DIFF::CHANGE_KIND::ADDED: compOverrides[kiid] = theme.added; break;
-                    case KICAD_DIFF::CHANGE_KIND::REMOVED:
-                        refOverrides[kiid] = theme.removed;
-                        compOverrides[kiid] = theme.removed;
-                        break;
-                    case KICAD_DIFF::CHANGE_KIND::MODIFIED:
-                        refOverrides[kiid] = theme.modified;
-                        compOverrides[kiid] = theme.modified;
-                        break;
-                    default:
-                        refOverrides[kiid] = theme.conflict;
-                        compOverrides[kiid] = theme.conflict;
-                        break;
-                    }
-                }
-
-                for( const KICAD_DIFF::ITEM_CHANGE& child : aChange.children )
-                    collect( child );
-            };
+        for( const KICAD_DIFF::ITEM_CHANGE& child : aChange.children )
+            collect( child );
+    };
 
     for( const KICAD_DIFF::ITEM_CHANGE& change : view.result.changes )
         collect( change );
@@ -2074,13 +2070,12 @@ PCB_DIFF_VIEW buildPcbDiffView( BOARD* aLive, BOARD* aOther, const wxString& aOt
         }
     }
 
-    view.switcher =
-            [other = aOther, color = theme.modified, overrides = compOverrides, extras = std::move( extraItems ),
-             categories = kiidCategories] ( WIDGET_DIFF_CANVAS& aCanvas, const KIID_PATH& )
-            {
-                KICAD_DIFF::ConfigurePcbDiffCanvasContext( aCanvas, nullptr, other, color, overrides, extras,
-                                                           categories );
-            };
+    view.switcher = [other = aOther, color = theme.modified, overrides = compOverrides,
+                     extras = std::move( extraItems ),
+                     categories = kiidCategories]( WIDGET_DIFF_CANVAS& aCanvas, const KIID_PATH& )
+    {
+        KICAD_DIFF::ConfigurePcbDiffCanvasContext( aCanvas, nullptr, other, color, overrides, extras, categories );
+    };
 
     return view;
 }
@@ -2238,119 +2233,116 @@ int BOARD_INSPECTION_TOOL::CompareBoardWithHistory( const TOOL_EVENT& aEvent )
     PROJECT*               curPrj = nullptr;
     wxString               curTempDir;
 
-    auto cleanupCurrent =
-            [&]()
-            {
-                if( curBoard )
-                {
-                    curBoard->ClearProject();
-                    curBoard.reset();
-                }
+    auto cleanupCurrent = [&]()
+    {
+        if( curBoard )
+        {
+            curBoard->ClearProject();
+            curBoard.reset();
+        }
 
-                // Skip if the project was already evicted from the manager.
-                if( curPrj && mgr->IsProjectLoaded( curPrj ) )
-                    mgr->UnloadProject( curPrj, false );
+        // Skip if the project was already evicted from the manager.
+        if( curPrj && mgr->IsProjectLoaded( curPrj ) )
+            mgr->UnloadProject( curPrj, false );
 
-                curPrj = nullptr;
+        curPrj = nullptr;
 
-                if( !curTempDir.IsEmpty() )
-                {
-                    wxFileName::Rmdir( curTempDir, wxPATH_RMDIR_RECURSIVE );
-                    curTempDir.Clear();
-                }
-            };
+        if( !curTempDir.IsEmpty() )
+        {
+            wxFileName::Rmdir( curTempDir, wxPATH_RMDIR_RECURSIVE );
+            curTempDir.Clear();
+        }
+    };
 
     // Extract + load snapshot aIndex into the out-params. Cleans up its own temp
     // on any failure.
-    auto loadRevision =
-            [&]( int aIndex, std::unique_ptr<BOARD>& aBoard, PROJECT*& aPrj, wxString& aTempDir ) -> bool
-            {
-                const wxString hash = snapshots[aIndex].hash;
-                wxFileName     dirFn;
-                dirFn.AssignDir( wxFileName::GetTempDir() );
-                dirFn.AppendDir( wxS( "kicad-history-" ) + hash.Left( 8 ) );
-                const wxString tempDir = dirFn.GetPath();
+    auto loadRevision = [&]( int aIndex, std::unique_ptr<BOARD>& aBoard, PROJECT*& aPrj, wxString& aTempDir ) -> bool
+    {
+        const wxString hash = snapshots[aIndex].hash;
+        wxFileName     dirFn;
+        dirFn.AssignDir( wxFileName::GetTempDir() );
+        dirFn.AppendDir( wxS( "kicad-history-" ) + hash.Left( 8 ) );
+        const wxString tempDir = dirFn.GetPath();
 
-                // Extract just the board and project file (its real net classes and
-                // design settings), skipping the schematic, 3D models, gerbers, etc.
-                if( !history.ExtractAllFilesAtCommit( projectPath, hash, tempDir,
-                                                      { wxS( ".kicad_pcb" ), wxS( ".kicad_pro" ) } ) )
-                {
-                    wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
-                    return false;
-                }
+        // Extract just the board and project file (its real net classes and
+        // design settings), skipping the schematic, 3D models, gerbers, etc.
+        if( !history.ExtractAllFilesAtCommit( projectPath, hash, tempDir,
+                                              { wxS( ".kicad_pcb" ), wxS( ".kicad_pro" ) } ) )
+        {
+            wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
+            return false;
+        }
 
-                const wxString boardPath = tempDir + wxS( "/" ) + relPath;
-                const wxString proPath = tempDir + wxS( "/" ) + projRel;
+        const wxString boardPath = tempDir + wxS( "/" ) + relPath;
+        const wxString proPath = tempDir + wxS( "/" ) + projRel;
 
-                mgr->LoadProject( proPath, false );
-                PROJECT* prj = mgr->GetProject( proPath );
+        mgr->LoadProject( proPath, false );
+        PROJECT* prj = mgr->GetProject( proPath );
 
-                if( !prj )
-                {
-                    wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
-                    return false;
-                }
+        if( !prj )
+        {
+            wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
+            return false;
+        }
 
-                BOARD_LOADER::OPTIONS loadOptions;
-                loadOptions.initialize_after_load = false;
+        BOARD_LOADER::OPTIONS loadOptions;
+        loadOptions.initialize_after_load = false;
 
-                std::unique_ptr<BOARD> loaded;
+        std::unique_ptr<BOARD> loaded;
 
-                try
-                {
-                    loaded = BOARD_LOADER::Load( boardPath,
-                                                 PCB_IO_MGR::FindPluginTypeFromBoardPath( boardPath, KICTL_KICAD_ONLY ),
-                                                 prj, loadOptions );
-                }
-                catch( ... )
-                {
-                    // A historical board may be malformed or in a format this build cannot parse. Skip it
-                    // rather than letting the throw escape.
-                    mgr->UnloadProject( prj, false );
-                    wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
-                    return false;
-                }
+        try
+        {
+            loaded = BOARD_LOADER::Load( boardPath,
+                                         PCB_IO_MGR::FindPluginTypeFromBoardPath( boardPath, KICTL_KICAD_ONLY ), prj,
+                                         loadOptions );
+        }
+        catch( ... )
+        {
+            // A historical board may be malformed or in a format this build cannot parse. Skip it
+            // rather than letting the throw escape.
+            mgr->UnloadProject( prj, false );
+            wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
+            return false;
+        }
 
-                if( !loaded )
-                {
-                    mgr->UnloadProject( prj, false );
-                    wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
-                    return false;
-                }
+        if( !loaded )
+        {
+            mgr->UnloadProject( prj, false );
+            wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
+            return false;
+        }
 
-                aBoard = std::move( loaded );
-                aPrj = prj;
-                aTempDir = tempDir;
-                return true;
-            };
+        aBoard = std::move( loaded );
+        aPrj = prj;
+        aTempDir = tempDir;
+        return true;
+    };
 
     // Load a revision and build its diff view, guarding both the parse and the
     // diff so a bad snapshot is skipped instead of crashing.
-    auto loadView =
-            [&]( int aIndex, std::unique_ptr<BOARD>& aBoard, PROJECT*& aPrj, wxString& aTempDir,
-                 PCB_DIFF_VIEW& aView ) -> bool
-            {
-                if( !loadRevision( aIndex, aBoard, aPrj, aTempDir ) )
-                    return false;
+    auto loadView = [&]( int aIndex, std::unique_ptr<BOARD>& aBoard, PROJECT*& aPrj, wxString& aTempDir,
+                         PCB_DIFF_VIEW& aView ) -> bool
+    {
+        if( !loadRevision( aIndex, aBoard, aPrj, aTempDir ) )
+            return false;
 
-                try
-                {
-                    aView = buildPcbDiffView( liveBoard, aBoard.get(), aTempDir + wxS( "/" ) + relPath );
-                }
-                catch( ... )
-                {
-                    aBoard->ClearProject();
-                    aBoard.reset();
-                    mgr->UnloadProject( aPrj, false );
-                    aPrj = nullptr;
-                    wxFileName::Rmdir( aTempDir, wxPATH_RMDIR_RECURSIVE );
-                    aTempDir.Clear();
-                    return false;
-                }
+        try
+        {
+            aView = buildPcbDiffView( liveBoard, aBoard.get(), aTempDir + wxS( "/" ) + relPath );
+        }
+        catch( ... )
+        {
+            aBoard->ClearProject();
+            aBoard.reset();
+            mgr->UnloadProject( aPrj, false );
+            aPrj = nullptr;
+            wxFileName::Rmdir( aTempDir, wxPATH_RMDIR_RECURSIVE );
+            aTempDir.Clear();
+            return false;
+        }
 
-                return true;
-            };
+        return true;
+    };
 
     PCB_DIFF_VIEW view;
     int           startIndex = 0;

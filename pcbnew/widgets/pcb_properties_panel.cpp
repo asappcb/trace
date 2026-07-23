@@ -1005,9 +1005,18 @@ void PCB_PROPERTIES_PANEL::valueChanged( wxPropertyGridEvent& aEvent )
 
                 PCB_CONSTRAINT* driving = SetDimensionValueMode(
                         board, dim, mode, length, overrideText,
-                        [&]( BOARD_ITEM* aItem ) { changes.Modify( aItem ); },
-                        [&]( BOARD_ITEM* aItem ) { changes.Add( aItem ); },
-                        [&]( BOARD_ITEM* aItem ) { changes.Remove( aItem ); } );
+                        [&]( BOARD_ITEM* aItem )
+                        {
+                            changes.Modify( aItem );
+                        },
+                        [&]( BOARD_ITEM* aItem )
+                        {
+                            changes.Add( aItem );
+                        },
+                        [&]( BOARD_ITEM* aItem )
+                        {
+                            changes.Remove( aItem );
+                        } );
 
                 if( driving )
                     drivingConstraints.push_back( driving );
@@ -1019,8 +1028,8 @@ void PCB_PROPERTIES_PANEL::valueChanged( wxPropertyGridEvent& aEvent )
             {
                 // Parsed in dimension own units to match display validator already blocked
                 // non positive entries other selected dims failing parse left unchanged
-                double iu = EDA_UNIT_UTILS::UI::DoubleValueFromString( pcbIUScale, dim->GetUnits(),
-                                                                       newValue.GetString() );
+                double iu =
+                        EDA_UNIT_UTILS::UI::DoubleValueFromString( pcbIUScale, dim->GetUnits(), newValue.GetString() );
 
                 if( iu > 0.0 )
                 {

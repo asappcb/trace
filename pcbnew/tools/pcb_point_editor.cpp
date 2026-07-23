@@ -2910,24 +2910,23 @@ void PCB_POINT_EDITOR::updateItem( BOARD_COMMIT& aCommit )
     // Re-derive any geometry constrained to the dragged segment endpoint (issue #2329).  The
     // behavior above has already moved the dragged point to the cursor, so its current endpoint
     // position is the pin target for the solver.
-    auto anyConstraints =
-            [&]() -> bool
-            {
-                if( !board() )
-                    return false;
+    auto anyConstraints = [&]() -> bool
+    {
+        if( !board() )
+            return false;
 
-                if( !board()->Constraints().empty() )
-                    return true;
+        if( !board()->Constraints().empty() )
+            return true;
 
-                // In the footprint editor the constraints live on the footprint, not the board.
-                for( FOOTPRINT* fp : board()->Footprints() )
-                {
-                    if( !fp->Constraints().empty() )
-                        return true;
-                }
+        // In the footprint editor the constraints live on the footprint, not the board.
+        for( FOOTPRINT* fp : board()->Footprints() )
+        {
+            if( !fp->Constraints().empty() )
+                return true;
+        }
 
-                return false;
-            };
+        return false;
+    };
 
     if( item->Type() == PCB_SHAPE_T && m_editedPoint && anyConstraints() )
     {
@@ -3455,9 +3454,16 @@ int PCB_POINT_EDITOR::addCorner( const TOOL_EVENT& aEvent )
         // past new vertex issue 2329 members only exist on hole free polys index past outline count is a hole vertex
         if( graphicItem && nextNearestIdx < (unsigned) zoneOutline->COutline( 0 ).PointCount() )
         {
-            RemapPolygonVertexMembers( frame->GetBoard(), graphicItem->m_Uuid, (int) nextNearestIdx, 1,
-                                       [&]( BOARD_ITEM* aConstraint ) { commit.Modify( aConstraint ); },
-                                       [&]( BOARD_ITEM* aConstraint ) { commit.Remove( aConstraint ); } );
+            RemapPolygonVertexMembers(
+                    frame->GetBoard(), graphicItem->m_Uuid, (int) nextNearestIdx, 1,
+                    [&]( BOARD_ITEM* aConstraint )
+                    {
+                        commit.Modify( aConstraint );
+                    },
+                    [&]( BOARD_ITEM* aConstraint )
+                    {
+                        commit.Remove( aConstraint );
+                    } );
         }
 
         if( item->Type() == PCB_ZONE_T )
@@ -3569,9 +3575,16 @@ int PCB_POINT_EDITOR::removeCorner( const TOOL_EVENT& aEvent )
             // index removed vertex member retires its constraint later ordinals shift down issue 2329
             if( item->Type() == PCB_SHAPE_T && vertexIdx.m_contour == 0 )
             {
-                RemapPolygonVertexMembers( frame->GetBoard(), item->m_Uuid, vertexIdx.m_vertex, -1,
-                                           [&]( BOARD_ITEM* aConstraint ) { commit.Modify( aConstraint ); },
-                                           [&]( BOARD_ITEM* aConstraint ) { commit.Remove( aConstraint ); } );
+                RemapPolygonVertexMembers(
+                        frame->GetBoard(), item->m_Uuid, vertexIdx.m_vertex, -1,
+                        [&]( BOARD_ITEM* aConstraint )
+                        {
+                            commit.Modify( aConstraint );
+                        },
+                        [&]( BOARD_ITEM* aConstraint )
+                        {
+                            commit.Remove( aConstraint );
+                        } );
             }
         }
         else
@@ -3690,8 +3703,14 @@ int PCB_POINT_EDITOR::chamferCorner( const TOOL_EVENT& aEvent )
             // first threshold nearestIdx plus 1 deleting first nets negative one instead issue 2329
             if( item->Type() == PCB_SHAPE_T && nearestIdx < (unsigned) polygon->COutline( 0 ).PointCount() )
             {
-                auto modify = [&]( BOARD_ITEM* aConstraint ) { commit.Modify( aConstraint ); };
-                auto remove = [&]( BOARD_ITEM* aConstraint ) { commit.Remove( aConstraint ); };
+                auto modify = [&]( BOARD_ITEM* aConstraint )
+                {
+                    commit.Modify( aConstraint );
+                };
+                auto remove = [&]( BOARD_ITEM* aConstraint )
+                {
+                    commit.Remove( aConstraint );
+                };
 
                 RemapPolygonVertexMembers( frame->GetBoard(), item->m_Uuid, (int) nearestIdx + 1, 2, modify, remove );
                 RemapPolygonVertexMembers( frame->GetBoard(), item->m_Uuid, (int) nearestIdx, -1, modify, remove );

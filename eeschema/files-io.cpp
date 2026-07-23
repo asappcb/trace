@@ -1610,8 +1610,7 @@ bool SCH_EDIT_FRAME::importFile( const wxString& aFileName, int aFileType,
                     std::vector<wxString> sourceFpLibs;
                     IMPORT_PROJ_PROPS::ReadFootprintProps( aProperties, cacheNick, sourceFpLibs );
 
-                    SCH_FOOTPRINT_FIELD_RECONCILER fpReconciler( cacheNick, sourceFpLibs,
-                                                                 &loadReporter );
+                    SCH_FOOTPRINT_FIELD_RECONCILER fpReconciler( cacheNick, sourceFpLibs, &loadReporter );
                     fpReconciler.Reconcile( Schematic() );
                 }
 

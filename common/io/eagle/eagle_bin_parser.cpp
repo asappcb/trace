@@ -106,12 +106,12 @@ namespace
 {
 enum ATTR_TYPE
 {
-    T_BMB, // bit-mask-bool: apply mask in len to byte at offs, result is a boolean
-    T_UBF, // unsigned bitfield, len is a BITFIELD() descriptor
-    T_INT, // signed little-endian integer
+    T_BMB,  // bit-mask-bool: apply mask in len to byte at offs, result is a boolean
+    T_UBF,  // unsigned bitfield, len is a BITFIELD() descriptor
+    T_INT,  // signed little-endian integer
     T_UINT, // unsigned little-endian integer
-    T_DBL, // 8-byte IEEE double
-    T_STR  // fixed-length NUL-padded string
+    T_DBL,  // 8-byte IEEE double
+    T_STR   // fixed-length NUL-padded string
 };
 
 enum SS_TYPE
@@ -2755,7 +2755,7 @@ void EAGLE_BIN_PARSER::renameSchSections( EGB_NODE* aSchematic )
                 case EGKW_SECT_SCHEMANET:      aNode->name = wxS( "net" );        break;
                 case EGKW_SECT_PACKAGEVARIANT: aNode->name = wxS( "device" );     break;
                 // segment reader wants <label> not <netbuslabel> or it gets dropped
-                case EGKW_SECT_NETBUSLABEL:    aNode->name = wxS( "label" );      break;
+                case EGKW_SECT_NETBUSLABEL: aNode->name = wxS( "label" ); break;
                 default:
                     if( aNode->name == wxS( "variants" ) )
                         aNode->name = wxS( "devices" );

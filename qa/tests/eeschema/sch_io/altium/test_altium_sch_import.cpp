@@ -67,15 +67,12 @@ struct ALTIUM_SCH_IMPORT_FIXTURE
 
     wxString ticket1303DataFile( const wxString& aName ) const
     {
-        return wxString::FromUTF8( KI_TEST::GetEeschemaTestDataDir()
-                                   + "/plugins/altium/ticket1303/" )
-               + aName;
+        return wxString::FromUTF8( KI_TEST::GetEeschemaTestDataDir() + "/plugins/altium/ticket1303/" ) + aName;
     }
 
     wxString eDPAdapterDataFile( const wxString& aName ) const
     {
-        return wxString::FromUTF8( KI_TEST::GetTestDataRootDir()
-                                   + "pcbnew/plugins/altium/eDP_adapter_dvt1_source/" )
+        return wxString::FromUTF8( KI_TEST::GetTestDataRootDir() + "pcbnew/plugins/altium/eDP_adapter_dvt1_source/" )
                + aName;
     }
 
@@ -203,8 +200,8 @@ BOOST_AUTO_TEST_CASE( Ticket1303_MultiPageBlock )
 {
     SCH_IO_ALTIUM plugin;
 
-    SCH_SHEET* rootSheet = plugin.LoadSchematicFile( ticket1303DataFile( wxT( "overview.SchDoc" ) ),
-                                                     &m_schematic, nullptr, nullptr );
+    SCH_SHEET* rootSheet =
+            plugin.LoadSchematicFile( ticket1303DataFile( wxT( "overview.SchDoc" ) ), &m_schematic, nullptr, nullptr );
     BOOST_REQUIRE( rootSheet );
     BOOST_REQUIRE( rootSheet->GetScreen() );
 
@@ -269,12 +266,10 @@ BOOST_AUTO_TEST_CASE( Ticket1303_MultiPageBlock )
                 foundSigLabel = true;
         }
 
-        BOOST_CHECK_MESSAGE( foundSigLabel,
-                             "Pruned sheet pin must survive as a hierarchical label" );
+        BOOST_CHECK_MESSAGE( foundSigLabel, "Pruned sheet pin must survive as a hierarchical label" );
     }
 
-    BOOST_CHECK_MESSAGE( foundMergedScreen,
-                         "Both pages of the multi-file sheet symbol must load into one screen" );
+    BOOST_CHECK_MESSAGE( foundMergedScreen, "Both pages of the multi-file sheet symbol must load into one screen" );
 }
 
 
@@ -288,8 +283,7 @@ BOOST_AUTO_TEST_CASE( Issue24843_SymbolOrientationMatchesAltium )
 {
     SCH_IO_ALTIUM plugin;
 
-    SCH_SHEET* rootSheet = plugin.LoadSchematicFile( eDPAdapterDataFile( "power.SchDoc" ),
-                                                     &m_schematic );
+    SCH_SHEET* rootSheet = plugin.LoadSchematicFile( eDPAdapterDataFile( "power.SchDoc" ), &m_schematic );
     BOOST_REQUIRE( rootSheet );
 
     m_schematic.RefreshHierarchy();
@@ -319,9 +313,8 @@ BOOST_AUTO_TEST_CASE( Issue24843_SymbolOrientationMatchesAltium )
     for( const auto& [ref, angle] : expected )
     {
         BOOST_REQUIRE_MESSAGE( actual.count( ref ), "Symbol '" << ref << "' not found on import" );
-        BOOST_CHECK_MESSAGE( actual.at( ref ) == angle,
-                             "Symbol '" << ref << "' imported with orientation " << actual.at( ref )
-                                        << ", expected " << angle );
+        BOOST_CHECK_MESSAGE( actual.at( ref ) == angle, "Symbol '" << ref << "' imported with orientation "
+                                                                   << actual.at( ref ) << ", expected " << angle );
     }
 }
 

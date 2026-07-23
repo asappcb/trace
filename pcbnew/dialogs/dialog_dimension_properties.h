@@ -94,10 +94,10 @@ private:
     wxTextCtrl*             m_txtValueActual;      // The active value control
 
     // Units the value field is shown in captured on open not reformatted when units dropdown changes
-    EDA_UNITS               m_valueFieldUnits;
+    EDA_UNITS m_valueFieldUnits;
 
     // True when choice includes Driving entry with both endpoints bound indices shift when absent
-    bool                    m_valueModeHasDriving = false;
+    bool m_valueModeHasDriving = false;
 
     UNIT_BINDER             m_textWidth;
     UNIT_BINDER             m_textHeight;

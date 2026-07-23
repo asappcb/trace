@@ -2524,8 +2524,7 @@ std::vector<std::unique_ptr<BOARD_ITEM>> BOARD_BUILDER::buildPadItems( const BLK
 
             if( !shapeData )
             {
-                wxLogTrace( traceAllegroBuilder,
-                            "Padstack %s: SHAPE_SYMBOL on layer %zu has no 0x28 shape at %#010x",
+                wxLogTrace( traceAllegroBuilder, "Padstack %s: SHAPE_SYMBOL on layer %zu has no 0x28 shape at %#010x",
                             padStackName, i, padComp.m_ShapePtr );
                 break;
             }
@@ -3246,8 +3245,7 @@ std::unique_ptr<BOARD_ITEM> BOARD_BUILDER::buildVia( const BLK_0x33_VIA& aViaDat
         const bool touchesOuter = ( startLayer == 0 ) || ( endLayer == totalCu - 1 );
 
         via->SetViaType( touchesOuter ? VIATYPE::BLIND : VIATYPE::BURIED );
-        via->SetLayerPair( nthCopperLayerId( startLayer, totalCu ),
-                           nthCopperLayerId( endLayer, totalCu ) );
+        via->SetLayerPair( nthCopperLayerId( startLayer, totalCu ), nthCopperLayerId( endLayer, totalCu ) );
     }
     else
     {
@@ -3716,8 +3714,7 @@ SHAPE_POLY_SET BOARD_BUILDER::shapeToPolySet( const BLK_0x28_SHAPE& aShape, cons
 }
 
 
-SHAPE_POLY_SET ALLEGRO::BOARD_BUILDER::tryBuildZoneShape( const BLOCK_BASE& aBlock,
-                                                          const TRANSFORM_TRS& aXform ) const
+SHAPE_POLY_SET ALLEGRO::BOARD_BUILDER::tryBuildZoneShape( const BLOCK_BASE& aBlock, const TRANSFORM_TRS& aXform ) const
 {
     SHAPE_POLY_SET polySet;
 

@@ -463,8 +463,7 @@ void CLIPBOARD_IO::SaveSelection( const PCB_SELECTION& aSelected, bool isFootpri
         {
             if( ConstraintFullySelected( constraint, selectedIds ) )
             {
-                std::unique_ptr<PCB_CONSTRAINT> copy(
-                        static_cast<PCB_CONSTRAINT*>( constraint->Clone() ) );
+                std::unique_ptr<PCB_CONSTRAINT> copy( static_cast<PCB_CONSTRAINT*>( constraint->Clone() ) );
                 Format( copy.get() );
             }
         }

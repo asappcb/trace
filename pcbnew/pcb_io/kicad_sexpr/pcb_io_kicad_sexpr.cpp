@@ -434,9 +434,7 @@ void PCB_IO_KICAD_SEXPR::Format( const BOARD_ITEM* aItem ) const
         format( static_cast<const PCB_GENERATOR*>( aItem ) );
         break;
 
-    case PCB_CONSTRAINT_T:
-        format( static_cast<const PCB_CONSTRAINT*>( aItem ) );
-        break;
+    case PCB_CONSTRAINT_T: format( static_cast<const PCB_CONSTRAINT*>( aItem ) ); break;
 
     case PCB_TRACE_T:
     case PCB_ARC_T:
@@ -2764,7 +2762,7 @@ void PCB_IO_KICAD_SEXPR::format( const PCB_CONSTRAINT* aConstraint ) const
         }
     }
 
-    m_out->Print( ")" );        // Close `members` token.
+    m_out->Print( ")" ); // Close `members` token.
 
     if( aConstraint->HasValue() )
     {
@@ -2781,7 +2779,7 @@ void PCB_IO_KICAD_SEXPR::format( const PCB_CONSTRAINT* aConstraint ) const
     if( !aConstraint->IsDriving() )
         KICAD_FORMAT::FormatBool( m_out, "driving", false );
 
-    m_out->Print( ")" );        // Close `constraint` token.
+    m_out->Print( ")" ); // Close `constraint` token.
 }
 
 

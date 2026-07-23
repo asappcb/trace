@@ -2784,7 +2784,7 @@ INSPECT_RESULT FOOTPRINT::Visit( INSPECTOR inspector, void* testData,
 
         case PCB_CONSTRAINT_T:
             if( IterateForward<PCB_CONSTRAINT*>( m_constraints, inspector, testData, { scanType } )
-                    == INSPECT_RESULT::QUIT )
+                == INSPECT_RESULT::QUIT )
             {
                 return INSPECT_RESULT::QUIT;
             }

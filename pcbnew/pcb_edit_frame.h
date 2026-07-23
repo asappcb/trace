@@ -760,8 +760,8 @@ protected:
      * @param aDefinitions are the importer's caller-owned cached library footprints, captured
      *                     during load before the plugin was destroyed.
      */
-    void reconcileImportedFootprintLibraries(
-            std::vector<std::unique_ptr<FOOTPRINT>> aDefinitions, const wxString& aBoardPath );
+    void reconcileImportedFootprintLibraries( std::vector<std::unique_ptr<FOOTPRINT>> aDefinitions,
+                                              const wxString&                         aBoardPath );
 
     /**
      * @brief Save a board object to a file

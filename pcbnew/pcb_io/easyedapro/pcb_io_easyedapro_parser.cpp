@@ -197,8 +197,7 @@ static void AlignText( EDA_TEXT* text, int align )
 }
 
 
-void PCB_IO_EASYEDAPRO_PARSER::FillFootprintModelInfo( FOOTPRINT* footprint,
-                                                       const wxString& modelUuid,
+void PCB_IO_EASYEDAPRO_PARSER::FillFootprintModelInfo( FOOTPRINT* footprint, const wxString& modelUuid,
                                                        const wxString& modelTitle,
                                                        const wxString& modelTransform ) const
 {
@@ -414,8 +413,7 @@ PCB_IO_EASYEDAPRO_PARSER::ParsePoly( BOARD_ITEM_CONTAINER* aContainer, nlohmann:
                 {
                     if( chain.PointCount() > 2 )
                     {
-                        std::unique_ptr<PCB_SHAPE> shape =
-                                std::make_unique<PCB_SHAPE>( aContainer, SHAPE_T::POLY );
+                        std::unique_ptr<PCB_SHAPE> shape = std::make_unique<PCB_SHAPE>( aContainer, SHAPE_T::POLY );
 
                         chain.SetClosed( true );
                         shape->SetFilled( true );

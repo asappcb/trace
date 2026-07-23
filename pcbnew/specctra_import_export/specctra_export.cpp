@@ -1453,7 +1453,7 @@ void SPECCTRA_DB::FromBOARD( BOARD* aBoard )
             place->SetRotation( footprint->GetOrientationDegrees() );
             place->SetVertex( mapPt( footprint->GetPosition() ) );
             place->m_component_id = componentId;
-            place->m_part_number  = sanitizeForDSNString( footprint->GetValue() );
+            place->m_part_number = sanitizeForDSNString( footprint->GetValue() );
 
             // footprint is flipped from bottom side, set side to T_back
             if( footprint->GetFlag() )

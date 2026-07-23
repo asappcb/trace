@@ -212,7 +212,7 @@ PCB_GROUP* PCB_GROUP::DeepClone() const
 
 
 PCB_GROUP* PCB_GROUP::DeepDuplicate( bool addToParentGroup, BOARD_COMMIT* aCommit,
-                                    std::map<KIID, KIID>* aKIIDMap ) const
+                                     std::map<KIID, KIID>* aKIIDMap ) const
 {
     PCB_GROUP* newGroup = static_cast<PCB_GROUP*>( Duplicate( addToParentGroup, aCommit ) );
     newGroup->m_items.clear();
@@ -226,8 +226,8 @@ PCB_GROUP* PCB_GROUP::DeepDuplicate( bool addToParentGroup, BOARD_COMMIT* aCommi
         // copy would leave the duplicate referencing the original's members.
         if( member->Type() == PCB_GROUP_T || member->Type() == PCB_GENERATOR_T )
         {
-            newGroup->AddItem( static_cast<PCB_GROUP*>( member )->DeepDuplicate( IGNORE_PARENT_GROUP,
-                                                                                nullptr, aKIIDMap ) );
+            newGroup->AddItem(
+                    static_cast<PCB_GROUP*>( member )->DeepDuplicate( IGNORE_PARENT_GROUP, nullptr, aKIIDMap ) );
         }
         else
         {
@@ -241,8 +241,12 @@ PCB_GROUP* PCB_GROUP::DeepDuplicate( bool addToParentGroup, BOARD_COMMIT* aCommi
                 // Children from ordered vectors so lockstep walk pairs reliably
                 // only unordered group membership above needs clone-time capture
                 std::vector<BOARD_ITEM*> dupeChildren;
-                memberDupe->RunOnChildren( [&]( BOARD_ITEM* aChild ) { dupeChildren.push_back( aChild ); },
-                                           RECURSE_MODE::RECURSE );
+                memberDupe->RunOnChildren(
+                        [&]( BOARD_ITEM* aChild )
+                        {
+                            dupeChildren.push_back( aChild );
+                        },
+                        RECURSE_MODE::RECURSE );
 
                 std::size_t index = 0;
                 orig->RunOnChildren(

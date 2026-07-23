@@ -46,14 +46,14 @@ wxString ShortenLibName( wxString aProjectName );
 LIB_ID ToKiCadLibID( const wxString& aLibName, const wxString& aLibReference );
 
 std::vector<IMPORT_PROJECT_DESC> ProjectToSelectorDialog( const nlohmann::json& aProject, bool aPcbOnly = false,
-                                                          bool                  aSchOnly = false );
+                                                          bool aSchOnly = false );
 
 nlohmann::json FindJsonFile( const wxString& aZipFileName, const std::set<wxString>& aFileNames );
 
 nlohmann::json ReadProjectOrDeviceFile( const wxString& aZipFileName );
 
 void IterateZipFiles( const wxString&                                                         aFileName,
-        std::function<bool( const wxString&, const wxString&, wxInputStream& )> aCallback );
+                      std::function<bool( const wxString&, const wxString&, wxInputStream& )> aCallback );
 
 std::vector<nlohmann::json> ParseJsonLines( wxInputStream& aInput, const wxString& aSource );
 

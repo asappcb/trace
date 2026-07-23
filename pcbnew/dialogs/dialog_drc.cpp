@@ -630,7 +630,7 @@ void DIALOG_DRC::OnDRCItemSelected( wxDataViewEvent& aEvent )
     }
 
     if( rc_item->GetErrorCode() == DRCE_UNRESOLVED_VARIABLE && parentMarker
-            && parentMarker->GetMarkerType() == MARKER_BASE::MARKER_DRAWING_SHEET )
+        && parentMarker->GetMarkerType() == MARKER_BASE::MARKER_DRAWING_SHEET )
     {
         m_frame->FocusOnLocation( parentMarker->GetPos(), m_scroll_on_crossprobe );
 

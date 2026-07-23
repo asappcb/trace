@@ -1046,8 +1046,7 @@ PNS::ITEM* queryFinishAnchor( PNS::NODE& aWorld, const PNS::LINE& aTrack )
     PNS_LAYER_RANGE anchorLayers;
     PNS::ITEM*      anchorItem = nullptr;
 
-    BOOST_REQUIRE( topo.NearestUnconnectedAnchorPoint( &aTrack, anchorPoint, anchorLayers,
-                                                       anchorItem ) );
+    BOOST_REQUIRE( topo.NearestUnconnectedAnchorPoint( &aTrack, anchorPoint, anchorLayers, anchorItem ) );
     return anchorItem;
 }
 } // namespace
@@ -1068,8 +1067,8 @@ BOOST_FIXTURE_TEST_CASE( PNSFinishAnchorNoDanglingBranchItem, PNS_TEST_FIXTURE )
     PNS::NET_HANDLE net = (PNS::NET_HANDLE) 1;
 
     // Persistent unconnected target on the same net, away from the track
-    PNS::SEGMENT* target = new PNS::SEGMENT( SEG( VECTOR2I( 10000000, 10000000 ),
-                                                 VECTOR2I( 12000000, 10000000 ) ), net );
+    PNS::SEGMENT* target =
+            new PNS::SEGMENT( SEG( VECTOR2I( 10000000, 10000000 ), VECTOR2I( 12000000, 10000000 ) ), net );
     target->SetWidth( 250000 );
     target->SetLayers( PNS_LAYER_RANGE( F_Cu ) );
     world.AddRaw( target );
@@ -1105,8 +1104,7 @@ BOOST_FIXTURE_TEST_CASE( PNSFinishAnchorCrossesArcInConnectivity, PNS_TEST_FIXTU
     PNS::NET_HANDLE net = (PNS::NET_HANDLE) 1;
 
     // Farther from the track end than its own far segment, wins only once that's subtracted
-    PNS::SEGMENT* target = new PNS::SEGMENT( SEG( VECTOR2I( 7000000, 0 ),
-                                                 VECTOR2I( 8000000, 0 ) ), net );
+    PNS::SEGMENT* target = new PNS::SEGMENT( SEG( VECTOR2I( 7000000, 0 ), VECTOR2I( 8000000, 0 ) ), net );
     target->SetWidth( 250000 );
     target->SetLayers( PNS_LAYER_RANGE( F_Cu ) );
     world.AddRaw( target );
@@ -1118,8 +1116,7 @@ BOOST_FIXTURE_TEST_CASE( PNSFinishAnchorCrossesArcInConnectivity, PNS_TEST_FIXTU
     track.SetWidth( 250000 );
     track.Line().Append( VECTOR2I( 0, 0 ) );
     track.Line().Append( VECTOR2I( 1000000, 0 ) );
-    track.Line().Append( SHAPE_ARC( VECTOR2I( 1000000, 0 ), VECTOR2I( 1500000, 500000 ),
-                                    VECTOR2I( 2000000, 0 ), 0 ) );
+    track.Line().Append( SHAPE_ARC( VECTOR2I( 1000000, 0 ), VECTOR2I( 1500000, 500000 ), VECTOR2I( 2000000, 0 ), 0 ) );
     track.Line().Append( VECTOR2I( 3000000, 0 ) );
 
     // Anchor must be the persistent target, not a branch-owned primitive across the arc

@@ -90,8 +90,7 @@ BOOST_AUTO_TEST_CASE( BoardLoadNoAssertions )
 // aliasing would let the reconciler (takes ownership) double-free the board
 BOOST_AUTO_TEST_CASE( CachedLibraryFootprintsAreOwnedCopies )
 {
-    std::string dataPath =
-            KI_TEST::GetPcbnewTestDataDir() + "plugins/altium/HiFive/HiFive1.B01.PcbDoc";
+    std::string dataPath = KI_TEST::GetPcbnewTestDataDir() + "plugins/altium/HiFive/HiFive1.B01.PcbDoc";
 
     std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
     m_altiumPlugin.LoadBoard( dataPath, board.get(), nullptr );
@@ -706,8 +705,7 @@ BOOST_AUTO_TEST_CASE( LengthTuningPatterns )
 // footprint origin, so the keepout zone lands far from the footprint that owns it.
 BOOST_AUTO_TEST_CASE( Issue24847_FootprintKeepoutPlacement )
 {
-    std::string dataPath = KI_TEST::GetPcbnewTestDataDir()
-                           + "plugins/altium/issue24847/PCB1.PcbDoc";
+    std::string dataPath = KI_TEST::GetPcbnewTestDataDir() + "plugins/altium/issue24847/PCB1.PcbDoc";
 
     std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
     m_altiumPlugin.LoadBoard( dataPath, board.get(), nullptr );
@@ -728,16 +726,15 @@ BOOST_AUTO_TEST_CASE( Issue24847_FootprintKeepoutPlacement )
             const VECTOR2I zoneCenter = zone->GetBoundingBox().GetCenter();
             const double   distMm = ( zoneCenter - fpPos ).EuclideanNorm() / 1e6;
 
-            BOOST_TEST_MESSAGE( "footprint " << footprint->GetReference().ToStdString()
-                                             << " at (" << fpPos.x << "," << fpPos.y
-                                             << ") keepout center (" << zoneCenter.x << ","
-                                             << zoneCenter.y << ") dist " << distMm << " mm" );
+            BOOST_TEST_MESSAGE( "footprint " << footprint->GetReference().ToStdString() << " at (" << fpPos.x << ","
+                                             << fpPos.y << ") keepout center (" << zoneCenter.x << "," << zoneCenter.y
+                                             << ") dist " << distMm << " mm" );
 
             // A footprint-local keepout sits on its footprint anchor; the pre-fix regression put
             // it over 100mm away, so anything past a couple of mm is a placement failure.
-            BOOST_CHECK_MESSAGE( distMm < 2.0,
-                                 "Keepout in footprint " << footprint->GetReference().ToStdString()
-                                     << " is " << distMm << " mm from its footprint origin" );
+            BOOST_CHECK_MESSAGE( distMm < 2.0, "Keepout in footprint " << footprint->GetReference().ToStdString()
+                                                                       << " is " << distMm
+                                                                       << " mm from its footprint origin" );
         }
     }
 

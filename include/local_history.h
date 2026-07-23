@@ -155,8 +155,7 @@ public:
      *   second - corresponding source path under the project directory
      */
     static std::vector<std::pair<wxString, wxString>>
-    CollectAutosaveFilePairs( const wxString& aAutosaveRoot, const wxString& aProjectPath,
-                              BACKUP_LOCATION aLocation );
+    CollectAutosaveFilePairs( const wxString& aAutosaveRoot, const wxString& aProjectPath, BACKUP_LOCATION aLocation );
 
     /**
      * Remove every autosave file under the project at @p aProjectPath regardless of

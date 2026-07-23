@@ -543,24 +543,20 @@ wxString PCB_DIMENSION_BASE::GetValueFieldText() const
     {
     case DIM_VALUE_MODE::DRIVING:
     {
-        PCB_CONSTRAINT* lengthConstraint =
-                FindDimensionLengthConstraint( const_cast<BOARD*>( GetBoard() ), this );
+        PCB_CONSTRAINT* lengthConstraint = FindDimensionLengthConstraint( const_cast<BOARD*>( GetBoard() ), this );
 
         if( lengthConstraint && lengthConstraint->GetValue() )
         {
-            return EDA_UNIT_UTILS::UI::StringFromValue( pcbIUScale, GetUnits(),
-                                                        *lengthConstraint->GetValue() );
+            return EDA_UNIT_UTILS::UI::StringFromValue( pcbIUScale, GetUnits(), *lengthConstraint->GetValue() );
         }
 
         return GetValueText();
     }
 
-    case DIM_VALUE_MODE::ARBITRARY:
-        return GetOverrideText();
+    case DIM_VALUE_MODE::ARBITRARY: return GetOverrideText();
 
     case DIM_VALUE_MODE::DRIVEN:
-    default:
-        return GetValueText();
+    default: return GetValueText();
     }
 }
 
@@ -2095,9 +2091,9 @@ static struct DIMENSION_DESC
                     .Map( DIM_ARROW_DIRECTION::OUTWARD, _HKI( "Outward" ) );
 
         ENUM_MAP<DIM_VALUE_MODE>::Instance()
-                    .Map( DIM_VALUE_MODE::DRIVEN,    _HKI( "Driven" ) )
-                    .Map( DIM_VALUE_MODE::DRIVING,   _HKI( "Driving" ) )
-                    .Map( DIM_VALUE_MODE::ARBITRARY, _HKI( "Arbitrary" ) );
+                .Map( DIM_VALUE_MODE::DRIVEN, _HKI( "Driven" ) )
+                .Map( DIM_VALUE_MODE::DRIVING, _HKI( "Driving" ) )
+                .Map( DIM_VALUE_MODE::ARBITRARY, _HKI( "Arbitrary" ) );
 
         PROPERTY_MANAGER& propMgr = PROPERTY_MANAGER::Instance();
         REGISTER_TYPE( PCB_DIMENSION_BASE );
@@ -2138,88 +2134,84 @@ static struct DIMENSION_DESC
                 &PCB_DIMENSION_BASE::ChangeSuffix, &PCB_DIMENSION_BASE::GetSuffix ),
                 groupDimension )
                 .SetAvailableFunc( isNotLeader );
-        auto hasValueMode =
-                []( INSPECTABLE* aItem ) -> bool
-                {
-                    return DimensionHasValueMode( dynamic_cast<PCB_DIMENSION_BASE*>( aItem ) );
-                };
+        auto hasValueMode = []( INSPECTABLE* aItem ) -> bool
+        {
+            return DimensionHasValueMode( dynamic_cast<PCB_DIMENSION_BASE*>( aItem ) );
+        };
 
         // Value bearing dims use Value row instead while leaders keep Text below
         // Override Text left for centre mark only
-        auto usesOverrideText =
-                [isLeader, hasValueMode]( INSPECTABLE* aItem ) -> bool
-                {
-                    return aItem && !isLeader( aItem ) && !hasValueMode( aItem );
-                };
+        auto usesOverrideText = [isLeader, hasValueMode]( INSPECTABLE* aItem ) -> bool
+        {
+            return aItem && !isLeader( aItem ) && !hasValueMode( aItem );
+        };
 
         // Driving needs both endpoints bound to movable geometry
         // Dropdown always offers it so gate the transition here
-        auto valueModeValidator =
-                []( const wxAny&& aValue, EDA_ITEM* aItem ) -> VALIDATOR_RESULT
-                {
-                    PCB_DIMENSION_BASE* dim = dynamic_cast<PCB_DIMENSION_BASE*>( aItem );
+        auto valueModeValidator = []( const wxAny&& aValue, EDA_ITEM* aItem ) -> VALIDATOR_RESULT
+        {
+            PCB_DIMENSION_BASE* dim = dynamic_cast<PCB_DIMENSION_BASE*>( aItem );
 
-                    if( !dim )
-                        return std::nullopt;
+            if( !dim )
+                return std::nullopt;
 
-                    int mode = 0;
+            int mode = 0;
 
-                    if( aValue.CheckType<DIM_VALUE_MODE>() )
-                        mode = static_cast<int>( aValue.As<DIM_VALUE_MODE>() );
-                    else if( !aValue.GetAs( &mode ) )
-                        return std::nullopt;
+            if( aValue.CheckType<DIM_VALUE_MODE>() )
+                mode = static_cast<int>( aValue.As<DIM_VALUE_MODE>() );
+            else if( !aValue.GetAs( &mode ) )
+                return std::nullopt;
 
-                    if( mode == static_cast<int>( DIM_VALUE_MODE::DRIVING )
-                            && !DimensionCanDrive( dim->GetBoard(), dim ) )
-                    {
-                        return std::make_unique<VALIDATION_ERROR_MSG>(
-                                _( "Driving requires both dimension endpoints bound to objects" ) );
-                    }
+            if( mode == static_cast<int>( DIM_VALUE_MODE::DRIVING ) && !DimensionCanDrive( dim->GetBoard(), dim ) )
+            {
+                return std::make_unique<VALIDATION_ERROR_MSG>(
+                        _( "Driving requires both dimension endpoints bound to objects" ) );
+            }
 
-                    return std::nullopt;
-                };
+            return std::nullopt;
+        };
 
         // Driving edits length constraint which must stay positive
         // Catches zero and negative and stale exprs parsing to zero
-        auto drivingValueValidator =
-                []( const wxAny&& aValue, EDA_ITEM* aItem ) -> VALIDATOR_RESULT
-                {
-                    PCB_DIMENSION_BASE* dim = dynamic_cast<PCB_DIMENSION_BASE*>( aItem );
+        auto drivingValueValidator = []( const wxAny&& aValue, EDA_ITEM* aItem ) -> VALIDATOR_RESULT
+        {
+            PCB_DIMENSION_BASE* dim = dynamic_cast<PCB_DIMENSION_BASE*>( aItem );
 
-                    if( !dim || dim->GetValueMode() != DIM_VALUE_MODE::DRIVING )
-                        return std::nullopt;
+            if( !dim || dim->GetValueMode() != DIM_VALUE_MODE::DRIVING )
+                return std::nullopt;
 
-                    wxString text;
+            wxString text;
 
-                    if( !aValue.GetAs( &text ) )
-                        return std::nullopt;
+            if( !aValue.GetAs( &text ) )
+                return std::nullopt;
 
-                    double iu = EDA_UNIT_UTILS::UI::DoubleValueFromString( pcbIUScale, dim->GetUnits(),
-                                                                           text );
+            double iu = EDA_UNIT_UTILS::UI::DoubleValueFromString( pcbIUScale, dim->GetUnits(), text );
 
-                    if( !( iu > 0.0 ) )
-                    {
-                        return std::make_unique<VALIDATION_ERROR_MSG>(
-                                _( "Enter a positive length for a driving dimension" ) );
-                    }
+            if( !( iu > 0.0 ) )
+            {
+                return std::make_unique<VALIDATION_ERROR_MSG>( _( "Enter a positive length for a driving dimension" ) );
+            }
 
-                    return std::nullopt;
-                };
+            return std::nullopt;
+        };
 
         propMgr.AddProperty( new PROPERTY<PCB_DIMENSION_BASE, wxString>( _HKI( "Override Text" ),
-                &PCB_DIMENSION_BASE::ChangeOverrideText, &PCB_DIMENSION_BASE::GetOverrideText ),
-                groupDimension )
+                                                                         &PCB_DIMENSION_BASE::ChangeOverrideText,
+                                                                         &PCB_DIMENSION_BASE::GetOverrideText ),
+                             groupDimension )
                 .SetAvailableFunc( usesOverrideText );
 
-        propMgr.AddProperty( new PROPERTY_ENUM<PCB_DIMENSION_BASE, DIM_VALUE_MODE>( _HKI( "Value Mode" ),
-                &PCB_DIMENSION_BASE::ChangeValueMode, &PCB_DIMENSION_BASE::GetValueMode ),
-                groupDimension )
+        propMgr.AddProperty( new PROPERTY_ENUM<PCB_DIMENSION_BASE, DIM_VALUE_MODE>(
+                                     _HKI( "Value Mode" ), &PCB_DIMENSION_BASE::ChangeValueMode,
+                                     &PCB_DIMENSION_BASE::GetValueMode ),
+                             groupDimension )
                 .SetAvailableFunc( hasValueMode )
                 .SetValidator( std::move( valueModeValidator ) );
 
         propMgr.AddProperty( new PROPERTY<PCB_DIMENSION_BASE, wxString>( _HKI( "Value" ),
-                &PCB_DIMENSION_BASE::ChangeValueFieldText, &PCB_DIMENSION_BASE::GetValueFieldText ),
-                groupDimension )
+                                                                         &PCB_DIMENSION_BASE::ChangeValueFieldText,
+                                                                         &PCB_DIMENSION_BASE::GetValueFieldText ),
+                             groupDimension )
                 .SetAvailableFunc( hasValueMode )
                 .SetWriteableFunc(
                         []( INSPECTABLE* aItem ) -> bool

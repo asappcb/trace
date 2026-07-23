@@ -1066,13 +1066,11 @@ void PCB_BASE_FRAME::ActivateGalCanvas()
 }
 
 
-bool PCB_BASE_FRAME::displayOptionsRequireRecache( const PCB_DISPLAY_OPTIONS& aOld,
-                                                   const PCB_DISPLAY_OPTIONS& aNew )
+bool PCB_BASE_FRAME::displayOptionsRequireRecache( const PCB_DISPLAY_OPTIONS& aOld, const PCB_DISPLAY_OPTIONS& aNew )
 {
     // only zone mode and board flip change geometry
     // colour opacity contrast are recolour only
-    return aOld.m_ZoneDisplayMode != aNew.m_ZoneDisplayMode
-           || aOld.m_FlipBoardView != aNew.m_FlipBoardView;
+    return aOld.m_ZoneDisplayMode != aNew.m_ZoneDisplayMode || aOld.m_FlipBoardView != aNew.m_FlipBoardView;
 }
 
 

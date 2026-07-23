@@ -30,8 +30,7 @@
 
 using namespace KIGFX::PREVIEW;
 
-ARC_ASSISTANT::ARC_ASSISTANT( const ARC_GEOM_MANAGER& aManager, const EDA_IU_SCALE& aIuScale,
-                              EDA_UNITS aUnits ) :
+ARC_ASSISTANT::ARC_ASSISTANT( const ARC_GEOM_MANAGER& aManager, const EDA_IU_SCALE& aIuScale, EDA_UNITS aUnits ) :
         EDA_ITEM( NOT_USED ),
         m_constructMan( aManager ),
         m_iuScale( aIuScale ),

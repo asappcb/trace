@@ -191,16 +191,14 @@ private:
     /**
      * Try to build a zone shape for the given block, with holes.
      */
-    SHAPE_POLY_SET tryBuildZoneShape( const BLOCK_BASE& aBlock,
-                                      const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
+    SHAPE_POLY_SET tryBuildZoneShape( const BLOCK_BASE& aBlock, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
 
     /**
      * Walk a geometry chain (0x01 arcs and 0x15-17 segments) starting from the given key,
      * following m_Next links. Used for building hole outlines from 0x34 KEEPOUT blocks.
      * Identity transforms are cached by start key; non-identity transforms are built fresh.
      */
-    SHAPE_LINE_CHAIN buildSegmentChain( uint32_t aStartKey,
-                                        const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
+    SHAPE_LINE_CHAIN buildSegmentChain( uint32_t aStartKey, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
 
     /**
      * Get blocks that are related to the BOUNDARY shape, i.e. NET and SHAPE (fill) info.

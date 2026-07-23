@@ -110,7 +110,8 @@ struct PARSE_FILE_GUARD
     }
 
     PARSE_FILE_GUARD( SCH_IO_ALTIUM* aOwner, std::vector<wxString> aKeys ) :
-            m_owner( aOwner ), m_keys( std::move( aKeys ) )
+            m_owner( aOwner ),
+            m_keys( std::move( aKeys ) )
     {
         for( const wxString& key : m_keys )
             m_owner->m_parsingFiles[key]++;
@@ -1479,9 +1480,7 @@ void SCH_IO_ALTIUM::ParseAltiumSch( const wxString& aFileName )
 
         // Hold every block member on the parse stack so a page cross-referencing a sibling or
         // itself reads as recursion below
-        PARSE_FILE_GUARD blockGuard( this,
-                                     std::vector<wxString>( memberKeySet.begin(),
-                                                            memberKeySet.end() ) );
+        PARSE_FILE_GUARD blockGuard( this, std::vector<wxString>( memberKeySet.begin(), memberKeySet.end() ) );
 
         m_sheetPath.push_back( sheet );
 
@@ -1538,8 +1537,7 @@ void SCH_IO_ALTIUM::ParseAltiumSch( const wxString& aFileName )
 }
 
 
-void SCH_IO_ALTIUM::pruneCyclicSheets( const std::vector<SCH_SHEET*>& aCyclicSheets,
-                                       SCH_SCREEN* aScreen )
+void SCH_IO_ALTIUM::pruneCyclicSheets( const std::vector<SCH_SHEET*>& aCyclicSheets, SCH_SCREEN* aScreen )
 {
     SCH_SCREEN* rootScreen = m_rootSheet->GetScreen();
 
@@ -1562,8 +1560,7 @@ void SCH_IO_ALTIUM::pruneCyclicSheets( const std::vector<SCH_SHEET*>& aCyclicShe
             std::erase_if( rootScreen->m_sheetInstances,
                            [&]( const SCH_SHEET_INSTANCE& aInstance )
                            {
-                               return !aInstance.m_Path.empty()
-                                      && aInstance.m_Path.back() == sheet->m_Uuid;
+                               return !aInstance.m_Path.empty() && aInstance.m_Path.back() == sheet->m_Uuid;
                            } );
         }
 
@@ -2188,8 +2185,8 @@ void SCH_IO_ALTIUM::ParseComponent( int aIndex, const std::map<wxString, wxStrin
     // Library" against a canonical upright symbol does not rotate the placement.
     switch( elem.orientation )
     {
-    case 0: orientation = SYMBOL_ORIENTATION_T::SYM_ORIENT_0;   break;
-    case 1: orientation = SYMBOL_ORIENTATION_T::SYM_ORIENT_90;  break;
+    case 0: orientation = SYMBOL_ORIENTATION_T::SYM_ORIENT_0; break;
+    case 1: orientation = SYMBOL_ORIENTATION_T::SYM_ORIENT_90; break;
     case 2: orientation = SYMBOL_ORIENTATION_T::SYM_ORIENT_180; break;
     case 3: orientation = SYMBOL_ORIENTATION_T::SYM_ORIENT_270; break;
     default: break;

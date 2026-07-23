@@ -665,19 +665,18 @@ bool PCB_EDIT_FRAME::OpenProjectFiles( const std::vector<wxString>& aFileSet, in
 
             if( aCtl & KICTL_IMPORT_LIB )
             {
-                loaderOptions.post_load_hook =
-                        [&]( PCB_IO& aPlugin )
-                        {
-                            try
-                            {
-                                for( FOOTPRINT* fp : aPlugin.GetImportedCachedLibraryFootprints() )
-                                    importedLibFootprints.emplace_back( fp );
-                            }
-                            catch( const IO_ERROR& )
-                            {
-                                // no cached library, reconcile from placed only
-                            }
-                        };
+                loaderOptions.post_load_hook = [&]( PCB_IO& aPlugin )
+                {
+                    try
+                    {
+                        for( FOOTPRINT* fp : aPlugin.GetImportedCachedLibraryFootprints() )
+                            importedLibFootprints.emplace_back( fp );
+                    }
+                    catch( const IO_ERROR& )
+                    {
+                        // no cached library, reconcile from placed only
+                    }
+                };
             }
 
             loaderOptions.plugin_configurator =
@@ -1213,8 +1212,8 @@ bool PCB_EDIT_FRAME::importFile( const wxString& aFileName, int aFileType,
 }
 
 
-void PCB_EDIT_FRAME::reconcileImportedFootprintLibraries(
-        std::vector<std::unique_ptr<FOOTPRINT>> aDefinitions, const wxString& aBoardPath )
+void PCB_EDIT_FRAME::reconcileImportedFootprintLibraries( std::vector<std::unique_ptr<FOOTPRINT>> aDefinitions,
+                                                          const wxString&                         aBoardPath )
 {
     FOOTPRINT_LIBRARY_ADAPTER* adapter = PROJECT_PCB::FootprintLibAdapter( &Prj() );
 
@@ -1240,7 +1239,8 @@ void PCB_EDIT_FRAME::reconcileImportedFootprintLibraries(
     catch( const IO_ERROR& ioe )
     {
         reporter.Report( wxString::Format( _( "Could not reconcile imported footprint "
-                                              "libraries: %s" ), ioe.What() ),
+                                              "libraries: %s" ),
+                                           ioe.What() ),
                          RPT_SEVERITY_ERROR );
     }
 

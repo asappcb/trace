@@ -188,8 +188,7 @@ public:
      * requires the GAL cache to be rebuilt.  Colour, opacity and high-contrast changes are handled
      * by a cheaper recolour and return false.
      */
-    static bool displayOptionsRequireRecache( const PCB_DISPLAY_OPTIONS& aOld,
-                                              const PCB_DISPLAY_OPTIONS& aNew );
+    static bool displayOptionsRequireRecache( const PCB_DISPLAY_OPTIONS& aOld, const PCB_DISPLAY_OPTIONS& aNew );
 
     /**
      * Return the #PCB_PLOT_PARAMS for the BOARD owned by this frame.

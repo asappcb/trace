@@ -2429,17 +2429,16 @@ void EDIT_TOOL::collectConstraintShapes( const SELECTION& aSelection, std::vecto
     // container ourselves; the visited set guards against overlapping ownership paths.
     std::unordered_set<BOARD_ITEM*> visited;
 
-    std::function<void( BOARD_ITEM* )> collect =
-            [&]( BOARD_ITEM* aItem )
-            {
-                if( !aItem || !visited.insert( aItem ).second )
-                    return;
+    std::function<void( BOARD_ITEM* )> collect = [&]( BOARD_ITEM* aItem )
+    {
+        if( !aItem || !visited.insert( aItem ).second )
+            return;
 
-                if( aItem->Type() == PCB_SHAPE_T )
-                    aShapes.push_back( static_cast<PCB_SHAPE*>( aItem ) );
+        if( aItem->Type() == PCB_SHAPE_T )
+            aShapes.push_back( static_cast<PCB_SHAPE*>( aItem ) );
 
-                aItem->RunOnChildren( collect, RECURSE_MODE::NO_RECURSE );
-            };
+        aItem->RunOnChildren( collect, RECURSE_MODE::NO_RECURSE );
+    };
 
     for( EDA_ITEM* item : aSelection )
     {
@@ -3509,8 +3508,7 @@ int EDIT_TOOL::Duplicate( const TOOL_EVENT& aEvent )
 
     // Carry constraints whose members were all duplicated repointed at the copies
     // constraints are not selectable so add them to commit but keep them out of new selection
-    const CONSTRAINTS& sourceConstraints = parentFootprint ? parentFootprint->Constraints()
-                                                           : board()->Constraints();
+    const CONSTRAINTS& sourceConstraints = parentFootprint ? parentFootprint->Constraints() : board()->Constraints();
 
     for( PCB_CONSTRAINT* clone : CloneFullySelectedConstraints( sourceConstraints, idMap ) )
         commit.Add( clone );

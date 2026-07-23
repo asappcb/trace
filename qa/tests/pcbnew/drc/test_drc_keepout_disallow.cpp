@@ -158,9 +158,8 @@ BOOST_FIXTURE_TEST_CASE( DRCKeepoutFootprintExcludesItself, DRC_KEEPOUT_TEST_FIX
 
     bds.m_DRCEngine->RunTests( EDA_UNITS::MM, true, false );
 
-    BOOST_CHECK_MESSAGE( footprintViolations == 0,
-                         "Footprint flagged by its own keepout, got "
-                                 << footprintViolations << " footprint keepout violations" );
+    BOOST_CHECK_MESSAGE( footprintViolations == 0, "Footprint flagged by its own keepout, got "
+                                                           << footprintViolations << " footprint keepout violations" );
 }
 
 

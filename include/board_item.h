@@ -524,7 +524,7 @@ protected:
 
     // Mirrors BOARD identity-cache membership so ~BOARD_ITEM can evict without walking a parent
     // chain that may already be freed.  Maintained by BOARD; clones start detached.
-    mutable bool    m_indexedInBoard = false;
+    mutable bool m_indexedInBoard = false;
 
     friend class BOARD;
 };

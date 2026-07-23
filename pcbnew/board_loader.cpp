@@ -68,8 +68,7 @@ std::unique_ptr<BOARD> BOARD_LOADER::Load( const wxString& aFileName,
         pi->SetProgressReporter( aOptions.progress_reporter );
 
         // own the board first so a throwing hook can't leak it
-        std::unique_ptr<BOARD> boardOwner(
-                pi->LoadBoard( aFileName, nullptr, aOptions.properties, aProject ) );
+        std::unique_ptr<BOARD> boardOwner( pi->LoadBoard( aFileName, nullptr, aOptions.properties, aProject ) );
 
         // grab cached lib footprints while the plugin is alive
         if( boardOwner && aOptions.post_load_hook )

@@ -198,8 +198,8 @@ KICOMMON_API void CollectSubdirsLoopSafe( const wxString& aRoot, wxArrayString& 
 // how a symlink that resolves outside the scan root is treated
 enum class DIR_LOOP_POLICY
 {
-    CONFINE_TO_ROOT,    // descend only into targets that stay inside the root subtree
-    BLOCK_ROOT_ESCAPE   // descend anywhere except a link resolving to an ancestor of the root
+    CONFINE_TO_ROOT,  // descend only into targets that stay inside the root subtree
+    BLOCK_ROOT_ESCAPE // descend anywhere except a link resolving to an ancestor of the root
 };
 
 
@@ -208,8 +208,7 @@ enum class DIR_LOOP_POLICY
 class KICOMMON_API DIR_LOOP_GUARD
 {
 public:
-    explicit DIR_LOOP_GUARD( const wxString& aRoot,
-                             DIR_LOOP_POLICY aPolicy = DIR_LOOP_POLICY::CONFINE_TO_ROOT );
+    explicit DIR_LOOP_GUARD( const wxString& aRoot, DIR_LOOP_POLICY aPolicy = DIR_LOOP_POLICY::CONFINE_TO_ROOT );
 
     // false when the root itself would not resolve caller must not walk
     bool IsRooted() const { return !m_root.empty(); }

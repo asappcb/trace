@@ -140,8 +140,8 @@ bool NESTED_SETTINGS::SaveToFile( const wxString& aDirectory, bool aForce )
         // counting as a change and churning the parent on editor close (see #24402).
         auto jsonObjectInParent = m_parent->GetJson( m_path );
 
-        bool modified = !jsonObjectInParent
-                        || !nlohmann::json::diff( *m_internals, jsonObjectInParent.value() ).empty();
+        bool modified =
+                !jsonObjectInParent || !nlohmann::json::diff( *m_internals, jsonObjectInParent.value() ).empty();
 
         // Store() additionally reports user edits to registered params, not yet reflected above.
         modified |= Store();

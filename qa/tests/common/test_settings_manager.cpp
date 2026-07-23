@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE( ColorThemeNotRewrittenWhenUnchanged )
 
     auto readFile = []( const fs::path& aPath )
     {
-        std::ifstream in( aPath );
+        std::ifstream     in( aPath );
         std::stringstream buffer;
         buffer << in.rdbuf();
         return buffer.str();

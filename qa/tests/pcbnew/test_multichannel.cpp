@@ -716,8 +716,8 @@ BOOST_FIXTURE_TEST_CASE( TopologyMatchDottedRefDes, MULTICHANNEL_TEST_FIXTURE )
  */
 BOOST_FIXTURE_TEST_CASE( TopologyMatchUnannotatedReference, MULTICHANNEL_TEST_FIXTURE )
 {
-    using TMATCH::CONNECTION_GRAPH;
     using TMATCH::COMPONENT;
+    using TMATCH::CONNECTION_GRAPH;
 
     auto cgRef = std::make_unique<CONNECTION_GRAPH>();
     auto cgTarget = std::make_unique<CONNECTION_GRAPH>();
@@ -771,22 +771,21 @@ BOOST_FIXTURE_TEST_CASE( TopologyMatchUnannotatedReference, MULTICHANNEL_TEST_FI
                          "REF** placeholder must be the same kind as an annotated footprint "
                          "with matching FPID (issue 24585)" );
 
-    TMATCH::COMPONENT_MATCHES result;
+    TMATCH::COMPONENT_MATCHES                     result;
     std::vector<TMATCH::TOPOLOGY_MISMATCH_REASON> details;
-    bool status = cgRef->FindIsomorphism( cgTarget.get(), result, details );
+    bool                                          status = cgRef->FindIsomorphism( cgTarget.get(), result, details );
 
     if( !status )
     {
         for( const auto& reason : details )
         {
-            BOOST_TEST_MESSAGE( wxString::Format( "Mismatch: %s <-> %s: %s",
-                                                  reason.m_reference, reason.m_candidate, reason.m_reason ) );
+            BOOST_TEST_MESSAGE( wxString::Format( "Mismatch: %s <-> %s: %s", reason.m_reference, reason.m_candidate,
+                                                  reason.m_reason ) );
         }
     }
 
-    BOOST_CHECK_MESSAGE( status,
-                         "Design block layout with an un-annotated REF** footprint must match "
-                         "an annotated destination (issue 24585)" );
+    BOOST_CHECK_MESSAGE( status, "Design block layout with an un-annotated REF** footprint must match "
+                                 "an annotated destination (issue 24585)" );
     BOOST_CHECK( details.empty() );
 
     fpRef.Pads().clear();
@@ -2388,8 +2387,7 @@ BOOST_FIXTURE_TEST_CASE( RepeatLayoutRefusesDuplicatePlacementAreas, MULTICHANNE
 
     auto ruleData = mtTool->GetData();
 
-    BOOST_TEST_MESSAGE( wxString::Format( "Found %d rule areas",
-                                          static_cast<int>( ruleData->m_areas.size() ) ) );
+    BOOST_TEST_MESSAGE( wxString::Format( "Found %d rule areas", static_cast<int>( ruleData->m_areas.size() ) ) );
 
     BOOST_REQUIRE_EQUAL( ruleData->m_areas.size(), 4 );
 

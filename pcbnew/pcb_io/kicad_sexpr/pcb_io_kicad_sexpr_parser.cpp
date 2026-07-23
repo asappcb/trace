@@ -1304,9 +1304,7 @@ BOARD* PCB_IO_KICAD_SEXPR_PARSER::parseBOARD_unchecked()
             parseGROUP( m_board );
             break;
 
-        case T_constraint:
-            parseCONSTRAINT( m_board );
-            break;
+        case T_constraint: parseCONSTRAINT( m_board ); break;
 
         case T_generated:
             parseGENERATOR( m_board );
@@ -6258,9 +6256,7 @@ FOOTPRINT* PCB_IO_KICAD_SEXPR_PARSER::parseFOOTPRINT_unchecked( wxArrayString* a
             parseGROUP( footprint.get() );
             break;
 
-        case T_constraint:
-            parseCONSTRAINT( footprint.get() );
-            break;
+        case T_constraint: parseCONSTRAINT( footprint.get() ); break;
 
         case T_point:
         {
@@ -7791,10 +7787,10 @@ void PCB_IO_KICAD_SEXPR_PARSER::parseCONSTRAINT( BOARD_ITEM* aParent )
                 if( NextTok() != T_member )
                     Expecting( "member" );
 
-                NextTok();   // member uuid; resolved (and remapped on append) in resolveConstraints
+                NextTok(); // member uuid; resolved (and remapped on append) in resolveConstraints
                 KIID memberId( CurStr() );
 
-                NextTok();   // anchor token
+                NextTok(); // anchor token
                 CONSTRAINT_ANCHOR anchor = ConstraintAnchorFromToken( FromUTF8() );
 
                 // Only VERTEX may carry an ordinal and even then optional
@@ -7835,8 +7831,7 @@ void PCB_IO_KICAD_SEXPR_PARSER::parseCONSTRAINT( BOARD_ITEM* aParent )
             NeedRIGHT();
             break;
 
-        default:
-            Expecting( "type, uuid, members, value, or driving" );
+        default: Expecting( "type, uuid, members, value, or driving" );
         }
     }
 
@@ -7867,30 +7862,28 @@ void PCB_IO_KICAD_SEXPR_PARSER::resolveConstraints( BOARD_ITEM* aParent )
                 RECURSE_MODE::NO_RECURSE );
     }
 
-    auto getItem =
-            [&]( const KIID& aId ) -> BOARD_ITEM*
-            {
-                if( board )
-                {
-                    const auto& cache = board->GetItemByIdCache();
-                    auto        it = cache.find( aId );
+    auto getItem = [&]( const KIID& aId ) -> BOARD_ITEM*
+    {
+        if( board )
+        {
+            const auto& cache = board->GetItemByIdCache();
+            auto        it = cache.find( aId );
 
-                    return it != cache.end() ? it->second : nullptr;
-                }
-                else if( footprint )
-                {
-                    auto it = fpItemMap.find( aId );
+            return it != cache.end() ? it->second : nullptr;
+        }
+        else if( footprint )
+        {
+            auto it = fpItemMap.find( aId );
 
-                    return it != fpItemMap.end() ? it->second : nullptr;
-                }
+            return it != fpItemMap.end() ? it->second : nullptr;
+        }
 
-                return nullptr;
-            };
+        return nullptr;
+    };
 
     for( const CONSTRAINT_INFO& info : m_constraintInfos )
     {
-        std::unique_ptr<PCB_CONSTRAINT> constraint =
-                std::make_unique<PCB_CONSTRAINT>( info.parent, info.type );
+        std::unique_ptr<PCB_CONSTRAINT> constraint = std::make_unique<PCB_CONSTRAINT>( info.parent, info.type );
 
         constraint->SetUuidDirect( info.uuid );
         constraint->SetValue( info.value );

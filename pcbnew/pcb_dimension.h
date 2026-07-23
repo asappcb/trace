@@ -30,7 +30,7 @@
 class LINE_READER;
 class MSG_PANEL_ITEM;
 
-enum class DIM_VALUE_MODE : int;   // defined in constraints/constraint_builder.h
+enum class DIM_VALUE_MODE : int; // defined in constraints/constraint_builder.h
 
 
 /// How to display the units in a dimension's text

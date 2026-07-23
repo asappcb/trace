@@ -90,8 +90,7 @@ BOOST_AUTO_TEST_CASE( PlainRectangleCornerOrder )
     const int      h = 10000000;
 
     // Normalized rect plus negative extent variant hits normalization recursion
-    for( const SHAPE_RECT& rect : { SHAPE_RECT( pos, w, h ),
-                                    SHAPE_RECT( pos + VECTOR2I( w, h ), -w, -h ) } )
+    for( const SHAPE_RECT& rect : { SHAPE_RECT( pos, w, h ), SHAPE_RECT( pos + VECTOR2I( w, h ), -w, -h ) } )
     {
         ROUNDRECT rr( rect, 0 );
 

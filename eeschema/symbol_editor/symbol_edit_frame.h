@@ -748,10 +748,10 @@ private:
     int         m_bodyStyle;
 
     // When editing a symbol: only apply new graphic items to the current unit.
-    bool        m_drawSpecificUnit;
+    bool m_drawSpecificUnit;
 
     // When editing a symbol: only apply new graphic items to the current body style.
-    bool        m_drawSpecificBodyStyle;
+    bool m_drawSpecificBodyStyle;
 
     ///< Flag if the symbol being edited was loaded directly from a schematic.
     bool        m_isSymbolFromSchematic;

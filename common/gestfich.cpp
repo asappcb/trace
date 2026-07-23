@@ -760,8 +760,7 @@ bool isAncestorOrSame( const std::filesystem::path& aAncestor,
 class LOOP_SAFE_COLLECTOR : public wxDirTraverser
 {
 public:
-    LOOP_SAFE_COLLECTOR( wxArrayString& aOutput, const wxString& aRoot, bool aCollectFiles,
-                         bool aCollectDirs ) :
+    LOOP_SAFE_COLLECTOR( wxArrayString& aOutput, const wxString& aRoot, bool aCollectFiles, bool aCollectDirs ) :
             m_output( aOutput ),
             m_guard( aRoot, DIR_LOOP_POLICY::BLOCK_ROOT_ESCAPE ),
             m_collectFiles( aCollectFiles ),

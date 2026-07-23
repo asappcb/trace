@@ -87,7 +87,7 @@ SCH_IO* SCH_IO_MGR::FindPlugin( SCH_FILE_T aFileType )
     case SCH_PADS:            return new SCH_IO_PADS();
     case SCH_DIPTRACE:        return new SCH_IO_DIPTRACE();
     case SCH_PCAD:            return new SCH_IO_PCAD();
-    case SCH_ORCAD:           return new SCH_IO_ORCAD();
+    case SCH_ORCAD: return new SCH_IO_ORCAD();
     default:                  return nullptr;
     }
 }
@@ -116,7 +116,7 @@ const wxString SCH_IO_MGR::ShowType( SCH_FILE_T aType )
     case SCH_PADS:            return wxString( wxT( "PADS Logic" ) );
     case SCH_DIPTRACE:        return wxString( wxT( "DipTrace" ) );
     case SCH_PCAD:            return wxString( wxT( "P-CAD" ) );
-    case SCH_ORCAD:           return wxString( wxT( "OrCAD" ) );
+    case SCH_ORCAD: return wxString( wxT( "OrCAD" ) );
     case SCH_NESTED_TABLE:    return LIBRARY_TABLE_ROW::TABLE_TYPE_NAME;
     default:                  return wxString::Format( _( "Unknown SCH_FILE_T value: %d" ), aType );
     }

@@ -460,8 +460,8 @@ BOOST_AUTO_TEST_CASE( BinaryNetLabelAndHighVariantImported )
     std::unique_ptr<SCHEMATIC> schematic;
     loadEagleSchematic( eagleFn, wxS( "eagle_brenner_24829" ), schematic );
 
-    int symbolCount = 0;
-    SCH_SYMBOL* c4 = nullptr;
+    int             symbolCount = 0;
+    SCH_SYMBOL*     c4 = nullptr;
     SCH_LABEL_BASE* netLabel = nullptr;
 
     for( const SCH_SHEET_PATH& sheetPath : schematic->BuildSheetListSortedByPageNumbers() )
@@ -473,8 +473,7 @@ BOOST_AUTO_TEST_CASE( BinaryNetLabelAndHighVariantImported )
 
         for( SCH_ITEM* item : screen->Items() )
         {
-            if( item->Type() == SCH_LABEL_T || item->Type() == SCH_GLOBAL_LABEL_T
-                || item->Type() == SCH_HIER_LABEL_T )
+            if( item->Type() == SCH_LABEL_T || item->Type() == SCH_GLOBAL_LABEL_T || item->Type() == SCH_HIER_LABEL_T )
             {
                 netLabel = static_cast<SCH_LABEL_BASE*>( item );
             }

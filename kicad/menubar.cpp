@@ -160,10 +160,8 @@ void KICAD_MANAGER_FRAME::doReCreateMenuBar()
                      ID_IMPORT_DIPTRACE_PROJECT,
                      BITMAPS::import_project );
 
-    importMenu->Add( _( "OrCAD Project..." ),
-                     _( "Import OrCAD schematic (*.dsn) and optional Allegro board (*.brd)" ),
-                     ID_IMPORT_ORCAD_PROJECT,
-                     BITMAPS::import_project );
+    importMenu->Add( _( "OrCAD Project..." ), _( "Import OrCAD schematic (*.dsn) and optional Allegro board (*.brd)" ),
+                     ID_IMPORT_ORCAD_PROJECT, BITMAPS::import_project );
 
     fileMenu->Add( importMenu );
 

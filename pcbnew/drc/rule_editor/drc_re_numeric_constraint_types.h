@@ -113,10 +113,7 @@ public:
     using DRC_RE_NUMERIC_INPUT_CONSTRAINT_DATA::DRC_RE_NUMERIC_INPUT_CONSTRAINT_DATA;
     BITMAPS GetOverlayBitmap() const override { return BITMAPS::constraint_maximum_via_count; }
     bool                               IsIntegerOnly() const override { return true; }
-    std::vector<DRC_RE_FIELD_POSITION> GetFieldPositions() const override
-    {
-        return { { 165, 220, 69, 1 } };
-    }
+    std::vector<DRC_RE_FIELD_POSITION> GetFieldPositions() const override { return { { 165, 220, 69, 1 } }; }
 };
 
 
@@ -173,10 +170,7 @@ public:
     using DRC_RE_NUMERIC_INPUT_CONSTRAINT_DATA::DRC_RE_NUMERIC_INPUT_CONSTRAINT_DATA;
     BITMAPS GetOverlayBitmap() const override { return BITMAPS::constraint_minimum_thermal_relief_spoke_count; }
     bool    IsIntegerOnly() const override { return true; }
-    std::vector<DRC_RE_FIELD_POSITION> GetFieldPositions() const override
-    {
-        return { { 150, 205, 44, 1 } };
-    }
+    std::vector<DRC_RE_FIELD_POSITION> GetFieldPositions() const override { return { { 150, 205, 44, 1 } }; }
 };
 
 class DRC_RE_MINIMUM_DRILL_SIZE_CONSTRAINT_DATA : public DRC_RE_NUMERIC_INPUT_CONSTRAINT_DATA
