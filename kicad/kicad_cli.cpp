@@ -519,7 +519,7 @@ static std::vector<std::string> preprocessArgs( int argc, char** argv )
 bool PGM_KICAD::OnPgmInit()
 {
     PGM_BASE::BuildArgvUtf8();
-    App().SetAppDisplayName( wxT( "kicad-cli" ) );
+    App().SetAppDisplayName( wxT( "trace" ) );
 
 #if defined( DEBUG )
     wxString absoluteArgv0 = wxStandardPaths::Get().GetExecutablePath();
@@ -551,7 +551,7 @@ bool PGM_KICAD::OnPgmInit()
 
 int PGM_KICAD::OnPgmRun()
 {
-    argparse::ArgumentParser argParser( std::string( "kicad-cli" ), GetMajorMinorVersion().ToStdString(),
+    argparse::ArgumentParser argParser( std::string( "trace" ), GetMajorMinorVersion().ToStdString(),
                                         argparse::default_arguments::none );
 
     argParser.add_argument( "-v", ARG_VERSION )

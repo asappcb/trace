@@ -122,7 +122,7 @@ FOOTPRINT_EDIT_FRAME::FOOTPRINT_EDIT_FRAME( KIWAY* aKiway, wxWindow* aParent ) :
         m_silentFootprintTabClose( false )
 {
     m_showBorderAndTitleBlock = false;   // true to show the frame references
-    m_aboutTitle = _HKI( "KiCad Footprint Editor" );
+    m_aboutTitle = _HKI( "trace Footprint Editor" );
     m_editorSettings = nullptr;
 
     // Give an icon

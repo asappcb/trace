@@ -141,6 +141,21 @@ add_executable( kicad-cli WIN32
     ${KICAD_RESOURCES}
     )
 
+# The CLI ships as `trace` (the fork's terminal identity).  The CMake target keeps its
+# upstream name `kicad-cli` to minimize merge churn; only the produced binary is renamed.
+set_target_properties( kicad-cli PROPERTIES OUTPUT_NAME trace )
+
+# `kicad-cli` stays available as a compatibility alias: existing scripts/packaging expect it,
+# and the git merge driver resolves the "kicad-cli" sibling binary by name
+# (see common/git/git_init_handler.cpp).  Symlink it next to `trace` in the build tree so both
+# local runs and the git integration keep working.  (Windows would need a copy/shim instead.)
+if( NOT WIN32 )
+    add_custom_command( TARGET kicad-cli POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E create_symlink
+                $<TARGET_FILE_NAME:kicad-cli> $<TARGET_FILE_DIR:kicad-cli>/kicad-cli
+        VERBATIM )
+endif()
+
 if( MSVC )
    # The cli needs subsystem:console or else we can't link wmain/main
    set_target_properties(kicad-cli PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
@@ -228,6 +243,11 @@ if( NOT APPLE )
         DESTINATION ${KICAD_BIN}
         COMPONENT binary
         )
+
+    # Install the `kicad-cli` compatibility symlink alongside the `trace` binary.
+    install( CODE "execute_process( COMMAND ${CMAKE_COMMAND} -E create_symlink
+                       trace \"\$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${KICAD_BIN}/kicad-cli\" )"
+        COMPONENT binary )
 endif()
 
 if( KICAD_WIN32_INSTALL_PDBS )
