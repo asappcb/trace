@@ -184,6 +184,7 @@ set( KICOMMON_SRCS
     jobs/job_sch_import.cpp
     jobs/job_pcb_render.cpp
     jobs/job_pcb_drc.cpp
+    jobs/job_pcb_ratsnest.cpp
     jobs/job_diff_base.cpp
     jobs/job_pcb_diff.cpp
     jobs/job_fp_diff.cpp
