@@ -61,6 +61,10 @@
 #include <jobs/job_export_pcb_pos.h>
 #include <jobs/job_export_pcb_ps.h>
 #include <jobs/job_export_pcb_stats.h>
+#include <jobs/job_export_pcb_json.h>
+#include <zone.h>
+#include <geometry/shape_poly_set.h>
+#include <geometry/shape_line_chain.h>
 #include <jobs/job_export_pcb_svg.h>
 #include <jobs/job_export_pcb_3d.h>
 #include <jobs/job_pcb_render.h>
@@ -265,6 +269,11 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
 
                   DIALOG_PLOT dlg( editFrame, aParent, psJob );
                   return dlg.ShowModal() == wxID_OK;
+              } );
+    Register( "json", std::bind( &PCBNEW_JOBS_HANDLER::JobExportJson, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
               } );
     Register( "stats", std::bind( &PCBNEW_JOBS_HANDLER::JobExportStats, this, std::placeholders::_1 ),
               [aKiway]( JOB* job, wxWindow* aParent ) -> bool
@@ -1767,6 +1776,164 @@ int PCBNEW_JOBS_HANDLER::JobExportStats( JOB* aJob )
     m_reporter->Report( wxString::Format( _( "Wrote board statistics to '%s'.\n" ), outPath ), RPT_SEVERITY_ACTION );
 
     statsJob->AddOutput( outPath );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobExportJson( JOB* aJob )
+{
+    JOB_EXPORT_PCB_JSON* jsonJob = dynamic_cast<JOB_EXPORT_PCB_JSON*>( aJob );
+
+    if( jsonJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( jsonJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    // All geometry is emitted in mm; internal units are nm.
+    auto mm = []( int aIU ) { return pcbIUScale.IUTomm( aIU ); };
+    auto pt = [&]( const VECTOR2I& aPos ) { return nlohmann::json::array( { mm( aPos.x ), mm( aPos.y ) } ); };
+
+    // Copy every wxString into a std::string up front.  Several getters (GetLayerName,
+    // GetFPIDAsString, GetFileName, ...) return by value, and calling .ToUTF8() on that temporary
+    // yields a buffer that dangles the moment the temporary dies -- which nlohmann then stores as
+    // garbage bytes.  utf8_str() into a std::string copies while the source is still alive.
+    auto str = []( const wxString& aStr ) { return std::string( aStr.utf8_str() ); };
+    auto layerName = [&]( PCB_LAYER_ID aLayer ) { return str( brd->GetLayerName( aLayer ) ); };
+
+    nlohmann::json doc;
+    doc["source"] = str( brd->GetFileName() );
+    doc["units"] = "mm";
+
+    doc["layers"] = nlohmann::json::array();
+
+    for( PCB_LAYER_ID layer : brd->GetEnabledLayers().Seq() )
+        doc["layers"].push_back( { { "id", layer }, { "name", layerName( layer ) } } );
+
+    doc["nets"] = nlohmann::json::array();
+
+    for( const auto& [code, net] : brd->GetNetInfo().NetsByNetcode() )
+    {
+        if( code > 0 && net )
+            doc["nets"].push_back( { { "code", code }, { "name", str( net->GetNetname() ) } } );
+    }
+
+    doc["footprints"] = nlohmann::json::array();
+
+    for( FOOTPRINT* fp : brd->Footprints() )
+    {
+        nlohmann::json jfp;
+        jfp["ref"] = str( fp->GetReference() );
+        jfp["fpid"] = str( fp->GetFPIDAsString() );
+        jfp["layer"] = layerName( fp->GetLayer() );
+        jfp["position"] = pt( fp->GetPosition() );
+        jfp["rotation"] = fp->GetOrientationDegrees();
+        jfp["pads"] = nlohmann::json::array();
+
+        for( PAD* pad : fp->Pads() )
+        {
+            jfp["pads"].push_back( { { "number", str( pad->GetNumber() ) },
+                                     { "net", str( pad->GetNetname() ) },
+                                     { "position", pt( pad->GetPosition() ) } } );
+        }
+
+        doc["footprints"].push_back( jfp );
+    }
+
+    doc["tracks"] = nlohmann::json::array();
+    doc["vias"] = nlohmann::json::array();
+
+    for( PCB_TRACK* track : brd->Tracks() )
+    {
+        if( track->Type() == PCB_VIA_T )
+        {
+            PCB_VIA* via = static_cast<PCB_VIA*>( track );
+            doc["vias"].push_back( { { "position", pt( via->GetPosition() ) },
+                                     { "diameter", mm( via->GetWidth() ) },
+                                     { "drill", mm( via->GetDrillValue() ) },
+                                     { "layers", nlohmann::json::array( { layerName( via->TopLayer() ),
+                                                                          layerName( via->BottomLayer() ) } ) },
+                                     { "net", str( via->GetNetname() ) } } );
+        }
+        else
+        {
+            doc["tracks"].push_back( { { "start", pt( track->GetStart() ) },
+                                       { "end", pt( track->GetEnd() ) },
+                                       { "width", mm( track->GetWidth() ) },
+                                       { "layer", layerName( track->GetLayer() ) },
+                                       { "net", str( track->GetNetname() ) } } );
+        }
+    }
+
+    doc["zones"] = nlohmann::json::array();
+
+    for( ZONE* zone : brd->Zones() )
+    {
+        nlohmann::json jzone;
+        jzone["net"] = str( zone->GetNetname() );
+        jzone["layers"] = nlohmann::json::array();
+
+        nlohmann::json filled = nlohmann::json::object();
+
+        for( PCB_LAYER_ID layer : zone->GetLayerSet().Seq() )
+        {
+            jzone["layers"].push_back( layerName( layer ) );
+
+            std::shared_ptr<SHAPE_POLY_SET> polys = zone->GetFilledPolysList( layer );
+
+            if( !polys )
+                continue;
+
+            nlohmann::json layerPolys = nlohmann::json::array();
+
+            for( int o = 0; o < polys->OutlineCount(); ++o )
+            {
+                const SHAPE_LINE_CHAIN& outline = polys->COutline( o );
+                nlohmann::json          ring = nlohmann::json::array();
+
+                for( int p = 0; p < outline.PointCount(); ++p )
+                    ring.push_back( pt( outline.CPoint( p ) ) );
+
+                layerPolys.push_back( ring );
+            }
+
+            if( !layerPolys.empty() )
+                filled[layerName( layer )] = layerPolys;
+        }
+
+        if( !filled.empty() )
+            jzone["filled_polygons"] = filled;
+
+        doc["zones"].push_back( jzone );
+    }
+
+    // Board data can carry a stray non-UTF-8 byte (legacy Latin-1 fields); replace rather than
+    // throw, so a single bad glyph never fails the whole export.
+    wxString output = wxString::FromUTF8(
+            doc.dump( 2, ' ', false, nlohmann::json::error_handler_t::replace ).c_str() );
+
+    if( jsonJob->GetConfiguredOutputPath().IsEmpty() )
+    {
+        // No --output: the JSON is the sole stdout content so it stays pipeline-parseable.
+        m_reporter->Report( output, RPT_SEVERITY_ACTION );
+    }
+    else
+    {
+        wxString outPath = resolveJobOutputPath( aJob, brd );
+        wxFFile  file( outPath, wxT( "wb" ) );
+
+        if( !file.IsOpened() || !file.Write( output ) )
+        {
+            m_reporter->Report( wxString::Format( _( "Failed to write board JSON to %s\n" ), outPath ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+        }
+
+        m_reporter->Report( wxString::Format( _( "Wrote board JSON to %s\n" ), outPath ), RPT_SEVERITY_INFO );
+    }
 
     return CLI::EXIT_CODES::OK;
 }

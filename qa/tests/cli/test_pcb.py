@@ -342,3 +342,35 @@ def test_pcb_ratsnest( kitest: KiTestFixture ):
              "--exit-code-violations", connected] )
     assert exitcode == 0
     assert json.loads( stdout )["unconnected"] == 0
+
+
+def test_pcb_export_json( kitest: KiTestFixture ):
+    """`pcb export json` emits a structured board model: layers, nets, footprints (absolute
+    position + rotation), pads (with net), tracks, vias, and zones (filled polygons), in mm."""
+    input_file = str( kitest.get_data_file_path( "pcbnew/issue7086.kicad_pcb" ) )
+
+    stdout, _, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "export", "json", input_file] )
+    assert exitcode == 0
+    doc = json.loads( stdout )   # stdout must be pure JSON
+
+    assert doc["units"] == "mm"
+    assert set( doc ) >= { "layers", "nets", "footprints", "tracks", "vias", "zones" }
+
+    layer_names = { l["name"] for l in doc["layers"] }
+    assert { "F.Cu", "B.Cu" } <= layer_names
+
+    # J1 is a 1x4 P2.54mm pin header on the front copper.
+    j1 = next( fp for fp in doc["footprints"] if fp["ref"] == "J1" )
+    assert j1["layer"] == "F.Cu"
+    pads = sorted( j1["pads"], key=lambda p: p["number"] )
+    assert len( pads ) == 4
+    # Absolute board coordinates: adjacent pads are one 2.54 mm pitch apart.
+    assert round( pads[1]["position"][0] - pads[0]["position"][0], 3 ) == 2.54
+    assert all( p["net"] for p in pads )
+
+    # At least one zone carries a filled polygon (a list of [x, y] rings).
+    filled = [ z for z in doc["zones"] if z.get( "filled_polygons" ) ]
+    assert filled
+    ring = next( iter( filled[0]["filled_polygons"].values() ) )[0]
+    assert len( ring ) >= 3 and len( ring[0] ) == 2
