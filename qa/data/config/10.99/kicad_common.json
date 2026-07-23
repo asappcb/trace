@@ -81,9 +81,12 @@
     "sash_pos": 380
   },
   "session": {
+    "command_palette_mru": [],
     "pinned_design_block_libs": [],
     "pinned_fp_libs": [],
     "pinned_symbol_libs": [],
+    "recently_placed_footprints": [],
+    "recently_placed_symbols": [],
     "remember_open_files": false
   },
   "spacemouse": {

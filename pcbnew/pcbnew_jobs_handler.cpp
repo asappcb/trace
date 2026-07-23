@@ -65,6 +65,11 @@
 #include <jobs/job_export_pcb_3d.h>
 #include <jobs/job_pcb_render.h>
 #include <jobs/job_pcb_drc.h>
+#include <jobs/job_pcb_ratsnest.h>
+#include <connectivity/connectivity_data.h>
+#include <ratsnest/ratsnest_data.h>
+#include <netinfo.h>
+#include <wx/ffile.h>
 #include <jobs/job_pcb_import.h>
 #include <jobs/job_import_utils.h>
 #include <jobs/job_pcb_upgrade.h>
@@ -371,6 +376,11 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               []( JOB* job, wxWindow* aParent ) -> bool
               {
                   return true;
+              } );
+    Register( "ratsnest", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbRatsnest, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
               } );
     Register( "drc", std::bind( &PCBNEW_JOBS_HANDLER::JobExportDrc, this, std::placeholders::_1 ),
               []( JOB* job, wxWindow* aParent ) -> bool
@@ -2641,6 +2651,111 @@ int PCBNEW_JOBS_HANDLER::JobExportDrc( JOB* aJob )
             return CLI::EXIT_CODES::ERR_RC_VIOLATIONS;
         }
     }
+
+    return CLI::EXIT_CODES::SUCCESS;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbRatsnest( JOB* aJob )
+{
+    JOB_PCB_RATSNEST* ratsnestJob = dynamic_cast<JOB_PCB_RATSNEST*>( aJob );
+
+    if( ratsnestJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( ratsnestJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    // getBoard() loads but does not compute connectivity; the ratsnest is derived from it.
+    brd->BuildConnectivity();
+    std::shared_ptr<CONNECTIVITY_DATA> connectivity = brd->GetConnectivity();
+
+    // One ratsnest edge == one unconnected connection on that net.  Walk the nets in netcode
+    // order for stable output; skip the unconnected/no-net pseudo-net (code 0).
+    struct NET_RATSNEST
+    {
+        int      code;
+        wxString name;
+        unsigned unconnected;
+    };
+
+    std::vector<NET_RATSNEST> perNet;
+    unsigned                  total = 0;
+
+    for( const auto& [code, netinfo] : brd->GetNetInfo().NetsByNetcode() )
+    {
+        if( code <= 0 || !netinfo )
+            continue;
+
+        unsigned lines = 0;
+
+        if( RN_NET* rn = connectivity->GetRatsnestForNet( code ) )
+            lines = static_cast<unsigned>( rn->GetEdges().size() );
+
+        total += lines;
+
+        if( lines > 0 )
+            perNet.push_back( { code, netinfo->GetNetname(), lines } );
+    }
+
+    std::sort( perNet.begin(), perNet.end(),
+               []( const NET_RATSNEST& a, const NET_RATSNEST& b )
+               {
+                   return a.code < b.code;
+               } );
+
+    wxString output;
+
+    if( ratsnestJob->m_format == JOB_RC::OUTPUT_FORMAT::JSON )
+    {
+        nlohmann::json report;
+        report["source"] = brd->GetFileName().ToUTF8();
+        report["unconnected"] = total;
+        report["nets"] = nlohmann::json::array();
+
+        for( const NET_RATSNEST& n : perNet )
+        {
+            report["nets"].push_back(
+                    { { "net", n.name.ToUTF8() }, { "code", n.code }, { "unconnected", n.unconnected } } );
+        }
+
+        output = wxString::FromUTF8( report.dump( 2 ).c_str() );
+    }
+    else
+    {
+        output << wxString::Format( _( "Unconnected connections: %u\n" ), total );
+
+        for( const NET_RATSNEST& n : perNet )
+            output << wxString::Format( wxT( "  %-30s %u\n" ), n.name, n.unconnected );
+    }
+
+    if( ratsnestJob->GetConfiguredOutputPath().IsEmpty() )
+    {
+        // No --output: the report is the sole stdout content, so `--format json` stays
+        // machine-parseable in a pipeline.  The CLI reporter sends everything but errors to
+        // stdout, so the human summary below is intentionally skipped in this path.
+        m_reporter->Report( output, RPT_SEVERITY_ACTION );
+    }
+    else
+    {
+        wxString outPath = resolveJobOutputPath( aJob, brd );
+        wxFFile  file( outPath, wxT( "wb" ) );
+
+        if( !file.IsOpened() || !file.Write( output ) )
+        {
+            m_reporter->Report( wxString::Format( _( "Failed to write ratsnest report to %s\n" ), outPath ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+        }
+
+        // The report went to a file, so stdout is free for a human-readable summary.
+        m_reporter->Report( wxString::Format( _( "Found %u unconnected connection(s)\n" ), total ), RPT_SEVERITY_INFO );
+    }
+
+    if( ratsnestJob->m_exitCodeViolations && total > 0 )
+        return CLI::EXIT_CODES::ERR_RC_VIOLATIONS;
 
     return CLI::EXIT_CODES::SUCCESS;
 }

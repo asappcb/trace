@@ -20,6 +20,7 @@
 #
 
 import utils
+import json
 from pathlib import Path
 import pytest
 import re
@@ -310,3 +311,34 @@ def test_pcb_optimize_swaps(kitest: KiTestFixture):
     assert output_file.read_text().lstrip().startswith("(kicad_pcb")
     # The handler reports how many swaps it applied.
     assert "gate swap" in stdout.lower()
+
+
+def test_pcb_ratsnest( kitest: KiTestFixture ):
+    """`pcb ratsnest` reports unconnected connections per net.
+
+    issue7086 is partially unrouted: 4 unconnected connections across two nets
+    (Net-(J3-Pad4)=3, Net-(J3-Pad1)=1).
+    """
+    input_file = str( kitest.get_data_file_path( "pcbnew/issue7086.kicad_pcb" ) )
+
+    # JSON goes to stdout as the sole content, so it must parse cleanly.
+    stdout, _, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "ratsnest", "--format", "json", input_file] )
+    assert exitcode == 0    # default: a report, not a gate
+    report = json.loads( stdout )
+    assert report["unconnected"] == 4
+    assert { n["net"]: n["unconnected"] for n in report["nets"] } == {
+        "Net-(J3-Pad4)": 3, "Net-(J3-Pad1)": 1 }
+
+    # --exit-code-violations turns "any net unconnected" into a nonzero exit for scripting.
+    _, _, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "ratsnest", "--exit-code-violations", input_file] )
+    assert exitcode == 5
+
+    # A fully-connected board reports zero and does not gate.
+    connected = str( kitest.get_data_file_path( "pcbnew/complex_hierarchy.kicad_pcb" ) )
+    stdout, _, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "ratsnest", "--format", "json",
+             "--exit-code-violations", connected] )
+    assert exitcode == 0
+    assert json.loads( stdout )["unconnected"] == 0

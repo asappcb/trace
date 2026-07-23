@@ -58,6 +58,7 @@
 #include "cli/command_fp_diff.h"
 #include "cli/command_pcb_diff.h"
 #include "cli/command_pcb_drc.h"
+#include "cli/command_pcb_ratsnest.h"
 #include "cli/command_mergetool.h"
 #include "cli/command_git_mergedriver.h"
 #include "cli/command_sch_diff.h"
@@ -151,6 +152,7 @@ static CLI::RELEASE_VERIFY_COMMAND       releaseVerifyCmd{};
 static CLI::PCB_COMMAND                  pcbCmd{};
 static CLI::PCB_DIFF_COMMAND             pcbDiffCmd{};
 static CLI::PCB_DRC_COMMAND              pcbDrcCmd{};
+static CLI::PCB_RATSNEST_COMMAND         pcbRatsnestCmd{};
 static CLI::MERGETOOL_COMMAND            mergetoolCmd{};
 static CLI::GIT_MERGEDRIVER_COMMAND      gitMergeDriverCmd{};
 static CLI::PCB_RENDER_COMMAND           pcbRenderCmd{};
@@ -278,6 +280,9 @@ static std::vector<COMMAND_ENTRY> commandStack = {
             },
             {
                 &pcbDrcCmd
+            },
+            {
+                &pcbRatsnestCmd
             },
             {
                 &pcbImportCmd
