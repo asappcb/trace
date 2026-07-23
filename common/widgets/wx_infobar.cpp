@@ -18,6 +18,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include <core/kicad_algo.h>
 #include <id.h>
 #include <kiplatform/ui.h>
 #include <widgets/wx_infobar.h>
@@ -95,6 +96,16 @@ WX_INFOBAR::WX_INFOBAR( wxWindow* aParent, wxAuiManager* aMgr, wxWindowID aWinid
     SetSize( sx, sy );
 
     sizer->SetItemMinSize( (size_t) 0, iconSize.x, sy );
+
+    // wxInfoBarGeneric holds raw pointers to the controls it creates (its close button and
+    // checkbox) and dereferences them whenever the system colours change -- which happens
+    // when the frame is dragged to another display.  Remember them here so RemoveAllButtons()
+    // hides them instead of destroying them and leaving the base class dangling.
+    for( size_t ii = 0; ii < sizer->GetItemCount(); ii++ )
+    {
+        if( wxWindow* win = sizer->GetItem( ii )->GetWindow() )
+            m_baseControls.push_back( win );
+    }
 
     // Forcefully remove all existing buttons added by the wx constructors.
     // The default close button doesn't work with the AUI manager update scheme, so this
@@ -401,7 +412,22 @@ void WX_INFOBAR::RemoveAllButtons()
         if( sItem->IsSpacer() )
             break;
 
-        delete sItem->GetWindow();
+        wxWindow* win = sItem->GetWindow();
+
+        if( !win )
+            continue;
+
+        // Controls owned by wxInfoBarGeneric must outlive us: the base class keeps raw
+        // pointers to them and uses them when the system colours change.
+        if( alg::contains( m_baseControls, win ) )
+        {
+            win->Hide();
+            sizer->Detach( win );
+        }
+        else
+        {
+            delete win;
+        }
     }
 }
 
