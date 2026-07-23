@@ -102,6 +102,14 @@ JSON_SETTINGS::JSON_SETTINGS( const wxString& aFilename, SETTINGS_LOC aLocation,
 
 JSON_SETTINGS::~JSON_SETTINGS()
 {
+    // ReleaseNestedSettings() erases the released entry from m_nested_settings, which invalidates
+    // the iterators a range-for over that same vector is holding; the next iteration then walks
+    // freed storage.  Release from a copy so the erase can't cut the loop out from under us.
+    const std::vector<NESTED_SETTINGS*> nested = m_nested_settings;
+
+    for( NESTED_SETTINGS* settings : nested )
+        ReleaseNestedSettings( settings );
+
     for( PARAM_BASE* param: m_params )
         delete param;
 
@@ -935,13 +943,22 @@ bool JSON_SETTINGS::fromLegacyColor( wxConfigBase* aConfig, const std::string& a
 void JSON_SETTINGS::AddNestedSettings( NESTED_SETTINGS* aSettings )
 {
     wxLogTrace( traceSettings, wxT( "AddNestedSettings %s" ), aSettings->GetFilename() );
+
+    // SetParent() registers, and can be called again on an already-parented child.  Registering
+    // twice leaves a second entry behind when the child deregisters itself exactly once as it is
+    // destroyed, and that survivor dangles.
+    if( std::find( m_nested_settings.begin(), m_nested_settings.end(), aSettings ) != m_nested_settings.end() )
+    {
+        return;
+    }
+
     m_nested_settings.push_back( aSettings );
 }
 
 
 void JSON_SETTINGS::ReleaseNestedSettings( NESTED_SETTINGS* aSettings )
 {
-    if( !aSettings || !m_manager )
+    if( !aSettings )
         return;
 
     auto it = std::find_if( m_nested_settings.begin(), m_nested_settings.end(),
@@ -952,8 +969,15 @@ void JSON_SETTINGS::ReleaseNestedSettings( NESTED_SETTINGS* aSettings )
 
     if( it != m_nested_settings.end() )
     {
-        wxLogTrace( traceSettings, wxT( "Flush and release %s" ), ( *it )->GetFilename() );
-        m_modified |= ( *it )->SaveToFile();
+        // Flushing needs a manager, but de-registration must happen either way.  Bailing out
+        // early when there is no manager -- as this used to -- leaves the child registered after
+        // its destructor has run, and the parent's destructor then flushes freed memory.
+        if( m_manager )
+        {
+            wxLogTrace( traceSettings, wxT( "Flush and release %s" ), ( *it )->GetFilename() );
+            m_modified |= ( *it )->SaveToFile();
+        }
+
         m_nested_settings.erase( it );
     }
 

@@ -68,6 +68,7 @@ set( QA_PCBNEW_SRCS
     test_footprint_transform_sync.cpp
     test_footprint_rescue_layer.cpp
     test_issue24735.cpp
+    test_issue24901.cpp
     test_fp_lib_load_save.cpp
     test_io_mgr.cpp
     test_ellipse_roundtrip.cpp
@@ -202,6 +203,7 @@ set( QA_PCBNEW_SRCS
     drc/test_drc_creepage_issue24524.cpp
     drc/test_drc_creepage_issue24597.cpp
     drc/test_drc_creepage_issue24875.cpp
+    drc/test_drc_creepage_issue24885.cpp
     drc/test_creepage_engine_parity.cpp
     drc/test_creepage_engine_incremental.cpp
     drc/test_drc_invalid_outline_issue24078.cpp

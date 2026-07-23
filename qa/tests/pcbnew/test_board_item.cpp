@@ -24,6 +24,7 @@
 
 // Code under test
 #include <board.h>
+#include <board_design_settings.h>
 #include <board_item.h>
 #include <footprint.h>
 #include <pad.h>
@@ -403,6 +404,126 @@ BOOST_AUTO_TEST_CASE( Issue24696_SwapItemDataKeepsGroupMembership )
     BOOST_CHECK( image.GetParentGroup() == &group );
 
     image.SetParentGroup( nullptr );
+}
+
+
+// Partial hardening for the BOARD::RecordDRCExclusions crash family (Sentry KICAD-YT2,
+// KICAD-YTA).  A PCB_MARKER may legitimately carry a null RC_ITEM (its ctor and dtor both guard
+// the member), but SerializeToString() dereferences it unconditionally, so recording exclusions
+// during a project save or window close faulted on such a marker.
+BOOST_AUTO_TEST_CASE( RecordDRCExclusionsSkipsMarkerWithoutRCItem )
+{
+    BOARD board;
+
+    PCB_MARKER* marker = new PCB_MARKER( nullptr, VECTOR2I( 0, 0 ) );
+    marker->SetExcluded( true );
+    board.Add( marker );
+
+    BOOST_CHECK_NO_THROW( board.RecordDRCExclusions() );
+
+    // The item-less marker has no violation to serialize, so nothing is persisted.
+    BOOST_CHECK( board.GetDesignSettings().m_DrcExclusions.empty() );
+}
+
+
+BOOST_AUTO_TEST_CASE( ResolveItemIdentityCachePurgedOnDestruction )
+{
+    BOARD board;
+
+    FOOTPRINT* footprint = new FOOTPRINT( &board );
+    board.Add( footprint );
+
+    PAD* pad = new PAD( footprint );
+    footprint->Pads().push_back( pad );
+    board.CacheItemById( pad );
+
+    const KIID padId = pad->m_Uuid;
+
+    BOOST_REQUIRE( board.IsItemIndexedById( pad ) );
+    BOOST_REQUIRE_EQUAL( board.ResolveItem( padId, true ), static_cast<BOARD_ITEM*>( pad ) );
+
+    // Detach the pad from the footprint without FOOTPRINT::Remove()'s surgical eviction, leaving it
+    // parented to the still-board-attached footprint, then free it directly.  This stands in for the
+    // producer paths that free a board-parented item without touching the identity cache; only the
+    // ~BOARD_ITEM safety net can then keep ResolveItem() from returning a freed pointer.
+    std::deque<PAD*>& pads = footprint->Pads();
+    pads.erase( std::find( pads.begin(), pads.end(), pad ) );
+    delete pad;
+
+    BOOST_CHECK( board.ResolveItem( padId, true ) == nullptr );
+}
+
+
+// The per-item flag must track the board's identity cache across every mutation path.
+BOOST_AUTO_TEST_CASE( IndexMembershipFlagTracksCache )
+{
+    BOARD board;
+
+    FOOTPRINT* footprint = new FOOTPRINT( &board );
+    board.Add( footprint );
+
+    PAD* pad = new PAD( footprint );
+    footprint->Pads().push_back( pad );
+
+    BOOST_CHECK( !pad->IsIndexedInBoard() );
+
+    board.CacheItemById( pad );
+    BOOST_CHECK( pad->IsIndexedInBoard() );
+    BOOST_CHECK( board.IsItemIndexedById( pad ) );
+
+    // A clone is a distinct object, not itself indexed.
+    {
+        PAD copy( *pad );
+        BOOST_CHECK( !copy.IsIndexedInBoard() );
+    }
+
+    board.UncacheItemById( pad->m_Uuid );
+    BOOST_CHECK( !pad->IsIndexedInBoard() );
+    BOOST_CHECK( !board.IsItemIndexedById( pad ) );
+
+    board.CacheAndReturnItemById( pad->m_Uuid, pad );
+    BOOST_CHECK( pad->IsIndexedInBoard() );
+
+    board.UncacheItemByPtr( pad );
+    BOOST_CHECK( !pad->IsIndexedInBoard() );
+    BOOST_CHECK( !board.IsItemIndexedById( pad ) );
+
+    board.CacheItemById( pad );
+    BOOST_REQUIRE( pad->IsIndexedInBoard() );
+    board.ClearItemByIdCache();
+    BOOST_CHECK( !pad->IsIndexedInBoard() );
+}
+
+
+// A rejected Add() (here a track on a non-copper layer) must leave the item out of the cache.
+BOOST_AUTO_TEST_CASE( RejectedAddLeavesItemUnindexed )
+{
+    BOARD board;
+
+    PCB_TRACK* track = new PCB_TRACK( &board );
+    track->SetLayer( Edge_Cuts );
+
+    CHECK_WX_ASSERT( board.Add( track ) );
+
+    BOOST_CHECK( !track->IsIndexedInBoard() );
+    BOOST_CHECK( !board.IsItemIndexedById( track ) );
+
+    BOOST_CHECK_NO_THROW( delete track );
+}
+
+
+// A never-indexed item parented to a freed board must not touch that board on destruction, the
+// crash from the "KiCad master crashes" report (follow-up to ac12a1c820).
+BOOST_AUTO_TEST_CASE( UncachedItemSurvivesBoardDestruction )
+{
+    BOARD*   board = new BOARD();
+    PCB_VIA* dummy = new PCB_VIA( board );
+
+    BOOST_REQUIRE( !dummy->IsIndexedInBoard() );
+
+    delete board;
+
+    BOOST_CHECK_NO_THROW( delete dummy );
 }
 
 

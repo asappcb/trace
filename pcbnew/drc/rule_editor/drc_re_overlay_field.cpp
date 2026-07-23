@@ -28,8 +28,7 @@
 #include <wx/window.h>
 
 
-DRC_RE_OVERLAY_FIELD::DRC_RE_OVERLAY_FIELD( wxWindow* aParent, const wxString& aFieldId,
-                                            wxControl* aControl,
+DRC_RE_OVERLAY_FIELD::DRC_RE_OVERLAY_FIELD( wxWindow* aParent, const wxString& aFieldId, wxControl* aControl,
                                             const DRC_RE_FIELD_POSITION& aPosition ) :
         m_parent( aParent ),
         m_fieldId( aFieldId ),
@@ -40,7 +39,8 @@ DRC_RE_OVERLAY_FIELD::DRC_RE_OVERLAY_FIELD( wxWindow* aParent, const wxString& a
         m_unitBinder( nullptr ),
         m_errorIcon( nullptr ),
         m_showingError( false ),
-        m_label( nullptr )
+        m_label( nullptr ),
+        m_prefixLabel( nullptr )
 {
 }
 
@@ -138,13 +138,16 @@ bool DRC_RE_OVERLAY_FIELD::TransferFromWindow()
 }
 
 
-void DRC_RE_OVERLAY_FIELD::CreateLabel()
+void DRC_RE_OVERLAY_FIELD::CreateLabels()
 {
-    if( m_label )
-        return;
+    if( !m_label && !m_position.labelText.IsEmpty() && m_position.labelPosition != LABEL_POSITION::NONE
+        && GetControl()->GetLabel() != m_position.labelText )
+    {
+        m_label = new wxStaticText( m_parent, wxID_ANY, m_position.labelText );
+    }
 
-    if( m_position.labelText.IsEmpty() || m_position.labelPosition == LABEL_POSITION::NONE )
-        return;
-
-    m_label = new wxStaticText( m_parent, wxID_ANY, m_position.labelText );
+    if( !m_prefixLabel && !m_position.prefixText.IsEmpty() )
+    {
+        m_prefixLabel = new wxStaticText( m_parent, wxID_ANY, m_position.prefixText );
+    }
 }
