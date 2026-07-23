@@ -20,7 +20,7 @@ PANEL_DRC_GROUP_HEADER_BASE::PANEL_DRC_GROUP_HEADER_BASE( wxWindow* parent, wxWi
 	m_dataGrid->CreateGrid( 0, 3 );
     m_dataGrid->EnableEditing( false );
     m_dataGrid->EnableGridLines( true );
-	m_dataGrid->EnableDragGridSize( false );
+    m_dataGrid->EnableDragGridSize( false );
 	m_dataGrid->SetMargins( 0, 0 );
 
 	// Columns
@@ -33,10 +33,10 @@ PANEL_DRC_GROUP_HEADER_BASE::PANEL_DRC_GROUP_HEADER_BASE( wxWindow* parent, wxWi
     m_dataGrid->SetColLabelSize( wxGRID_AUTOSIZE );
     m_dataGrid->SetColLabelAlignment( wxALIGN_CENTER, wxALIGN_CENTER );
 
-	// Rows
+    // Rows
     m_dataGrid->AutoSizeRows();
     m_dataGrid->EnableDragRowSize( true );
-	m_dataGrid->SetRowLabelSize( 0 );
+    m_dataGrid->SetRowLabelSize( 0 );
 	m_dataGrid->SetRowLabelAlignment( wxALIGN_CENTER, wxALIGN_CENTER );
 
 	// Label Appearance

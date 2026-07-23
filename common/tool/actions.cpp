@@ -604,13 +604,13 @@ TOOL_ACTION ACTIONS::pointEditorArcKeepRadius( TOOL_ACTION_ARGS()
         .Parameter( ARC_EDIT_MODE::KEEP_CENTER_ENDS_ADJUST_ANGLE ) );
 
 TOOL_ACTION
-        ACTIONS::arcPosture( TOOL_ACTION_ARGS()
-                                     .Name( "common.InteractiveDrawing.arcPosture" )
-                                     .Scope( AS_GLOBAL )
-                                     .DefaultHotkey( '/' )
-                                     .LegacyHotkeyName( "Switch Track Posture" )
-                                     .FriendlyName( _( "Switch Arc Posture" ) )
-                                     .Tooltip( _( "Switch arc posture between clockwise and counter-clockwise" ) ) );
+ACTIONS::arcPosture( TOOL_ACTION_ARGS()
+                             .Name( "common.InteractiveDrawing.arcPosture" )
+                             .Scope( AS_GLOBAL )
+                             .DefaultHotkey( '/' )
+                             .LegacyHotkeyName( "Switch Track Posture" )
+                             .FriendlyName( _( "Switch Arc Posture" ) )
+                             .Tooltip( _( "Switch arc posture between clockwise and counter-clockwise" ) ) );
 
 TOOL_ACTION ACTIONS::deleteLastPoint( TOOL_ACTION_ARGS()
                                               .Name( "common.InteractiveDrawing.deleteLastPoint" )
