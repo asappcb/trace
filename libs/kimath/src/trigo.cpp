@@ -346,7 +346,13 @@ const VECTOR2D CalcArcCenter( const VECTOR2D& aStart, const VECTOR2D& aEnd,
     }
 
     double chord = ( start - end ).EuclideanNorm();
-    double r = ( chord / 2.0 ) / ( angle / 2.0 ).Sin();
+    double sinHalfAngle = ( angle / 2.0 ).Sin();
+
+    // A zero arc angle has no defined center, so fall back to the chord midpoint
+    if( sinHalfAngle == 0.0 )
+        return VECTOR2D( ( start + end ) / 2.0 );
+
+    double r = ( chord / 2.0 ) / sinHalfAngle;
     double d_squared = r * r - chord*  chord / 4.0;
     double d = 0.0;
 
@@ -404,6 +410,14 @@ const VECTOR2D CalcArcCenter( const VECTOR2D& aStart, const VECTOR2D& aMid, cons
 
     double aSlope = yDelta_21 / xDelta_21;
     double bSlope = yDelta_32 / xDelta_32;
+
+    // Guard the y-deltas after the slopes are taken so a horizontal chord keeps its exact zero
+    // slope while the 0.5/yDelta uncertainty terms below stay finite instead of a NaN-yielding inf
+    if( yDelta_21 == 0.0 )
+        yDelta_21 = std::numeric_limits<double>::epsilon();
+
+    if( yDelta_32 == 0.0 )
+        yDelta_32 = std::numeric_limits<double>::epsilon();
 
     double daSlope = aSlope * VECTOR2D( 0.5 / yDelta_21, 0.5 / xDelta_21 ).EuclideanNorm();
     double dbSlope = bSlope * VECTOR2D( 0.5 / yDelta_32, 0.5 / xDelta_32 ).EuclideanNorm();

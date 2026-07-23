@@ -27,7 +27,8 @@
  * Legacy IDs for things that have not yet been moved to ACTIONs.
  */
 
-enum id_kicad_frm {
+enum id_kicad_frm
+{
     ID_LEFT_FRAME = ID_KICAD_MANAGER_START,
     ID_PROJECT_TREE,
     ID_EDIT_LOCAL_FILE_IN_TEXT_EDITOR,
@@ -41,6 +42,7 @@ enum id_kicad_frm {
     ID_IMPORT_PCAD_PROJECT,
     ID_IMPORT_GEDA_PROJECT,
     ID_IMPORT_DIPTRACE_PROJECT,
+    ID_IMPORT_ORCAD_PROJECT,
     ID_COMPARE_PROJECT_BRANCHES
 };
 

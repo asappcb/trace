@@ -79,11 +79,25 @@ private:
 
     void addLocalLibraries( const std::set<wxString>& aLibName, FRAME_T aFrameType );
 
-    void EasyEDAProProjectHandler();
+    /**
+     * @brief Pre-commit one collision-free generated footprint-cache nickname into m_properties so
+     *        the schematic and PCB imports agree on where residual footprints land.
+     */
+    void setImportCacheNickname();
+
+    /// Join the basenames of the given library paths into a source-library property value.
+    wxString joinSourceLibNicknames( const std::set<wxString>& aPaths ) const;
+
+    void EasyEDAProProjectHandler( int aImportedSchFileType, int aImportedPcbFileType );
 
     void AltiumProjectHandler();
 
     void GedaProjectHandler();
+
+    /**
+     * @brief Imports the OrCAD schematic, then offers to import an associated Allegro board.
+     */
+    void OrcadProjectHandler();
 };
 
 #endif

@@ -62,6 +62,7 @@ set( QA_PCBNEW_SRCS
     test_footprint.cpp
     test_footprint_ipc_nonproto_roundtrip.cpp
     test_footprint_editor_tabs.cpp
+    test_footprint_import_reconciler.cpp
     test_footprint_library_adapter.cpp
     test_footprint_load_save.cpp
     test_footprint_realignment.cpp
@@ -69,6 +70,7 @@ set( QA_PCBNEW_SRCS
     test_footprint_rescue_layer.cpp
     test_issue24735.cpp
     test_issue24901.cpp
+    test_issue24967.cpp
     test_fp_lib_load_save.cpp
     test_io_mgr.cpp
     test_ellipse_roundtrip.cpp
@@ -106,9 +108,12 @@ set( QA_PCBNEW_SRCS
     test_gencad_export.cpp
     test_idf_export.cpp
     test_d356_export.cpp
+    test_specctra_export.cpp
     test_step_model_color_transfer.cpp
     test_step_backdrill_export.cpp
+    test_board_netlist_updater_fpid_change.cpp
     test_board_netlist_updater_nested_groups.cpp
+    test_netlist_group_instances.cpp
     test_step_export_modified_board.cpp
     test_pdf_output_path.cpp
     test_shape_corner_radius.cpp
@@ -124,6 +129,7 @@ set( QA_PCBNEW_SRCS
     test_tuning_pattern_layer.cpp
     test_multichannel.cpp
     test_pns_tuning_path_through_pad.cpp
+    test_pns_diff_pair_tuning_width.cpp
     test_variant.cpp
     test_text_variable_resolution.cpp
     test_zone.cpp
@@ -212,12 +218,14 @@ set( QA_PCBNEW_SRCS
     drc/test_drc_annular_overlap_issue24340.cpp
     drc/test_drc_hole_clearance_issue24355.cpp
     drc/test_drc_hole_to_hole_npth_slot_issue24541.cpp
+    drc/test_drc_npth_slot_clearance_issue24799.cpp
     drc/test_drc_issue24264.cpp
     drc/test_drc_issue23868.cpp
     drc/test_drc_issue24211.cpp
     drc/test_drc_physical_clearance.cpp
     drc/test_drc_rule_editor.cpp
     drc/test_drc_bitmap_overlay_panel.cpp
+    drc/test_drc_violation_layers_issue24941.cpp
 
     pcb_io/altium/test_altium_rule_transformer.cpp
     pcb_io/altium/test_altium_pcblib_import.cpp
@@ -238,6 +246,7 @@ set( QA_PCBNEW_SRCS
     pcb_io/kicad_sexpr/test_kicad_sexpr.cpp
 
     pcb_io/easyedapro/test_easyedapro_import.cpp
+    pcb_io/easyedapro/test_easyedapro_v3_import.cpp
 
     pcb_io/diptrace/test_diptrace_import.cpp
     pcb_io/diptrace/test_diptrace_cross_link.cpp
@@ -259,6 +268,29 @@ set( QA_PCBNEW_SRCS
     pcb_io/odbpp/test_odbpp_netlist.cpp
 
     group_saveload.cpp
+
+    # Geometric constraint solver (planegcs adapter)
+    constraints/test_planegcs_smoke.cpp
+    constraints/test_pcb_constraint.cpp
+    constraints/test_constraint_ownership.cpp
+    constraints/test_constraint_commit.cpp
+    constraints/test_constraint_exclusions.cpp
+    constraints/test_constraint_adapter.cpp
+    constraints/test_constraint_serialization.cpp
+    constraints/test_constraint_drag.cpp
+    constraints/test_constraint_authoring.cpp
+    constraints/test_constraint_diagnostics.cpp
+    constraints/test_constraint_protobuf.cpp
+    constraints/test_constraint_clipboard.cpp
+    constraints/test_constraint_duplicate.cpp
+    constraints/test_constraint_overlay.cpp
+    constraints/test_constraint_labels.cpp
+    constraints/test_constraint_apply.cpp
+    constraints/test_constraint_lock.cpp
+    constraints/test_constraint_combinations.cpp
+    constraints/test_constraint_reference.cpp
+    constraints/test_constraint_arc_angle.cpp
+    constraints/test_constraint_dimension.cpp
 )
 
 # DipTrace PCB benchmark tests that exercise proprietary reference designs kept outside the source
@@ -324,6 +356,7 @@ target_link_libraries( qa_pcbnew
     dxflib_qcad
     tinyspline_lib
     nanosvg
+    planegcs
     idf3
     markdown_lib
     ${PCBNEW_IO_LIBRARIES}
@@ -441,6 +474,9 @@ set( PCBNEW_DRC_REGRESSION_TESTS
 :DRCFalseNegativeRegressions\
 :DRCZoneFalsePositiveRegressions" )
 
+# Geometric constraint solver tests (planegcs adapter, issue #2329)
+set( PCBNEW_CONSTRAINTS_TESTS "PlanegcsSmokeSolve:ConstraintSolver*" )
+
 # Solder mask and copper sliver DRC tests (~6s)
 set( PCBNEW_DRC_SOLDER_MASK_TESTS
     "DRCCopperSliver\
@@ -459,6 +495,7 @@ add_pcbnew_test_group( tracks_cleaner "${PCBNEW_TRACKS_CLEANER_TESTS}" )
 add_pcbnew_test_group( multichannel "${PCBNEW_MULTICHANNEL_TESTS}" )
 add_pcbnew_test_group( drc_regression "${PCBNEW_DRC_REGRESSION_TESTS}" )
 add_pcbnew_test_group( drc_solder_mask "${PCBNEW_DRC_SOLDER_MASK_TESTS}" )
+add_pcbnew_test_group( constraints "${PCBNEW_CONSTRAINTS_TESTS}" )
 
 # Catch-all for everything not in a named group.  New tests automatically
 # land here so they are never silently skipped.
@@ -523,6 +560,8 @@ set( PCBNEW_EXCLUDED_FROM_OTHER
 :!DRCSolderMaskBridgeSingleErrorTest\
 :!DRCTrackToPadBridgeTest\
 :!FootprintLevelSolderMaskExpansion\
-:!SolderMaskExpansionPerformance" )
+:!SolderMaskExpansionPerformance\
+:!PlanegcsSmokeSolve\
+:!ConstraintSolver*" )
 
 add_pcbnew_test_group( other "${PCBNEW_EXCLUDED_FROM_OTHER}" )

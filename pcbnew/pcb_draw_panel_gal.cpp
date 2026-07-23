@@ -107,9 +107,9 @@ const int GAL_LAYER_ORDER[] = {
 
     LAYER_FP_TEXT, LAYER_FP_REFERENCES, LAYER_FP_VALUES,
 
-    LAYER_RATSNEST, LAYER_ANCHOR, LAYER_POINTS, LAYER_LOCKED_ITEM_SHADOW, LAYER_VIA_HOLES, LAYER_VIA_HOLEWALLS,
-    LAYER_PAD_PLATEDHOLES, LAYER_PAD_HOLEWALLS, LAYER_NON_PLATEDHOLES, LAYER_VIA_THROUGH, LAYER_VIA_BLIND,
-    LAYER_VIA_BURIED, LAYER_VIA_MICROVIA,
+    LAYER_RATSNEST, LAYER_ANCHOR, LAYER_POINTS, LAYER_LOCKED_ITEM_SHADOW, LAYER_CONSTRAINT_SHADOW, LAYER_VIA_HOLES,
+    LAYER_VIA_HOLEWALLS, LAYER_PAD_PLATEDHOLES, LAYER_PAD_HOLEWALLS, LAYER_NON_PLATEDHOLES, LAYER_VIA_THROUGH,
+    LAYER_VIA_BLIND, LAYER_VIA_BURIED, LAYER_VIA_MICROVIA,
 
     LAYER_PAD_FR_NETNAMES, NETNAMES_LAYER_INDEX( F_Cu ), PAD_COPPER_LAYER_FOR( F_Cu ), VIA_COPPER_LAYER_FOR( F_Cu ),
     CLEARANCE_LAYER_FOR( F_Cu ),
@@ -282,6 +282,11 @@ void PCB_DRAW_PANEL_GAL::DisplayBoard( BOARD* aBoard, PROGRESS_REPORTER* aReport
 
     for( BOARD_ITEM* item : aBoard->GetItemSet() )
     {
+        // Geometry-free items (constraints) are never rendered; VIEW::Add would stamp their
+        // view data on an empty layer set and risk a later "already in a different view" assert.
+        if( item->Type() == PCB_CONSTRAINT_T )
+            continue;
+
         viewItems.push_back( item );
 
         if( item->Type() == PCB_FOOTPRINT_T )
@@ -289,7 +294,8 @@ void PCB_DRAW_PANEL_GAL::DisplayBoard( BOARD* aBoard, PROGRESS_REPORTER* aReport
             static_cast<FOOTPRINT*>( item )->RunOnChildren(
                     [&viewItems]( BOARD_ITEM* child )
                     {
-                        viewItems.push_back( child );
+                        if( child->Type() != PCB_CONSTRAINT_T )
+                            viewItems.push_back( child );
                     },
                     RECURSE_MODE::NO_RECURSE );
         }
@@ -353,26 +359,38 @@ void PCB_DRAW_PANEL_GAL::SetHighContrastLayer( PCB_LAYER_ID aLayer )
         // Bring some other layers to the front in case of copper layers and make them colored
         // fixme do not like the idea of storing the list of layers here,
         // should be done in some other way I guess..
-        int layers[] = {
-                LAYER_CONFLICTS_SHADOW,
-                GetNetnameLayer( aLayer ),
-                LAYER_PAD_FR_NETNAMES, LAYER_PAD_BK_NETNAMES, LAYER_PAD_NETNAMES,
-                LAYER_VIA_NETNAMES,
-                PAD_COPPER_LAYER_FOR( aLayer ),
-                VIA_COPPER_LAYER_FOR( aLayer ),
-                ZONE_LAYER_FOR( aLayer ),
-                BITMAP_LAYER_FOR( aLayer ),
-                POINT_LAYER_FOR( aLayer ),
-                LAYER_PAD_PLATEDHOLES, LAYER_PAD_HOLEWALLS, LAYER_NON_PLATEDHOLES,
-                LAYER_VIA_THROUGH, LAYER_VIA_BLIND, LAYER_VIA_BURIED, LAYER_VIA_MICROVIA, LAYER_VIA_HOLES,
-                LAYER_VIA_HOLEWALLS,
-                LAYER_DRC_ERROR, LAYER_DRC_WARNING, LAYER_DRC_EXCLUSION, LAYER_MARKER_SHADOWS,
-                LAYER_DRC_SHAPES,
-                LAYER_SELECT_OVERLAY, LAYER_GP_OVERLAY,
-                LAYER_RATSNEST, LAYER_CURSOR,
-                LAYER_ANCHOR,
-                LAYER_LOCKED_ITEM_SHADOW
-        };
+        int layers[] = { LAYER_CONFLICTS_SHADOW,
+                         GetNetnameLayer( aLayer ),
+                         LAYER_PAD_FR_NETNAMES,
+                         LAYER_PAD_BK_NETNAMES,
+                         LAYER_PAD_NETNAMES,
+                         LAYER_VIA_NETNAMES,
+                         PAD_COPPER_LAYER_FOR( aLayer ),
+                         VIA_COPPER_LAYER_FOR( aLayer ),
+                         ZONE_LAYER_FOR( aLayer ),
+                         BITMAP_LAYER_FOR( aLayer ),
+                         POINT_LAYER_FOR( aLayer ),
+                         LAYER_PAD_PLATEDHOLES,
+                         LAYER_PAD_HOLEWALLS,
+                         LAYER_NON_PLATEDHOLES,
+                         LAYER_VIA_THROUGH,
+                         LAYER_VIA_BLIND,
+                         LAYER_VIA_BURIED,
+                         LAYER_VIA_MICROVIA,
+                         LAYER_VIA_HOLES,
+                         LAYER_VIA_HOLEWALLS,
+                         LAYER_DRC_ERROR,
+                         LAYER_DRC_WARNING,
+                         LAYER_DRC_EXCLUSION,
+                         LAYER_MARKER_SHADOWS,
+                         LAYER_DRC_SHAPES,
+                         LAYER_SELECT_OVERLAY,
+                         LAYER_GP_OVERLAY,
+                         LAYER_RATSNEST,
+                         LAYER_CURSOR,
+                         LAYER_ANCHOR,
+                         LAYER_LOCKED_ITEM_SHADOW,
+                         LAYER_CONSTRAINT_SHADOW };
 
         for( int i : layers )
             rSettings->SetLayerIsHighContrast( i );
@@ -402,13 +420,14 @@ void PCB_DRAW_PANEL_GAL::SetTopLayer( PCB_LAYER_ID aLayer )
     m_view->SetTopLayer( aLayer );
 
     // Layers that should always have on-top attribute enabled
-    const std::vector<int> layers = {
-        LAYER_VIA_THROUGH,     LAYER_VIA_BLIND,       LAYER_VIA_BURIED,    LAYER_VIA_MICROVIA,    LAYER_VIA_HOLES,
-        LAYER_VIA_HOLEWALLS,   LAYER_PAD_PLATEDHOLES, LAYER_PAD_HOLEWALLS, LAYER_NON_PLATEDHOLES, LAYER_PAD_NETNAMES,
-        LAYER_VIA_NETNAMES,    LAYER_SELECT_OVERLAY,  LAYER_GP_OVERLAY,    LAYER_RATSNEST,        LAYER_ANCHOR,
-        LAYER_DRC_HIGHLIGHTED, LAYER_DRC_ERROR,       LAYER_DRC_WARNING,   LAYER_DRC_EXCLUSION,   LAYER_MARKER_SHADOWS,
-        LAYER_DRC_SHAPES,      LAYER_CONFLICTS_SHADOW
-    };
+    const std::vector<int> layers = { LAYER_VIA_THROUGH,      LAYER_VIA_BLIND,        LAYER_VIA_BURIED,
+                                      LAYER_VIA_MICROVIA,     LAYER_VIA_HOLES,        LAYER_VIA_HOLEWALLS,
+                                      LAYER_PAD_PLATEDHOLES,  LAYER_PAD_HOLEWALLS,    LAYER_NON_PLATEDHOLES,
+                                      LAYER_PAD_NETNAMES,     LAYER_VIA_NETNAMES,     LAYER_SELECT_OVERLAY,
+                                      LAYER_GP_OVERLAY,       LAYER_RATSNEST,         LAYER_ANCHOR,
+                                      LAYER_DRC_HIGHLIGHTED,  LAYER_DRC_ERROR,        LAYER_DRC_WARNING,
+                                      LAYER_DRC_EXCLUSION,    LAYER_MARKER_SHADOWS,   LAYER_DRC_SHAPES,
+                                      LAYER_CONFLICTS_SHADOW, LAYER_CONSTRAINT_SHADOW };
 
     for( auto layer : layers )
         m_view->SetTopLayer( layer );
@@ -717,8 +736,11 @@ void PCB_DRAW_PANEL_GAL::setDefaultLayerDeps()
     // that may change while the view stays the same.
     m_view->SetLayerTarget( LAYER_CONFLICTS_SHADOW, KIGFX::TARGET_OVERLAY );
 
+    // Constraint shadow drawn under item like locked-item shadow
+    // kept on cached target not overlay and re-cached on set change
     m_view->SetLayerDisplayOnly( LAYER_LOCKED_ITEM_SHADOW );
     m_view->SetLayerDisplayOnly( LAYER_CONFLICTS_SHADOW );
+    m_view->SetLayerDisplayOnly( LAYER_CONSTRAINT_SHADOW );
     m_view->SetLayerDisplayOnly( LAYER_BOARD_OUTLINE_AREA );
 
     // Some more required layers settings

@@ -30,12 +30,12 @@
 
 using namespace KIGFX::PREVIEW;
 
-ARC_ASSISTANT::ARC_ASSISTANT( const ARC_GEOM_MANAGER& aManager, const EDA_IU_SCALE& aIuScale,
-                              EDA_UNITS aUnits ) :
+ARC_ASSISTANT::ARC_ASSISTANT( const ARC_GEOM_MANAGER& aManager, const EDA_IU_SCALE& aIuScale, EDA_UNITS aUnits ) :
         EDA_ITEM( NOT_USED ),
         m_constructMan( aManager ),
         m_iuScale( aIuScale ),
-        m_units( aUnits )
+        m_units( aUnits ),
+        m_drawArc( false )
 {
 }
 
@@ -83,8 +83,11 @@ void ARC_ASSISTANT::ViewDraw( int aLayer, KIGFX::VIEW* aView ) const
 
         EDA_ANGLE initAngle = m_constructMan.GetStartAngle();
 
-        // draw the radius guide circle
-        preview_ctx.DrawCircle( origin, m_constructMan.GetRadius(), true );
+        // Draw the radius guide circle if wanted
+        if( m_drawArc )
+        {
+            preview_ctx.DrawCircle( origin, m_constructMan.GetRadius(), true );
+        }
 
         initAngle.Normalize720();
 

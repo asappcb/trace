@@ -48,6 +48,9 @@
 #include <tools/pcb_selection_tool.h>
 #include <pcb_barcode.h>
 #include <tools/tool_event_utils.h>
+#include <tool/arc_draw_behavior.h>
+#include <tool/bezier_draw_behavior.h>
+#include <tool/ellipse_draw_behavior.h>
 #include <tools/zone_create_helper.h>
 #include <tools/zone_filler_tool.h>
 #include <view/view.h>
@@ -78,6 +81,8 @@
 #include <pcb_tablecell.h>
 #include <pcb_track.h>
 #include <pcb_dimension.h>
+#include <constraints/constraint_builder.h>
+#include <constraints/pcb_constraint.h>
 #include <pcbnew_id.h>
 #include <scoped_set_reset.h>
 #include <string_utils.h>
@@ -88,6 +93,95 @@
 const unsigned int DRAWING_TOOL::COORDS_PADDING = pcbIUScale.mmToIU( 20 );
 
 using SCOPED_DRAW_MODE = SCOPED_SET_RESET<DRAWING_TOOL::MODE>;
+
+
+// True if board already carries same constraint so a redrawn dimension does not stack a conflicting duplicate
+static bool dimensionBindingIsDuplicate( BOARD* aBoard, const PCB_CONSTRAINT* aConstraint )
+{
+    auto scan = [&]( const CONSTRAINTS& aList )
+    {
+        return std::ranges::any_of( aList,
+                                    [&]( const PCB_CONSTRAINT* aExisting )
+                                    {
+                                        return ConstraintsAreDuplicate( *aExisting, *aConstraint );
+                                    } );
+    };
+
+    if( scan( aBoard->Constraints() ) )
+        return true;
+
+    // Dimension coincidences parent to their own footprint not necessarily the first
+    // so every footprint constraints must be scanned to find where bindings are stored
+    return std::ranges::any_of( aBoard->Footprints(),
+                                [&]( FOOTPRINT* aFootprint )
+                                {
+                                    return scan( aFootprint->Constraints() );
+                                } );
+}
+
+
+// Bind dimension feature points coincident to measured geometry so it follows that geometry
+// Bindings ride @p aCommit with dimension for single undo interactive draw only paste and duplicate remap constraints
+static void bindDimensionEndpoints( BOARD* aBoard, PCB_DIMENSION_BASE* aDimension, BOARD_ITEM* aParent,
+                                    BOARD_COMMIT& aCommit )
+{
+    if( !aBoard || !aDimension )
+        return;
+
+    const double tol = pcbIUScale.mmToIU( 0.01 );
+
+    // Radial dimension binds only when centre and rim share one circle or arc
+    // uses coincident centre plus point on circumference rim not generic both ends coincidence
+    if( aDimension->Type() == PCB_DIM_RADIAL_T )
+    {
+        std::optional<KIID> arc = SelectRadialDimensionTarget( aBoard, aDimension->m_Uuid, aDimension->GetStart(),
+                                                               aDimension->GetEnd(), tol );
+
+        if( !arc )
+            return;
+
+        auto addBinding =
+                [&]( PCB_CONSTRAINT_TYPE aType, CONSTRAINT_ANCHOR aDimAnchor, CONSTRAINT_ANCHOR aTargetAnchor )
+        {
+            auto constraint = std::make_unique<PCB_CONSTRAINT>( aParent, aType );
+            constraint->AddMember( aDimension->m_Uuid, aDimAnchor );
+            constraint->AddMember( *arc, aTargetAnchor );
+
+            if( !dimensionBindingIsDuplicate( aBoard, constraint.get() ) )
+                aCommit.Add( constraint.release() );
+        };
+
+        addBinding( PCB_CONSTRAINT_TYPE::COINCIDENT, CONSTRAINT_ANCHOR::START, CONSTRAINT_ANCHOR::CENTER );
+        addBinding( PCB_CONSTRAINT_TYPE::POINT_ON_LINE, CONSTRAINT_ANCHOR::END, CONSTRAINT_ANCHOR::WHOLE );
+        return;
+    }
+
+    // Only aligned/orthogonal dimensions measure a second feature point; the rest bind START.
+    std::optional<VECTOR2I> end;
+
+    switch( aDimension->Type() )
+    {
+    case PCB_DIM_ALIGNED_T:
+    case PCB_DIM_ORTHOGONAL_T: end = aDimension->GetEnd(); break;
+
+    default: break;
+    }
+
+    std::vector<DIMENSION_ENDPOINT_BINDING> bindings =
+            SelectDimensionEndpointBindings( aBoard, aDimension->m_Uuid, aDimension->GetStart(), end, tol );
+
+    for( const DIMENSION_ENDPOINT_BINDING& binding : bindings )
+    {
+        auto constraint = std::make_unique<PCB_CONSTRAINT>( aParent, PCB_CONSTRAINT_TYPE::COINCIDENT );
+        constraint->AddMember( aDimension->m_Uuid, binding.dimAnchor );
+        constraint->AddMember( binding.target.m_item, binding.target.m_anchor, binding.target.m_index );
+
+        if( dimensionBindingIsDuplicate( aBoard, constraint.get() ) )
+            continue;
+
+        aCommit.Add( constraint.release() );
+    }
+}
 
 
 class VIA_SIZE_MENU : public ACTION_MENU
@@ -267,8 +361,8 @@ bool DRAWING_TOOL::Init()
 
     // tool-specific actions
     ctxMenu.AddItem( PCB_ACTIONS::closeOutline,          canCloseOutline, 200 );
-    ctxMenu.AddItem( PCB_ACTIONS::deleteLastPoint,       canUndoPoint, 200 );
-    ctxMenu.AddItem( PCB_ACTIONS::arcPosture,            arcToolActive, 200 );
+    ctxMenu.AddItem( ACTIONS::deleteLastPoint, canUndoPoint, 200 );
+    ctxMenu.AddItem( ACTIONS::arcPosture, arcToolActive, 200 );
     ctxMenu.AddItem( PCB_ACTIONS::spacingIncrease,       tuningToolActive, 200 );
     ctxMenu.AddItem( PCB_ACTIONS::spacingDecrease,       tuningToolActive, 200 );
     ctxMenu.AddItem( PCB_ACTIONS::amplIncrease,          tuningToolActive, 200 );
@@ -484,15 +578,6 @@ int DRAWING_TOOL::DrawEllipse( const TOOL_EVENT& aEvent )
                                } );
 }
 
-int DRAWING_TOOL::DrawEllipseArc( const TOOL_EVENT& aEvent )
-{
-    return runSimpleShapeDraw( aEvent, SHAPE_T::ELLIPSE_ARC, MODE::ELLIPSE_ARC, _( "Draw Elliptical Arc" ),
-                               [this]( const TOOL_EVENT& e, PCB_SHAPE** s, std::optional<VECTOR2D> sp )
-                               {
-                                   return drawShape( e, s, sp, nullptr );
-                               } );
-}
-
 
 int DRAWING_TOOL::DrawArc( const TOOL_EVENT& aEvent )
 {
@@ -505,10 +590,10 @@ int DRAWING_TOOL::DrawArc( const TOOL_EVENT& aEvent )
     REENTRANCY_GUARD guard( &m_inDrawingTool );
 
     BOARD_ITEM*             parent = m_frame->GetModel();
-    PCB_SHAPE*              arc = new PCB_SHAPE( parent );
+    std::unique_ptr<PCB_SHAPE> arc = std::make_unique<PCB_SHAPE>( parent );
     BOARD_COMMIT            commit( m_frame );
     SCOPED_DRAW_MODE        scopedDrawMode( m_mode, MODE::ARC );
-    std::optional<VECTOR2D> startingPoint;
+    std::vector<VECTOR2D>      initialPts;
 
     arc->SetShape( SHAPE_T::ARC );
     arc->SetFlags( IS_NEW );
@@ -517,23 +602,74 @@ int DRAWING_TOOL::DrawArc( const TOOL_EVENT& aEvent )
     Activate();
 
     if( aEvent.HasPosition() )
-        startingPoint = aEvent.Position();
+        initialPts.push_back( aEvent.Position() );
 
-    while( drawArc( aEvent, &arc, startingPoint ) )
+    ARC_DRAW_BEHAVIOR arcBehavior( pcbIUScale, m_frame->GetUserUnits() );
+
+    while( drawManagedShape( aEvent, arc, arcBehavior, initialPts ) )
     {
         if( arc )
         {
-            commit.Add( arc );
+            PCB_SHAPE* committedArc = arc.get();
+            commit.Add( arc.release() );
             commit.Push( _( "Draw Arc" ) );
 
-            m_toolMgr->RunAction<EDA_ITEM*>( ACTIONS::selectItem, arc );
+            m_toolMgr->RunAction<EDA_ITEM*>( ACTIONS::selectItem, committedArc );
         }
 
-        arc = new PCB_SHAPE( parent );
+        arc = std::make_unique<PCB_SHAPE>( parent );
         arc->SetShape( SHAPE_T::ARC );
         arc->SetFlags( IS_NEW );
 
-        startingPoint = std::nullopt;
+        initialPts.clear();
+    }
+
+    return 0;
+}
+
+
+int DRAWING_TOOL::DrawEllipseArc( const TOOL_EVENT& aEvent )
+{
+    if( m_isFootprintEditor && !m_frame->GetModel() )
+        return 0;
+
+    if( m_inDrawingTool )
+        return 0;
+
+    REENTRANCY_GUARD guard( &m_inDrawingTool );
+
+    BOARD_ITEM*                parent = m_frame->GetModel();
+    std::unique_ptr<PCB_SHAPE> arc = std::make_unique<PCB_SHAPE>( parent );
+    BOARD_COMMIT            commit( m_frame );
+    std::vector<VECTOR2D>      initialPts;
+
+    arc->SetShape( SHAPE_T::ELLIPSE_ARC );
+    arc->SetFlags( IS_NEW );
+
+    m_frame->PushTool( aEvent );
+    Activate();
+
+    if( aEvent.HasPosition() )
+        initialPts.push_back( aEvent.Position() );
+
+    ELLIPSE_ARC_DRAW_BEHAVIOR ellipseBehavior( pcbIUScale, m_frame->GetUserUnits() );
+
+    while( drawManagedShape( aEvent, arc, ellipseBehavior, initialPts ) )
+    {
+        if( arc )
+        {
+            PCB_SHAPE* committedArc = arc.get();
+            commit.Add( arc.release() );
+            commit.Push( _( "Draw Elliptical Arc" ) );
+
+            m_toolMgr->RunAction<EDA_ITEM*>( ACTIONS::selectItem, committedArc );
+        }
+
+        arc = std::make_unique<PCB_SHAPE>( parent );
+        arc->SetShape( SHAPE_T::ELLIPSE_ARC );
+        arc->SetFlags( IS_NEW );
+
+        initialPts.clear();
     }
 
     return 0;
@@ -550,47 +686,52 @@ int DRAWING_TOOL::DrawBezier( const TOOL_EVENT& aEvent )
 
     REENTRANCY_GUARD guard( &m_inDrawingTool );
 
-    BOARD_COMMIT            commit( m_frame );
-    SCOPED_DRAW_MODE        scopedDrawMode( m_mode, MODE::BEZIER );
-    OPT_VECTOR2I            startingPoint, startingC1;
+    BOARD_ITEM*                parent = m_frame->GetModel();
+    std::unique_ptr<PCB_SHAPE> bezier = std::make_unique<PCB_SHAPE>( parent );
+    BOARD_COMMIT               commit( m_frame );
+    SCOPED_DRAW_MODE           scopedDrawMode( m_mode, MODE::BEZIER );
+    std::vector<VECTOR2D>      initialPts;
+
+    bezier->SetShape( SHAPE_T::BEZIER );
+    bezier->SetFlags( IS_NEW );
 
     m_frame->PushTool( aEvent );
     Activate();
 
     if( aEvent.HasPosition() )
-        startingPoint = aEvent.Position();
+        initialPts.push_back( aEvent.Position() );
 
-    DRAW_ONE_RESULT result = DRAW_ONE_RESULT::ACCEPTED;
-    while( result != DRAW_ONE_RESULT::CANCELLED )
+    BEZIER_DRAW_BEHAVIOR bezierBehavior( pcbIUScale, m_frame->GetUserUnits() );
+
+    while( drawManagedShape( aEvent, bezier, bezierBehavior, initialPts ) )
     {
-        std::unique_ptr<PCB_SHAPE> bezier =
-                drawOneBezier( aEvent, startingPoint, startingC1, result );
-
-        // Anyting other than accepted means no chaining
-        startingPoint = std::nullopt;
-        startingC1 = std::nullopt;
-
-        // If a bezier was created, add it and go again
         if( bezier )
         {
-            PCB_SHAPE& bezierRef = *bezier;
+            // Chain: next bezier starts at the end of this one
+            initialPts.clear();
+            initialPts.push_back( bezier->GetEnd() );
+
+            // If the last control arm is non-zero, mirror it for tangent continuity
+            if( bezier->GetEnd() != bezier->GetBezierC2() )
+            {
+                VECTOR2D mirroredC1 = bezier->GetEnd() - ( bezier->GetBezierC2() - bezier->GetEnd() );
+                initialPts.push_back( mirroredC1 );
+            }
+
+            PCB_SHAPE* committedBezier = bezier.get();
             commit.Add( bezier.release() );
             commit.Push( _( "Draw Bezier" ) );
 
-            // Don't chain if reset (or accepted and reset)
-            if( result == DRAW_ONE_RESULT::ACCEPTED )
-            {
-                startingPoint = bezierRef.GetEnd();
-
-                // If the last bezier has a zero C2 control arm, allow the user to define a new C1
-                // control arm for the next one.
-                if( bezierRef.GetEnd() != bezierRef.GetBezierC2() )
-                {
-                    // Mirror the control point across the end point to get a tangent control point
-                    startingC1 = bezierRef.GetEnd() - ( bezierRef.GetBezierC2() - bezierRef.GetEnd() );
-                }
-            }
+            m_toolMgr->RunAction<EDA_ITEM*>( ACTIONS::selectItem, committedBezier );
         }
+        else
+        {
+            initialPts.clear();
+        }
+
+        bezier = std::make_unique<PCB_SHAPE>( parent );
+        bezier->SetShape( SHAPE_T::BEZIER );
+        bezier->SetFlags( IS_NEW );
     }
 
     return 0;
@@ -1815,6 +1956,10 @@ int DRAWING_TOOL::DrawDimension( const TOOL_EVENT& aEvent )
                 preview.Remove( dimension );
 
                 commit.Add( dimension );
+
+                // Bind feature points to measured geometry so it tracks that geometry interactive draw only
+                bindDimensionEndpoints( m_board, dimension, m_frame->GetModel(), commit );
+
                 commit.Push( _( "Draw Dimension" ) );
 
                 // Run the edit immediately to set the leader text
@@ -2767,8 +2912,7 @@ bool DRAWING_TOOL::drawShape( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
                 m_view->Update( &twoPointAsst );
             }
         }
-        else if( started && (   evt->IsAction( &PCB_ACTIONS::doDelete )
-                             || evt->IsAction( &PCB_ACTIONS::deleteLastPoint ) ) )
+        else if( started && ( evt->IsAction( &PCB_ACTIONS::doDelete ) || evt->IsAction( &ACTIONS::deleteLastPoint ) ) )
         {
             if( aCommittedGraphics && !aCommittedGraphics->empty() )
             {
@@ -2868,41 +3012,15 @@ bool DRAWING_TOOL::drawShape( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
 }
 
 
-/**
- * Update an arc PCB_SHAPE from the current state of an Arc Geometry Manager.
- */
-static void updateArcFromConstructionMgr( const KIGFX::PREVIEW::ARC_GEOM_MANAGER& aMgr,
-                                          PCB_SHAPE& aArc )
+bool DRAWING_TOOL::drawManagedShape( const TOOL_EVENT& aTool, std::unique_ptr<PCB_SHAPE>& aGraphic,
+                                     SHAPE_DRAW_BEHAVIOR& aBehavior, const std::vector<VECTOR2D>& aInitialPts )
 {
-    VECTOR2I vec = aMgr.GetOrigin();
+    if( !aGraphic )
+        return false;
 
-    aArc.SetCenter( vec );
+    PCB_SHAPE* graphic = aGraphic.get();
 
-    if( aMgr.GetSubtended() < ANGLE_0 )
-    {
-        vec = aMgr.GetStartRadiusEnd();
-        aArc.SetStart( vec );
-        vec = aMgr.GetEndRadiusEnd();
-        aArc.SetEnd( vec );
-    }
-    else
-    {
-        vec = aMgr.GetEndRadiusEnd();
-        aArc.SetStart( vec );
-        vec = aMgr.GetStartRadiusEnd();
-        aArc.SetEnd( vec );
-    }
-}
-
-
-bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
-                            std::optional<VECTOR2D> aStartingPoint )
-{
-    wxCHECK( aGraphic, false );
-
-    PCB_SHAPE*&  graphic = *aGraphic;
-
-    wxCHECK( graphic, false );
+    aBehavior.Reset();
 
     if( m_layer != m_frame->GetActiveLayer() )
     {
@@ -2912,16 +3030,10 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
         m_stroke.SetColor( COLOR4D::UNSPECIFIED );
     }
 
-    // Arc geometric construction manager
-    KIGFX::PREVIEW::ARC_GEOM_MANAGER arcManager;
-
-    // Arc drawing assistant overlay
-    KIGFX::PREVIEW::ARC_ASSISTANT arcAsst( arcManager, pcbIUScale, m_frame->GetUserUnits() );
-
     // Add a VIEW_GROUP that serves as a preview for the new item
     PCB_SELECTION preview;
     m_view->Add( &preview );
-    m_view->Add( &arcAsst );
+    m_view->Add( &aBehavior.GetAssistant() );
     PCB_GRID_HELPER grid( m_toolMgr, m_frame->GetMagneticItemsSettings() );
 
     auto setCursor =
@@ -2934,8 +3046,7 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
             [&] ()
             {
                 preview.Clear();
-                delete *aGraphic;
-                *aGraphic = nullptr;
+                aGraphic.reset();
             };
 
     m_controls->ShowCursor( true );
@@ -2948,8 +3059,35 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
 
     m_toolMgr->PostAction( ACTIONS::refreshPreview );
 
-    if( aStartingPoint )
-        m_toolMgr->PrimeTool( *aStartingPoint );
+    // Pre-load any initial points into the behaviour, advancing the construction
+    // state machine so that the next user click adds the subsequent point.
+    for( const VECTOR2D& pt : aInitialPts )
+        aBehavior.AddPoint( pt );
+
+    if( !aInitialPts.empty() )
+    {
+        m_toolMgr->RunAction( ACTIONS::selectionClear );
+
+        m_controls->SetAutoPan( true );
+        m_controls->CaptureCursor( true );
+
+        // Init the new item attributes
+        // (non-geometric, those are handled by the manager)
+        graphic->SetStroke( m_stroke );
+
+        if( !m_view->IsLayerVisible( m_layer ) )
+        {
+            m_frame->GetAppearancePanel()->SetLayerVisible( m_layer, true );
+            m_frame->GetCanvas()->Refresh();
+        }
+
+        preview.Add( graphic );
+        frame()->SetMsgPanel( graphic );
+
+        m_toolMgr->PrimeTool( aInitialPts.back() );
+
+        started = true;
+    }
 
     // Main loop: keep receiving events
     while( TOOL_EVENT* evt = Wait() )
@@ -2973,7 +3111,7 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
                                                COORDS_PADDING );
         m_controls->ForceCursorPosition( true, cursorPos );
 
-        if( evt->IsCancelInteractive() || ( started && evt->IsAction( &ACTIONS::undo ) ) )
+        if( evt->IsCancelInteractive() )
         {
             cleanup();
 
@@ -2985,6 +3123,11 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
                 cancelled = true;
             }
 
+            break;
+        }
+        else if( started && evt->IsAction( &ACTIONS::undo ) )
+        {
+            cleanup();
             break;
         }
         else if( evt->IsActivate() )
@@ -3019,7 +3162,6 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
 
                 // Init the new item attributes
                 // (non-geometric, those are handled by the manager)
-                graphic->SetShape( SHAPE_T::ARC );
                 graphic->SetStroke( m_stroke );
 
                 if( !m_view->IsLayerVisible( m_layer ) )
@@ -3033,22 +3175,22 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
                 started = true;
             }
 
-            arcManager.AddPoint( cursorPos, true );
+            aBehavior.AddPoint( cursorPos );
         }
-        else if( evt->IsAction( &PCB_ACTIONS::deleteLastPoint ) )
+        else if( evt->IsAction( &ACTIONS::deleteLastPoint ) )
         {
             // Snap guides persist in the grid helper until the tool exits, so a mid-draw backup
             // must clear them or they linger on screen.
             grid.FullReset();
-            arcManager.RemoveLastPoint();
+            aBehavior.RemoveLastPoint();
         }
         else if( evt->IsMotion() )
         {
             // set angle snap
-            arcManager.SetAngleSnap( angleSnap != LEADER_MODE::DIRECT );
+            aBehavior.SetAngleSnap( angleSnap != LEADER_MODE::DIRECT );
 
             // update, but don't step the manager state
-            arcManager.AddPoint( cursorPos, false );
+            aBehavior.SetCursorPosition( cursorPos );
         }
         else if( evt->IsAction( &PCB_ACTIONS::layerChanged ) )
         {
@@ -3080,17 +3222,7 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
         }
         else if( evt->IsAction( &PCB_ACTIONS::properties ) )
         {
-            if( arcManager.GetStep() == KIGFX::PREVIEW::ARC_GEOM_MANAGER::SET_START )
-            {
-                graphic->SetArcAngleAndEnd( ANGLE_90 );
-                frame()->OnEditItemRequest( graphic );
-                m_view->Update( &preview );
-                frame()->SetMsgPanel( graphic );
-                break;
-            }
-            // Don't show the edit panel if we can't represent the arc with it
-            else if( ( arcManager.GetStep() == KIGFX::PREVIEW::ARC_GEOM_MANAGER::SET_ANGLE )
-                    && ( arcManager.GetStartRadiusEnd() != arcManager.GetEndRadiusEnd() ) )
+            if( aBehavior.OnProperties( *graphic ) )
             {
                 frame()->OnEditItemRequest( graphic );
                 m_view->Update( &preview );
@@ -3134,14 +3266,14 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
                 }
             }
         }
-        else if( evt->IsAction( &PCB_ACTIONS::arcPosture ) )
+        else if( evt->IsAction( &ACTIONS::arcPosture ) )
         {
-            arcManager.ToggleClockwise();
+            aBehavior.ToggleClockwise();
         }
         else if( evt->IsAction( &ACTIONS::updateUnits ) )
         {
-            arcAsst.SetUnits( frame()->GetUserUnits() );
-            m_view->Update( &arcAsst );
+            aBehavior.SetUnits( frame()->GetUserUnits() );
+            m_view->Update( &aBehavior.GetAssistant() );
             evt->SetPassEvent();
         }
         else if( started && (   ZONE_FILLER_TOOL::IsZoneFillAction( evt )
@@ -3154,15 +3286,16 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
             evt->SetPassEvent();
         }
 
-        if( arcManager.IsComplete() )
+        if( aBehavior.IsComplete() )
         {
             break;
         }
-        else if( arcManager.HasGeometryChanged() )
+        else if( aBehavior.HasGeometryChanged() )
         {
-            updateArcFromConstructionMgr( arcManager, *graphic );
+            aBehavior.ApplyToShape( *graphic );
             m_view->Update( &preview );
-            m_view->Update( &arcAsst );
+            m_view->Update( &aBehavior.GetAssistant() );
+            aBehavior.ClearGeometryChanged();
 
             if( started )
                 frame()->SetMsgPanel( graphic );
@@ -3172,7 +3305,7 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
     }
 
     preview.Remove( graphic );
-    m_view->Remove( &arcAsst );
+    m_view->Remove( &aBehavior.GetAssistant() );
     m_view->Remove( &preview );
 
     if( selection().Empty() )
@@ -3182,324 +3315,12 @@ bool DRAWING_TOOL::drawArc( const TOOL_EVENT& aTool, PCB_SHAPE** aGraphic,
     m_controls->SetAutoPan( false );
     m_controls->CaptureCursor( false );
     m_controls->ForceCursorPosition( false );
+
+    if( cancelled )
+        aGraphic.reset();
 
     return !cancelled;
 }
-
-
-std::unique_ptr<PCB_SHAPE> DRAWING_TOOL::drawOneBezier( const TOOL_EVENT&   aTool,
-                                                        const OPT_VECTOR2I& aStartingPoint,
-                                                        const OPT_VECTOR2I& aStartingControl1Point,
-                                                        DRAW_ONE_RESULT&    aResult )
-{
-    int maxError = board()->GetDesignSettings().m_MaxError;
-
-    std::unique_ptr<PCB_SHAPE> bezier = std::make_unique<PCB_SHAPE>( m_frame->GetModel() );
-    bezier->SetShape( SHAPE_T::BEZIER );
-    bezier->SetFlags( IS_NEW );
-
-    if( m_layer != m_frame->GetActiveLayer() )
-    {
-        m_layer = m_frame->GetActiveLayer();
-        m_stroke.SetWidth( m_frame->GetDesignSettings().GetLineThickness( m_layer ) );
-        m_stroke.SetLineStyle( LINE_STYLE::DEFAULT );
-        m_stroke.SetColor( COLOR4D::UNSPECIFIED );
-    }
-
-    // Arc geometric construction manager
-    KIGFX::PREVIEW::BEZIER_GEOM_MANAGER bezierManager;
-
-    // Arc drawing assistant overlay
-    KIGFX::PREVIEW::BEZIER_ASSISTANT bezierAsst( bezierManager, pcbIUScale, m_frame->GetUserUnits() );
-
-    // Add a VIEW_GROUP that serves as a preview for the new item
-    PCB_SELECTION preview;
-    m_view->Add( &preview );
-    m_view->Add( &bezierAsst );
-    PCB_GRID_HELPER grid( m_toolMgr, m_frame->GetMagneticItemsSettings() );
-
-    const auto setCursor =
-            [&]()
-            {
-                m_frame->GetCanvas()->SetCurrentCursor( KICURSOR::PENCIL );
-            };
-
-    const auto resetProgress =
-            [&]()
-            {
-                preview.Clear();
-                bezier.reset();
-            };
-
-    m_controls->ShowCursor( true );
-    m_controls->ForceCursorPosition( false );
-    // Set initial cursor
-    setCursor();
-
-    const auto started =
-            [&]()
-            {
-                return bezierManager.GetStep() > KIGFX::PREVIEW::BEZIER_GEOM_MANAGER::SET_START;
-            };
-
-    aResult = DRAW_ONE_RESULT::ACCEPTED;
-    bool priming = false;
-
-    m_toolMgr->PostAction( ACTIONS::refreshPreview );
-
-    // Load in one or two points if they were passed in
-    if( aStartingPoint )
-    {
-        priming = true;
-
-        if( aStartingControl1Point )
-        {
-            bezierManager.AddPoint( *aStartingPoint, true );
-            bezierManager.AddPoint( *aStartingControl1Point, true );
-            m_toolMgr->PrimeTool( *aStartingControl1Point );
-        }
-        else
-        {
-            bezierManager.AddPoint( *aStartingPoint, true );
-            m_toolMgr->PrimeTool( *aStartingPoint );
-        }
-    }
-
-    // Main loop: keep receiving events
-    while( TOOL_EVENT* evt = Wait() )
-    {
-        if( started() )
-            m_frame->SetMsgPanel( bezier.get() );
-
-        setCursor();
-
-        // Init the new item attributes
-        // (non-geometric, those are handled by the manager)
-        bezier->SetShape( SHAPE_T::BEZIER );
-        bezier->SetStroke( m_stroke );
-        bezier->SetLayer( m_layer );
-
-        grid.SetSnap( !evt->Modifier( MD_SHIFT ) );
-        grid.SetUseGrid( getView()->GetGAL()->GetGridSnapping() && !evt->DisableGridSnapping() );
-        VECTOR2I cursorPos = GetClampedCoords( grid.BestSnapAnchor( m_controls->GetMousePosition(), bezier.get(),
-                                                                    GRID_GRAPHICS ),
-                                               COORDS_PADDING );
-        m_controls->ForceCursorPosition( true, cursorPos );
-
-        if( evt->IsCancelInteractive() || ( started() && evt->IsAction( &ACTIONS::undo ) ) )
-        {
-            resetProgress();
-
-            if( !started() )
-            {
-                // We've handled the cancel event.  Don't cancel other tools
-                evt->SetPassEvent( false );
-                m_frame->PopTool( aTool );
-                aResult = DRAW_ONE_RESULT::CANCELLED;
-            }
-            else
-            {
-                // We're not cancelling, but we're also not returning a finished bezier
-                // So we'll be called again.
-                aResult = DRAW_ONE_RESULT::RESET;
-            }
-
-            break;
-        }
-        else if( evt->IsActivate() )
-        {
-            if( evt->IsPointEditor() )
-            {
-                // don't exit (the point editor runs in the background)
-            }
-            else if( evt->IsMoveTool() )
-            {
-                resetProgress();
-                // leave ourselves on the stack so we come back after the move
-                aResult = DRAW_ONE_RESULT::CANCELLED;
-                break;
-            }
-            else
-            {
-                resetProgress();
-                m_frame->PopTool( aTool );
-                aResult = DRAW_ONE_RESULT::CANCELLED;
-                break;
-            }
-        }
-        else if( evt->IsClick( BUT_LEFT ) || evt->IsDblClick( BUT_LEFT ) )
-        {
-            if( !started() )
-            {
-                m_toolMgr->RunAction( ACTIONS::selectionClear );
-
-                m_controls->SetAutoPan( true );
-                m_controls->CaptureCursor( true );
-
-                if( !m_view->IsLayerVisible( m_layer ) )
-                {
-                    m_frame->GetAppearancePanel()->SetLayerVisible( m_layer, true );
-                    m_frame->GetCanvas()->Refresh();
-                }
-
-                frame()->SetMsgPanel( bezier.get() );
-            }
-
-            if( !priming )
-                bezierManager.AddPoint( cursorPos, true );
-            else
-                priming = false;
-
-            const bool doubleClick = evt->IsDblClick( BUT_LEFT );
-
-            if( doubleClick )
-            {
-                // Use the current point for all remaining points
-                while( bezierManager.GetStep() < KIGFX::PREVIEW::BEZIER_GEOM_MANAGER::SET_END )
-                    bezierManager.AddPoint( cursorPos, true );
-            }
-
-            if( bezierManager.GetStep() == KIGFX::PREVIEW::BEZIER_GEOM_MANAGER::SET_END )
-                preview.Add( bezier.get() );
-
-            // Return to the caller for a reset
-            if( doubleClick )
-            {
-                // Don't chain to this one
-                aResult = DRAW_ONE_RESULT::ACCEPTED_AND_RESET;
-                break;
-            }
-        }
-        else if( evt->IsAction( &PCB_ACTIONS::deleteLastPoint ) )
-        {
-            // Snap guides persist in the grid helper until the tool exits, so a mid-draw backup
-            // must clear them or they linger on screen.
-            grid.FullReset();
-            bezierManager.RemoveLastPoint();
-
-            if( bezierManager.GetStep() < KIGFX::PREVIEW::BEZIER_GEOM_MANAGER::SET_END )
-                preview.Remove( bezier.get() );
-        }
-        else if( evt->IsMotion() )
-        {
-            // set angle snap
-            // bezierManager.SetAngleSnap( Is45Limited() );
-
-            // update, but don't step the manager state
-            bezierManager.AddPoint( cursorPos, false );
-        }
-        else if( evt->IsAction( &PCB_ACTIONS::layerChanged ) )
-        {
-            if( m_layer != m_frame->GetActiveLayer() )
-            {
-                m_layer = m_frame->GetActiveLayer();
-                m_stroke.SetWidth( m_frame->GetDesignSettings().GetLineThickness( m_layer ) );
-                m_stroke.SetLineStyle( LINE_STYLE::DEFAULT );
-                m_stroke.SetColor( COLOR4D::UNSPECIFIED );
-            }
-
-            if( !m_view->IsLayerVisible( m_layer ) )
-            {
-                m_frame->GetAppearancePanel()->SetLayerVisible( m_layer, true );
-                m_frame->GetCanvas()->Refresh();
-            }
-
-            bezier->SetLayer( m_layer );
-            bezier->SetStroke( m_stroke );
-            m_view->Update( &preview );
-            frame()->SetMsgPanel( bezier.get() );
-        }
-        else if( evt->IsAction( &PCB_ACTIONS::properties ) )
-        {
-            // Don't show the edit panel if we can't represent the arc with it
-            if( ( bezierManager.GetStep() >= KIGFX::PREVIEW::BEZIER_GEOM_MANAGER::SET_END ) )
-            {
-                frame()->OnEditItemRequest( bezier.get() );
-                m_view->Update( &preview );
-                frame()->SetMsgPanel( bezier.get() );
-                break;
-            }
-            else
-            {
-                evt->SetPassEvent();
-            }
-        }
-        else if( evt->IsClick( BUT_RIGHT ) )
-        {
-            m_menu->ShowContextMenu( selection() );
-        }
-        else if( evt->IsAction( &PCB_ACTIONS::incWidth ) )
-        {
-            m_stroke.SetWidth( m_stroke.GetWidth() + WIDTH_STEP );
-
-            bezier->SetStroke( m_stroke );
-            m_view->Update( &preview );
-            frame()->SetMsgPanel( bezier.get() );
-        }
-        else if( evt->IsAction( &PCB_ACTIONS::decWidth ) )
-        {
-            if( (unsigned) m_stroke.GetWidth() > WIDTH_STEP )
-            {
-                m_stroke.SetWidth( m_stroke.GetWidth() - WIDTH_STEP );
-
-                bezier->SetStroke( m_stroke );
-                m_view->Update( &preview );
-                frame()->SetMsgPanel( bezier.get() );
-            }
-        }
-        else if( evt->IsAction( &ACTIONS::updateUnits ) )
-        {
-            bezierAsst.SetUnits( frame()->GetUserUnits() );
-            m_view->Update( &bezierAsst );
-            evt->SetPassEvent();
-        }
-        else if( started() && (   ZONE_FILLER_TOOL::IsZoneFillAction( evt )
-                               || evt->IsAction( &ACTIONS::redo ) ) )
-        {
-            wxBell();
-        }
-        else
-        {
-            evt->SetPassEvent();
-        }
-
-        if( bezierManager.IsComplete() )
-        {
-            break;
-        }
-        else if( bezierManager.HasGeometryChanged() )
-        {
-            bezier->SetStart( bezierManager.GetStart() );
-            bezier->SetBezierC1( bezierManager.GetControlC1() );
-            bezier->SetEnd( bezierManager.GetEnd() );
-            bezier->SetBezierC2( bezierManager.GetControlC2() );
-            bezier->RebuildBezierToSegmentsPointsList( maxError );
-
-            m_view->Update( &preview );
-            m_view->Update( &bezierAsst );
-
-            // Once we are receiving end points, we can show the bezier in the preview
-            if( bezierManager.GetStep() >= KIGFX::PREVIEW::BEZIER_GEOM_MANAGER::SET_END )
-                frame()->SetMsgPanel( bezier.get() );
-            else
-                frame()->SetMsgPanel( board() );
-        }
-    }
-
-    preview.Remove( bezier.get() );
-    m_view->Remove( &bezierAsst );
-    m_view->Remove( &preview );
-
-    if( selection().Empty() )
-        m_frame->SetMsgPanel( board() );
-
-    m_frame->GetCanvas()->SetCurrentCursor( KICURSOR::ARROW );
-    m_controls->SetAutoPan( false );
-    m_controls->CaptureCursor( false );
-    m_controls->ForceCursorPosition( false );
-
-    return bezier;
-};
 
 
 bool DRAWING_TOOL::getSourceZoneForAction( ZONE_MODE aMode, ZONE** aZone )
@@ -3733,9 +3554,9 @@ int DRAWING_TOOL::DrawZone( const TOOL_EVENT& aEvent )
                 }
             }
         }
-        else if( started && (   evt->IsAction( &PCB_ACTIONS::deleteLastPoint )
-                             || evt->IsAction( &ACTIONS::doDelete )
-                             || evt->IsAction( &ACTIONS::undo ) ) )
+        else if( started
+                 && ( evt->IsAction( &ACTIONS::deleteLastPoint ) || evt->IsAction( &ACTIONS::doDelete )
+                      || evt->IsAction( &ACTIONS::undo ) ) )
         {
             // Snap guides persist in the grid helper until the tool exits, so dropping a corner
             // must clear them or they linger on screen.

@@ -22,19 +22,17 @@
 #include <i18n_utility.h>
 
 
-NLOHMANN_JSON_SERIALIZE_ENUM( JOB_SCH_IMPORT::FORMAT,
-                              {
-                                  { JOB_SCH_IMPORT::FORMAT::AUTO, "auto" },
-                                  { JOB_SCH_IMPORT::FORMAT::ALTIUM, "altium" },
-                                  { JOB_SCH_IMPORT::FORMAT::EAGLE, "eagle" },
-                                  { JOB_SCH_IMPORT::FORMAT::CADSTAR, "cadstar" },
-                                  { JOB_SCH_IMPORT::FORMAT::EASYEDA, "easyeda" },
-                                  { JOB_SCH_IMPORT::FORMAT::EASYEDAPRO, "easyedapro" },
-                                  { JOB_SCH_IMPORT::FORMAT::LTSPICE, "ltspice" },
-                                  { JOB_SCH_IMPORT::FORMAT::PADS, "pads" },
-                                  { JOB_SCH_IMPORT::FORMAT::DIPTRACE, "diptrace" },
-                                  { JOB_SCH_IMPORT::FORMAT::PCAD, "pcad" }
-                              } )
+NLOHMANN_JSON_SERIALIZE_ENUM( JOB_SCH_IMPORT::FORMAT, { { JOB_SCH_IMPORT::FORMAT::AUTO, "auto" },
+                                                        { JOB_SCH_IMPORT::FORMAT::ALTIUM, "altium" },
+                                                        { JOB_SCH_IMPORT::FORMAT::EAGLE, "eagle" },
+                                                        { JOB_SCH_IMPORT::FORMAT::CADSTAR, "cadstar" },
+                                                        { JOB_SCH_IMPORT::FORMAT::EASYEDA, "easyeda" },
+                                                        { JOB_SCH_IMPORT::FORMAT::EASYEDAPRO, "easyedapro" },
+                                                        { JOB_SCH_IMPORT::FORMAT::LTSPICE, "ltspice" },
+                                                        { JOB_SCH_IMPORT::FORMAT::PADS, "pads" },
+                                                        { JOB_SCH_IMPORT::FORMAT::DIPTRACE, "diptrace" },
+                                                        { JOB_SCH_IMPORT::FORMAT::PCAD, "pcad" },
+                                                        { JOB_SCH_IMPORT::FORMAT::ORCAD, "orcad" } } )
 
 
 JOB_SCH_IMPORT::JOB_SCH_IMPORT() :

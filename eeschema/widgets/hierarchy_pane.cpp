@@ -946,8 +946,7 @@ void HIERARCHY_PANE::renameIdenticalSheets( const SCH_SHEET_PATH& renamedSheet,
         }
 
         // Check if this is an identical sheet that needs renaming (but not the renamed sheet itself)
-        if( data->m_SheetPath.Cmp( renamedSheet ) != 0
-            && data->m_SheetPath.Last() == renamedSheet.Last() )
+        if( data->m_SheetPath.Cmp( renamedSheet ) != 0 && data->m_SheetPath.Last() == renamedSheet.Last() )
         {
             SCH_SCREEN* modifyScreen = nullptr;
 
@@ -966,8 +965,7 @@ void HIERARCHY_PANE::renameIdenticalSheets( const SCH_SHEET_PATH& renamedSheet,
 
             if( modifyScreen )
             {
-                commit->Modify( data->m_SheetPath.Last()->GetField( FIELD_T::SHEET_NAME ),
-                                modifyScreen );
+                commit->Modify( data->m_SheetPath.Last()->GetField( FIELD_T::SHEET_NAME ), modifyScreen );
 
                 data->m_SheetPath.Last()->SetName( newName );
 

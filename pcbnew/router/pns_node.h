@@ -579,9 +579,9 @@ private:
     ARC* findRedundantArc( ARC* aSeg );
 
     ///< Scan the joint map, forming a line starting from segment (current).
-    void followLine( LINKED_ITEM* aCurrent, bool aScanDirection, int& aPos, int aLimit,
-                     VECTOR2I* aCorners, LINKED_ITEM** aSegments, bool* aArcReversed,
-                     bool& aGuardHit, bool aStopAtLockedJoints, bool aFollowLockedSegments );
+    void followLine( LINKED_ITEM* aCurrent, bool aScanDirection, int& aPos, int aLimit, VECTOR2I* aCorners,
+                     LINKED_ITEM** aSegments, bool* aArcReversed, bool& aGuardHit, bool aStopAtLockedJoints,
+                     bool aFollowLockedSegments, bool aAllowSegmentSizeMismatch );
 
 private:
     struct DEFAULT_OBSTACLE_VISITOR;

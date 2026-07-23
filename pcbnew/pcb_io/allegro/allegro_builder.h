@@ -33,6 +33,7 @@
 
 #include <board.h>
 #include <geometry/shape_line_chain.h>
+#include <geometry/transform_trs.h>
 #include <reporter.h>
 #include <progress_reporter.h>
 #include <pcb_io/common/plugin_common_layer_mapping.h>
@@ -169,17 +170,6 @@ private:
     std::vector<std::unique_ptr<BOARD_ITEM>> buildTrack( const BLK_0x05_TRACK& aBlock, int aNetcode );
     std::unique_ptr<BOARD_ITEM>              buildVia( const BLK_0x33_VIA& aBlock, int aNetcode );
 
-    /// Resolve a via padstack's copper span (0-based first/last copper index), or nullopt for a
-    /// through via, from the padstack name or the tracks meeting at the via centre. @p aResolved is
-    /// false when the span could not be determined, so the result is not cached.
-    std::optional<std::pair<int, int>> resolveViaSpan( const BLK_0x1C_PADSTACK& aPadstack,
-                                                       const VECTOR2I& aViaCenterRaw, int aTotalCu,
-                                                       bool& aResolved );
-
-    /// Populate m_trackEndpointCopper, mapping each copper track segment endpoint to the copper
-    /// layers terminating there. Built lazily the first time a name-less blind/buried via needs it.
-    void collectTrackEndpointCopper();
-
     class ZONE_FILL_HANDLER;
 
     /**
@@ -190,24 +180,25 @@ private:
      */
     std::unique_ptr<ZONE> buildZone( const BLOCK_BASE&                     aBoundaryBlock,
                                      const std::vector<const BLOCK_BASE*>& aRelatedBlocks,
-                                     ZONE_FILL_HANDLER&                    aZoneFillHandler );
+                                     ZONE_FILL_HANDLER& aZoneFillHandler, BOARD_ITEM_CONTAINER& aParent );
 
-    SHAPE_LINE_CHAIN buildOutline( const BLK_0x0E_RECT& aRect ) const;
-    SHAPE_LINE_CHAIN buildOutline( const BLK_0x24_RECT& aRect ) const;
-    SHAPE_LINE_CHAIN buildOutline( const BLK_0x28_SHAPE& aShape ) const;
+    SHAPE_LINE_CHAIN buildOutline( const BLK_0x0E_RECT& aRect, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
+    SHAPE_LINE_CHAIN buildOutline( const BLK_0x24_RECT& aRect, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
+    SHAPE_LINE_CHAIN buildOutline( const BLK_0x28_SHAPE& aShape, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
 
-    SHAPE_POLY_SET shapeToPolySet( const BLK_0x28_SHAPE& aShape ) const;
+    SHAPE_POLY_SET shapeToPolySet( const BLK_0x28_SHAPE& aShape, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
 
     /**
      * Try to build a zone shape for the given block, with holes.
      */
-    SHAPE_POLY_SET tryBuildZoneShape( const BLOCK_BASE& aBlock );
+    SHAPE_POLY_SET tryBuildZoneShape( const BLOCK_BASE& aBlock, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
 
     /**
      * Walk a geometry chain (0x01 arcs and 0x15-17 segments) starting from the given key,
      * following m_Next links. Used for building hole outlines from 0x34 KEEPOUT blocks.
+     * Identity transforms are cached by start key; non-identity transforms are built fresh.
      */
-    const SHAPE_LINE_CHAIN& buildSegmentChain( uint32_t aStartKey ) const;
+    SHAPE_LINE_CHAIN buildSegmentChain( uint32_t aStartKey, const TRANSFORM_TRS& aXform = TRANSFORM_TRS() ) const;
 
     /**
      * Get blocks that are related to the BOUNDARY shape, i.e. NET and SHAPE (fill) info.
@@ -292,15 +283,6 @@ private:
 
     // Cache of segment chains keyed by start key, avoiding redundant hole geometry rebuilds
     mutable std::unordered_map<uint32_t, SHAPE_LINE_CHAIN> m_segChainCache;
-
-    // Resolved copper span (0-based) per via padstack key, or nullopt for a through via.
-    std::unordered_map<uint32_t, std::optional<std::pair<int, int>>> m_viaSpanCache;
-
-    // Packed track segment endpoint -> [min,max] copper layer index of tracks ending there.
-    std::unordered_map<int64_t, std::pair<int, int>> m_trackEndpointCopper;
-
-    // True once m_trackEndpointCopper has been populated.
-    bool m_trackEndpointsCollected = false;
 
     // Conversion factor from internal units to nanometers.
     double m_scale;

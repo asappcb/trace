@@ -62,8 +62,10 @@ set( QA_EESCHEMA_SRCS
     sch_io/geda/test_geda_sch_import.cpp
     sch_io/diptrace/test_diptrace_sch_import.cpp
     sch_io/pcad/test_pcad_sch_import.cpp
+    sch_io/orcad/test_orcad_sch_import.cpp
     sch_io/cadstar/test_issue14447_arc_connection.cpp
 
+    erc/test_erc_empty_label.cpp
     erc/test_erc_four_way.cpp
 	erc/test_erc_label_not_connected.cpp
 	erc/test_erc_multiple_pin_to_pin.cpp
@@ -123,8 +125,14 @@ set( QA_EESCHEMA_SRCS
     test_issue24409_cli_hierarchical_instances.cpp
     test_issue24760_plot_page_numbers.cpp
     test_issue24858_variant_persistence.cpp
+    test_issue24915_job_variant_fields.cpp
+    test_issue24943_variant_unit_sync.cpp
+    test_issue24961_group_promotion.cpp
     test_issue24663_sheet_dnp_fields.cpp
     test_issue24360_root_sheetname.cpp
+    test_unique_sheet_name.cpp
+    test_unique_group_name.cpp
+    test_issue1441_bom_default_filename.cpp
     test_issue16915_bus_netclass.cpp
     test_issue24220_hierarchical_bus_netclass.cpp
     test_issue24297_http_migrate.cpp
@@ -137,6 +145,9 @@ set( QA_EESCHEMA_SRCS
     test_nc_pin_connectivity.cpp
     test_crossing_label.cpp
     test_eagle_plugin.cpp
+    test_sch_footprint_field_reconciler.cpp
+    test_easyedapro_v3_import.cpp
+    test_easyedapro_v3_plugin.cpp
     test_junction_helpers.cpp
     test_junction_place.cpp
     test_issue18346_junction_fixup.cpp
@@ -180,6 +191,7 @@ set( QA_EESCHEMA_SRCS
     test_sch_reference_list.cpp
     test_sch_screen.cpp
     test_sch_sheet.cpp
+    test_issue24972_sheet_pin_constrain.cpp
     test_sch_sheet_path.cpp
     test_sch_sheet_list.cpp
     test_sch_symbol.cpp
@@ -219,7 +231,6 @@ set( QA_EESCHEMA_SRCS
     test_schematic_clipboard_export.cpp
     test_autoplace_fields.cpp
     test_field_case_conflicts.cpp
-    test_issue23020_deep_hierarchy.cpp
 
     # Net Chains test suite
     net_chains/test_net_chains.cpp

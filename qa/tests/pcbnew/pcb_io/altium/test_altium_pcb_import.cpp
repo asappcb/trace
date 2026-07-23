@@ -31,6 +31,7 @@
 
 #include <board.h>
 #include <board_design_settings.h>
+#include <footprint.h>
 #include <board_stackup_manager/board_stackup.h>
 #include <common.h>
 #include <core/utf8.h>
@@ -82,6 +83,39 @@ BOOST_AUTO_TEST_CASE( BoardLoadNoAssertions )
     // Basic sanity checks
     BOOST_CHECK( board->GetNetCount() > 0 );
     BOOST_CHECK( board->Footprints().size() > 0 );
+}
+
+
+// GetImportedCachedLibraryFootprints() is caller-owns, so Altium must clone rather than alias
+// aliasing would let the reconciler (takes ownership) double-free the board
+BOOST_AUTO_TEST_CASE( CachedLibraryFootprintsAreOwnedCopies )
+{
+    std::string dataPath = KI_TEST::GetPcbnewTestDataDir() + "plugins/altium/HiFive/HiFive1.B01.PcbDoc";
+
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+    m_altiumPlugin.LoadBoard( dataPath, board.get(), nullptr );
+
+    BOOST_REQUIRE( board );
+    BOOST_REQUIRE_GT( board->Footprints().size(), 0 );
+
+    std::vector<FOOTPRINT*> cached = m_altiumPlugin.GetImportedCachedLibraryFootprints();
+
+    // adopt ownership so the clones free with the test
+    std::vector<std::unique_ptr<FOOTPRINT>> owned;
+
+    for( FOOTPRINT* fp : cached )
+        owned.emplace_back( fp );
+
+    BOOST_CHECK_EQUAL( cached.size(), board->Footprints().size() );
+
+    std::set<FOOTPRINT*> boardFootprints( board->Footprints().begin(), board->Footprints().end() );
+
+    // no returned footprint may alias a board-owned one
+    for( FOOTPRINT* fp : cached )
+    {
+        BOOST_CHECK_MESSAGE( boardFootprints.count( fp ) == 0,
+                             "GetImportedCachedLibraryFootprints returned a board-owned footprint" );
+    }
 }
 
 
@@ -662,6 +696,51 @@ BOOST_AUTO_TEST_CASE( LengthTuningPatterns )
     BOOST_CHECK_EQUAL( tuningCount, 8 );
     BOOST_CHECK_EQUAL( singleCount, 4 );
     BOOST_CHECK_EQUAL( diffPairCount, 4 );
+}
+
+
+// https://gitlab.com/kicad/code/kicad/-/issues/24847
+// Keepout regions defined inside an Altium footprint must be imported at the footprint's board
+// location. The importer keeps the Altium absolute coordinates instead of re-basing them to the
+// footprint origin, so the keepout zone lands far from the footprint that owns it.
+BOOST_AUTO_TEST_CASE( Issue24847_FootprintKeepoutPlacement )
+{
+    std::string dataPath = KI_TEST::GetPcbnewTestDataDir() + "plugins/altium/issue24847/PCB1.PcbDoc";
+
+    std::unique_ptr<BOARD> board = std::make_unique<BOARD>();
+    m_altiumPlugin.LoadBoard( dataPath, board.get(), nullptr );
+
+    BOOST_REQUIRE( board );
+    BOOST_REQUIRE_GT( board->Footprints().size(), 0 );
+
+    int keepoutZoneCount = 0;
+
+    for( FOOTPRINT* footprint : board->Footprints() )
+    {
+        const VECTOR2I fpPos = footprint->GetPosition();
+
+        for( ZONE* zone : footprint->Zones() )
+        {
+            keepoutZoneCount++;
+
+            const VECTOR2I zoneCenter = zone->GetBoundingBox().GetCenter();
+            const double   distMm = ( zoneCenter - fpPos ).EuclideanNorm() / 1e6;
+
+            BOOST_TEST_MESSAGE( "footprint " << footprint->GetReference().ToStdString() << " at (" << fpPos.x << ","
+                                             << fpPos.y << ") keepout center (" << zoneCenter.x << "," << zoneCenter.y
+                                             << ") dist " << distMm << " mm" );
+
+            // A footprint-local keepout sits on its footprint anchor; the pre-fix regression put
+            // it over 100mm away, so anything past a couple of mm is a placement failure.
+            BOOST_CHECK_MESSAGE( distMm < 2.0, "Keepout in footprint " << footprint->GetReference().ToStdString()
+                                                                       << " is " << distMm
+                                                                       << " mm from its footprint origin" );
+        }
+    }
+
+    // PCB1.PcbDoc carries exactly three footprint-local keepouts (Z1, Z2, R1); dropping any is a
+    // regression the placement check alone would not catch.
+    BOOST_CHECK_EQUAL( keepoutZoneCount, 3 );
 }
 
 

@@ -52,6 +52,7 @@ using namespace std::placeholders;
 #include <tool/tool_manager.h>
 #include <tools/tool_event_utils.h>
 #include <tools/pcb_point_editor.h>
+#include <tools/constraint_edit_tool.h>
 #include <tools/pcb_selection_tool.h>
 #include <tools/pcb_actions.h>
 #include <tools/board_inspection_tool.h>
@@ -448,6 +449,20 @@ int PCB_SELECTION_TOOL::Main( const TOOL_EVENT& aEvent )
             {
                 m_disambiguateTimer.Stop();
 
+                // A click on a geometric-constraint badge selects that constraint instead of a
+                // board item (the badges have no selectable geometry of their own); a click that
+                // misses every badge clears any badge selection.
+                if( CONSTRAINT_EDIT_TOOL* constraintTool = m_toolMgr->GetTool<CONSTRAINT_EDIT_TOOL>() )
+                {
+                    if( constraintTool->SelectConstraintAt( evt->Position() ) )
+                    {
+                        m_canceledMenu = false;
+                        continue;
+                    }
+
+                    constraintTool->ClearConstraintSelection();
+                }
+
                 // Single click? Select single object
                 if( m_highlight_modifier && brd_editor )
                 {
@@ -503,6 +518,13 @@ int PCB_SELECTION_TOOL::Main( const TOOL_EVENT& aEvent )
             if( frame && frame->IsType( FRAME_FOOTPRINT_VIEWER ) )
             {
                 evt->SetPassEvent();
+                continue;
+            }
+
+            // A double-click on a constraint badge edits that relation's value.
+            if( CONSTRAINT_EDIT_TOOL* constraintTool = m_toolMgr->GetTool<CONSTRAINT_EDIT_TOOL>();
+                constraintTool && constraintTool->EditConstraintAt( evt->Position() ) )
+            {
                 continue;
             }
 
@@ -672,6 +694,12 @@ int PCB_SELECTION_TOOL::Main( const TOOL_EVENT& aEvent )
         {
             m_disambiguateTimer.Stop();
             m_frame->ClearFocus();
+
+            if( CONSTRAINT_EDIT_TOOL* constraintTool = m_toolMgr->GetTool<CONSTRAINT_EDIT_TOOL>();
+                constraintTool && constraintTool->ClearConstraintSelection() )
+            {
+                continue;
+            }
 
             if( !GetSelection().Empty() )
             {
@@ -1528,9 +1556,8 @@ int PCB_SELECTION_TOOL::SelectPolyArea( const TOOL_EVENT& aEvent )
             evt->SetPassEvent( false );
             break;
         }
-        else if(   evt->IsAction( &PCB_ACTIONS::deleteLastPoint )
-                || evt->IsAction( &ACTIONS::doDelete )
-                || evt->IsAction( &ACTIONS::undo ) )
+        else if( evt->IsAction( &ACTIONS::deleteLastPoint ) || evt->IsAction( &ACTIONS::doDelete )
+                 || evt->IsAction( &ACTIONS::undo ) )
         {
             if( points.GetPointCount() > 0 )
             {
@@ -2236,6 +2263,12 @@ void PCB_SELECTION_TOOL::selectAllConnectedTracks( const std::vector<BOARD_CONNE
 
     auto connectivity = board()->GetConnectivity();
 
+    // Don't let expansion select outside an entered group, or select() would ExitGroup mid-walk.
+    auto inScope = [this]( BOARD_ITEM* aItem )
+    {
+        return isWithinEnteredGroup( aItem, m_enteredGroup, m_isFootprintEditor );
+    };
+
     std::set<PAD*>                     startPadSet;
     std::vector<BOARD_CONNECTED_ITEM*> cleanupItems;
 
@@ -2248,7 +2281,7 @@ void PCB_SELECTION_TOOL::selectAllConnectedTracks( const std::vector<BOARD_CONNE
         // Select any starting track items
         if( startItem->IsType( { PCB_TRACE_T, PCB_ARC_T, PCB_VIA_T } ) )
         {
-            if( itemPassesFilter( startItem, true ) )
+            if( itemPassesFilter( startItem, true ) && inScope( startItem ) )
                 select( startItem );
         }
     }
@@ -2461,7 +2494,7 @@ void PCB_SELECTION_TOOL::selectAllConnectedTracks( const std::vector<BOARD_CONNE
                     if( !itemPassesFilter( track, true ) )
                         continue;
 
-                    if( !track->IsSelected() )
+                    if( !track->IsSelected() && inScope( track ) )
                         select( track );
 
                     if( !track->HasFlag( SKIP_STRUCT ) )
@@ -2487,7 +2520,7 @@ void PCB_SELECTION_TOOL::selectAllConnectedTracks( const std::vector<BOARD_CONNE
                     if( !itemPassesFilter( shape, true ) )
                         continue;
 
-                    if( !shape->IsSelected() )
+                    if( !shape->IsSelected() && inScope( shape ) )
                         select( shape );
 
                     if( !shape->HasFlag( SKIP_STRUCT ) )
@@ -2510,7 +2543,7 @@ void PCB_SELECTION_TOOL::selectAllConnectedTracks( const std::vector<BOARD_CONNE
 
                 if( hitVia )
                 {
-                    if( !hitVia->IsSelected() )
+                    if( !hitVia->IsSelected() && inScope( hitVia ) )
                         select( hitVia );
 
                     if( !hitVia->HasFlag( SKIP_STRUCT ) )
@@ -4108,6 +4141,7 @@ bool PCB_SELECTION_TOOL::Selectable( const BOARD_ITEM* aItem, bool checkVisibili
 
     // These are not selectable
     case PCB_NETINFO_T:
+    case PCB_CONSTRAINT_T: // geometry-free, never rendered or hit-tested (#2329)
     case NOT_USED:
     case TYPE_NOT_INIT:
         return false;
@@ -4777,6 +4811,17 @@ bool PCB_SELECTION_TOOL::HasLockedDescendant( const BOARD_ITEM* aItem )
             RECURSE_MODE::RECURSE );
 
     return lockedDescendant;
+}
+
+
+bool PCB_SELECTION_TOOL::isWithinEnteredGroup( BOARD_ITEM* aItem, PCB_GROUP* aEnteredGroup, bool aIsFootprintEditor )
+{
+    if( aEnteredGroup )
+        return PCB_GROUP::WithinScope( aItem, aEnteredGroup, aIsFootprintEditor );
+
+    // Not entered: keep expansion at the top level so it can't reach into a group and
+    // silently pull the whole group into a later delete.
+    return aItem->GetParentGroup() == nullptr;
 }
 
 

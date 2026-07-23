@@ -2048,14 +2048,14 @@ PCB_DIFF_VIEW buildPcbDiffView( BOARD* aLive, BOARD* aOther, const wxString& aOt
 
         if( BOARD_ITEM* found = aLive->ResolveItem( kiid, /*aAllowNullptrReturn=*/true ) )
         {
-            if( auto* clone = dynamic_cast<BOARD_ITEM*>( found->Clone() ) )
+            if( BOARD_ITEM* clone = dynamic_cast<BOARD_ITEM*>( found->Clone() ) )
                 view.clones.emplace_back( clone );
         }
     }
 
     std::vector<KIGFX::VIEW_ITEM*> extraItems;
 
-    for( const auto& clone : view.clones )
+    for( const std::unique_ptr<BOARD_ITEM>& clone : view.clones )
     {
         // A footprint draws nothing itself. Its pads, graphics and fields are
         // independent view items, so add them too or the clone is invisible.
@@ -2298,8 +2298,8 @@ int BOARD_INSPECTION_TOOL::CompareBoardWithHistory( const TOOL_EVENT& aEvent )
         }
         catch( ... )
         {
-            // A historical board may be malformed or in a format this build
-            // cannot parse. Skip it rather than letting the throw escape.
+            // A historical board may be malformed or in a format this build cannot parse. Skip it
+            // rather than letting the throw escape.
             mgr->UnloadProject( prj, false );
             wxFileName::Rmdir( tempDir, wxPATH_RMDIR_RECURSIVE );
             return false;
@@ -2823,26 +2823,27 @@ int BOARD_INSPECTION_TOOL::HighlightNetChain( const TOOL_EVENT& aEvent )
     KIGFX::VIEW_CONTROLS* controls = getViewControls();
     VECTOR2D cursorPos = controls->GetCursorPosition( !aEvent.DisableGridSnapping() );
     BOARD_ITEM* item = nullptr;
+
     {
         // Collect nearest connectable item at cursor position
         BOARD* board = m_frame->GetBoard();
         GENERAL_COLLECTORS_GUIDE guide = m_frame->GetCollectorsGuide();
         GENERAL_COLLECTOR collector;
-        collector.Collect( board, { PCB_PAD_T, PCB_VIA_T, PCB_TRACE_T, PCB_ARC_T, PCB_SHAPE_T }, cursorPos,
-                           guide );
+        collector.Collect( board, { PCB_PAD_T, PCB_VIA_T, PCB_TRACE_T, PCB_ARC_T, PCB_SHAPE_T }, cursorPos, guide );
 
         if( collector.GetCount() > 0 )
-            item = static_cast<BOARD_ITEM*>( collector[0] );
+            item = collector[0];
     }
+
     wxString sig;
 
     if( item )
     {
         NETINFO_ITEM* net = nullptr;
 
-        if( auto pad = dynamic_cast<PAD*>( item ) )
+        if( PAD* pad = dynamic_cast<PAD*>( item ) )
             net = pad->GetNet();
-        else if( auto ci = dynamic_cast<BOARD_CONNECTED_ITEM*>( item ) )
+        else if( BOARD_CONNECTED_ITEM* ci = dynamic_cast<BOARD_CONNECTED_ITEM*>( item ) )
             net = ci->GetNet();
 
         if( net )
@@ -2858,10 +2859,13 @@ int BOARD_INSPECTION_TOOL::HighlightNetChain( const TOOL_EVENT& aEvent )
         settings->SetHighlight( false );
         m_currentlyHighlighted.clear();
         m_toolMgr->GetView()->UpdateAllLayersColor();
-    if( auto pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
+
+        if( KIGFX::PCB_RENDER_SETTINGS* pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
             pcbSettings->SetHighlightedNetChain( wxString() );
+
         return 0;
     }
+
 
     // If same chain already highlighted, clear highlight
     if( !sig.IsEmpty() && sig == m_highlightedNetChain )
@@ -2870,8 +2874,10 @@ int BOARD_INSPECTION_TOOL::HighlightNetChain( const TOOL_EVENT& aEvent )
         settings->SetHighlight( false );
         m_currentlyHighlighted.clear();
         m_toolMgr->GetView()->UpdateAllLayersColor();
-    if( auto pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
+
+        if( KIGFX::PCB_RENDER_SETTINGS* pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
             pcbSettings->SetHighlightedNetChain( wxString() );
+
         return 0;
     }
 
@@ -2882,16 +2888,19 @@ int BOARD_INSPECTION_TOOL::HighlightNetChain( const TOOL_EVENT& aEvent )
         if( sig.IsEmpty() )
         {
             int firstCode = *m_currentlyHighlighted.begin();
+
             if( NETINFO_ITEM* net = m_frame->GetBoard()->FindNet( firstCode ) )
                 sig = net->GetNetChain();
         }
     }
 
     m_highlightedNetChain = sig;
-    if( auto pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
+
+    if( KIGFX::PCB_RENDER_SETTINGS* pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
         pcbSettings->SetHighlightedNetChain( sig );
 
     std::set<int> codes;
+
     if( !sig.IsEmpty() )
     {
         for( NETINFO_ITEM* net : m_frame->GetBoard()->GetNetInfo() )
@@ -2915,7 +2924,7 @@ int BOARD_INSPECTION_TOOL::ReplaceTerminalPad( const TOOL_EVENT& aEvent )
         return 0;
 
     // Parameters are passed as a single pair<old,new>
-    auto ids = aEvent.Parameter<std::pair<wxString, wxString>>();
+    std::pair<wxString, wxString> ids = aEvent.Parameter<std::pair<wxString, wxString>>();
     KIID oldId( ids.first );
     KIID newId( ids.second );
     m_frame->GetBoard()->ReplaceNetChainTerminalPad( m_highlightedNetChain, oldId, newId );
@@ -2933,9 +2942,11 @@ int BOARD_INSPECTION_TOOL::ClearHighlight( const TOOL_EVENT& aEvent )
 
     board->ResetNetHighLight();
     settings->SetHighlight( false );
+
     // Also clear any chain-specific state
-    if( auto pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
+    if( KIGFX::PCB_RENDER_SETTINGS* pcbSettings = dynamic_cast<KIGFX::PCB_RENDER_SETTINGS*>( settings ) )
         pcbSettings->SetHighlightedNetChain( wxString() );
+
     m_toolMgr->GetView()->UpdateAllLayersColor();
     m_frame->SetMsgPanel( board );
     m_frame->SendCrossProbeNetName( "" );
@@ -3037,9 +3048,9 @@ int BOARD_INSPECTION_TOOL::UpdateLocalRatsnest( const TOOL_EVENT& aEvent )
         m_dynamicData = nullptr;
     }
 
-    auto selectionTool = m_toolMgr->GetTool<PCB_SELECTION_TOOL>();
-    auto& selection = selectionTool->GetSelection();
-    auto connectivity = getModel<BOARD>()->GetConnectivity();
+    PCB_SELECTION_TOOL*                selectionTool = m_toolMgr->GetTool<PCB_SELECTION_TOOL>();
+    PCB_SELECTION&                     selection = selectionTool->GetSelection();
+    std::shared_ptr<CONNECTIVITY_DATA> connectivity = getModel<BOARD>()->GetConnectivity();
 
     if( selection.Empty() )
     {

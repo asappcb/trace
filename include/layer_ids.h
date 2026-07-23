@@ -220,64 +220,64 @@ enum NETNAMES_LAYER_ID: int
  *  #GAL_LAYER_ID_START is not that sensitive, but the offsets should never be changed or else any
  *  existing visibility settings will be disrupted.
  */
-enum GAL_LAYER_ID: int
+enum GAL_LAYER_ID : int
 {
     GAL_LAYER_ID_START = NETNAMES_LAYER_ID_END,
 
-     /// Meta control for all vias opacity/visibility.
-    LAYER_VIAS               = GAL_LAYER_ID_START +  0,
-    LAYER_VIA_MICROVIA       = GAL_LAYER_ID_START +  1, /// Draw micro vias.
-    LAYER_VIA_BLIND          = GAL_LAYER_ID_START +  2, /// Draw blind vias.
-    LAYER_VIA_BURIED         = GAL_LAYER_ID_START +  3, /// Draw buried vias.
-    LAYER_VIA_THROUGH        = GAL_LAYER_ID_START +  4, /// Draw usual through hole vias.
+    /// Meta control for all vias opacity/visibility.
+    LAYER_VIAS = GAL_LAYER_ID_START + 0,
+    LAYER_VIA_MICROVIA = GAL_LAYER_ID_START + 1, /// Draw micro vias.
+    LAYER_VIA_BLIND = GAL_LAYER_ID_START + 2,    /// Draw blind vias.
+    LAYER_VIA_BURIED = GAL_LAYER_ID_START + 3,   /// Draw buried vias.
+    LAYER_VIA_THROUGH = GAL_LAYER_ID_START + 4,  /// Draw usual through hole vias.
 
     /// Handle color for not plated holes (holes, not pads).
-    LAYER_NON_PLATEDHOLES    = GAL_LAYER_ID_START +  5,
-    LAYER_FP_TEXT            = GAL_LAYER_ID_START +  6,
+    LAYER_NON_PLATEDHOLES = GAL_LAYER_ID_START + 5,
+    LAYER_FP_TEXT = GAL_LAYER_ID_START + 6,
 
-//  LAYER_MOD_TEXT_BK deprecated                  +  6,
+    //  LAYER_MOD_TEXT_BK deprecated                  +  6,
 
-//  DEPRECATED, UNUSED SINCE 9.0. text marked as invisible.
-//  LAYER_HIDDEN_TEXT        = GAL_LAYER_ID_START +  7,
+    //  DEPRECATED, UNUSED SINCE 9.0. text marked as invisible.
+    //  LAYER_HIDDEN_TEXT        = GAL_LAYER_ID_START +  7,
 
     /// Anchor of items having an anchor point (texts, footprints).
-    LAYER_ANCHOR             = GAL_LAYER_ID_START +  8,
+    LAYER_ANCHOR = GAL_LAYER_ID_START + 8,
 
-//  LAYER_PADS_SMD_FR        = GAL_LAYER_ID_START +  9, // Deprecated since 9.0
-//  LAYER_PADS_SMD_BK        = GAL_LAYER_ID_START + 10, // Deprecated since 9.0
+    //  LAYER_PADS_SMD_FR        = GAL_LAYER_ID_START +  9, // Deprecated since 9.0
+    //  LAYER_PADS_SMD_BK        = GAL_LAYER_ID_START + 10, // Deprecated since 9.0
 
-    LAYER_RATSNEST           = GAL_LAYER_ID_START + 11,
-    LAYER_GRID               = GAL_LAYER_ID_START + 12,
-    LAYER_GRID_AXES          = GAL_LAYER_ID_START + 13,
+    LAYER_RATSNEST = GAL_LAYER_ID_START + 11,
+    LAYER_GRID = GAL_LAYER_ID_START + 12,
+    LAYER_GRID_AXES = GAL_LAYER_ID_START + 13,
 
-//  LAYER_NO_CONNECTS deprecated                  + 14, // show a marker on pads with no nets
+    //  LAYER_NO_CONNECTS deprecated                  + 14, // show a marker on pads with no nets
 
-    LAYER_FOOTPRINTS_FR      = GAL_LAYER_ID_START + 15, ///< Show footprints on front.
-    LAYER_FOOTPRINTS_BK      = GAL_LAYER_ID_START + 16, ///< Show footprints on back.
+    LAYER_FOOTPRINTS_FR = GAL_LAYER_ID_START + 15, ///< Show footprints on front.
+    LAYER_FOOTPRINTS_BK = GAL_LAYER_ID_START + 16, ///< Show footprints on back.
 
     /// Show footprints values (when texts are visible).
-    LAYER_FP_VALUES          = GAL_LAYER_ID_START + 17,
+    LAYER_FP_VALUES = GAL_LAYER_ID_START + 17,
 
     /// Show footprints references (when texts are visible).
-    LAYER_FP_REFERENCES      = GAL_LAYER_ID_START + 18,
-    LAYER_TRACKS             = GAL_LAYER_ID_START + 19,
+    LAYER_FP_REFERENCES = GAL_LAYER_ID_START + 18,
+    LAYER_TRACKS = GAL_LAYER_ID_START + 19,
 
-//  LAYER_PADS_TH            = GAL_LAYER_ID_START + 20, ///< Deprecated since 9.0
+    //  LAYER_PADS_TH            = GAL_LAYER_ID_START + 20, ///< Deprecated since 9.0
 
-    LAYER_PAD_PLATEDHOLES    = GAL_LAYER_ID_START + 21, ///< to draw pad holes (plated)
+    LAYER_PAD_PLATEDHOLES = GAL_LAYER_ID_START + 21, ///< to draw pad holes (plated)
 
     /// Draw via holes (pad holes do not use this layer).
-    LAYER_VIA_HOLES          = GAL_LAYER_ID_START + 22,
+    LAYER_VIA_HOLES = GAL_LAYER_ID_START + 22,
 
-     /// Layer for DRC markers with #SEVERITY_ERROR.
-    LAYER_DRC_ERROR          = GAL_LAYER_ID_START + 23,
-    LAYER_DRAWINGSHEET       = GAL_LAYER_ID_START + 24, ///< Sheet frame and title block.
-    LAYER_GP_OVERLAY         = GAL_LAYER_ID_START + 25, ///< General purpose overlay.
-    LAYER_SELECT_OVERLAY     = GAL_LAYER_ID_START + 26, ///< Selected items overlay.
-    LAYER_PCB_BACKGROUND     = GAL_LAYER_ID_START + 27, ///< PCB background color.
-    LAYER_CURSOR             = GAL_LAYER_ID_START + 28, ///< PCB cursor.
-    LAYER_AUX_ITEMS          = GAL_LAYER_ID_START + 29, ///< Auxiliary items (guides, rule, etc).
-    LAYER_DRAW_BITMAPS       = GAL_LAYER_ID_START + 30, ///< Draw images.
+    /// Layer for DRC markers with #SEVERITY_ERROR.
+    LAYER_DRC_ERROR = GAL_LAYER_ID_START + 23,
+    LAYER_DRAWINGSHEET = GAL_LAYER_ID_START + 24,   ///< Sheet frame and title block.
+    LAYER_GP_OVERLAY = GAL_LAYER_ID_START + 25,     ///< General purpose overlay.
+    LAYER_SELECT_OVERLAY = GAL_LAYER_ID_START + 26, ///< Selected items overlay.
+    LAYER_PCB_BACKGROUND = GAL_LAYER_ID_START + 27, ///< PCB background color.
+    LAYER_CURSOR = GAL_LAYER_ID_START + 28,         ///< PCB cursor.
+    LAYER_AUX_ITEMS = GAL_LAYER_ID_START + 29,      ///< Auxiliary items (guides, rule, etc).
+    LAYER_DRAW_BITMAPS = GAL_LAYER_ID_START + 30,   ///< Draw images.
 
     /// This is the end of the layers used for visibility bit masks in legacy board files
     GAL_LAYER_ID_BITMASK_END = GAL_LAYER_ID_START + 31,
@@ -285,47 +285,55 @@ enum GAL_LAYER_ID: int
     // Layers in this section have visibility controls but were not present in legacy board files.
 
     /// Meta control for all pads opacity/visibility (color ignored).
-    LAYER_PADS               = GAL_LAYER_ID_START + 32,
+    LAYER_PADS = GAL_LAYER_ID_START + 32,
 
     /// Control for copper zone opacity/visibility (color ignored).
-    LAYER_ZONES              = GAL_LAYER_ID_START + 33,
+    LAYER_ZONES = GAL_LAYER_ID_START + 33,
 
-    LAYER_PAD_HOLEWALLS      = GAL_LAYER_ID_START + 34,
-    LAYER_VIA_HOLEWALLS      = GAL_LAYER_ID_START + 35,
+    LAYER_PAD_HOLEWALLS = GAL_LAYER_ID_START + 34,
+    LAYER_VIA_HOLEWALLS = GAL_LAYER_ID_START + 35,
 
     /// Layer for DRC markers with #SEVERITY_WARNING.
-    LAYER_DRC_WARNING        = GAL_LAYER_ID_START + 36,
+    LAYER_DRC_WARNING = GAL_LAYER_ID_START + 36,
 
     /// Layer for DRC markers which have been individually excluded.
-    LAYER_DRC_EXCLUSION      = GAL_LAYER_ID_START + 37,
-    LAYER_MARKER_SHADOWS     = GAL_LAYER_ID_START + 38, ///< Shadows for DRC markers.
+    LAYER_DRC_EXCLUSION = GAL_LAYER_ID_START + 37,
+    LAYER_MARKER_SHADOWS = GAL_LAYER_ID_START + 38, ///< Shadows for DRC markers.
 
     LAYER_LOCKED_ITEM_SHADOW = GAL_LAYER_ID_START + 39, ///< Shadow layer for locked items.
 
     /// Shadow layer for items flagged conflicting.
-    LAYER_CONFLICTS_SHADOW   = GAL_LAYER_ID_START + 40,
+    LAYER_CONFLICTS_SHADOW = GAL_LAYER_ID_START + 40,
 
     /// Copper graphic shape opacity/visibility (color ignored).
-    LAYER_FILLED_SHAPES      = GAL_LAYER_ID_START + 41,
+    LAYER_FILLED_SHAPES = GAL_LAYER_ID_START + 41,
 
-    LAYER_DRC_SHAPES         = GAL_LAYER_ID_START + 42,  ///< Custom shapes for DRC markers.
-//  LAYER_DRC_SHAPE2         = GAL_LAYER_ID_START + 43,  ///< Deprecated since 10.0
+    LAYER_DRC_SHAPES = GAL_LAYER_ID_START + 42, ///< Custom shapes for DRC markers.
+    //  LAYER_DRC_SHAPE2         = GAL_LAYER_ID_START + 43,  ///< Deprecated since 10.0
 
     LAYER_BOARD_OUTLINE_AREA = GAL_LAYER_ID_START + 44, ///< PCB board outline
 
     /// PCB reference/manual snap points visibility
-    LAYER_POINTS             = GAL_LAYER_ID_START + 45,
+    LAYER_POINTS = GAL_LAYER_ID_START + 45,
+
+    /// Shadow layer for items bound to a constraint
+    LAYER_CONSTRAINT_SHADOW = GAL_LAYER_ID_START + 46,
 
     // Add layers below this point that do not have visibility controls, so don't need explicit
     // enum values
 
-    LAYER_DRAWINGSHEET_PAGE1,      ///< Sheet Editor previewing first page.
-    LAYER_DRAWINGSHEET_PAGEn,      ///< Sheet Editor previewing pages after first page.
+    LAYER_DRAWINGSHEET_PAGE1, ///< Sheet Editor previewing first page.
+    LAYER_DRAWINGSHEET_PAGEn, ///< Sheet Editor previewing pages after first page.
 
-    LAYER_PAGE_LIMITS,             ///< Color for drawing the page extents (visibility stored in
-                                   ///< PCBNEW_SETTINGS::m_ShowPageLimits)
+    LAYER_PAGE_LIMITS, ///< Color for drawing the page extents (visibility stored in
+                       ///< PCBNEW_SETTINGS::m_ShowPageLimits)
 
-    LAYER_DRC_HIGHLIGHTED,          ///< Color for highlighted DRC markers.
+    LAYER_DRC_HIGHLIGHTED, ///< Color for highlighted DRC markers.
+
+    // Constraint tints themed and drawn by overlay with no visibility control of their own
+    LAYER_CONSTRAINT_UNDER, ///< Under-constrained (free DOF remain).
+    LAYER_CONSTRAINT_WELL,  ///< Fully constrained.
+    LAYER_CONSTRAINT_OVER,  ///< Over-constrained / conflicting.
 
     /// Virtual layers for stacking zones and tracks on a given copper layer.
     LAYER_ZONE_START,

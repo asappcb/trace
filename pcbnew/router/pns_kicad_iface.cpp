@@ -934,8 +934,7 @@ int PNS_PCBNEW_RULE_RESOLVER::Clearance( const PNS::ITEM* aA, const PNS::ITEM* a
                 }
             }
 
-            // No 'else'; non-plated milled holes get both HOLE_CLEARANCE and EDGE_CLEARANCE
-            if( isEdge( aA ) || IsNonPlatedSlot( aA ) || isEdge( aB ) || IsNonPlatedSlot( aB ) )
+            if( isEdge( aA ) || isEdge( aB ) )
             {
                 if( QueryConstraint( PNS::CONSTRAINT_TYPE::CT_EDGE_CLEARANCE, aA, aB, layer, &constraint ) )
                 {
@@ -1299,6 +1298,28 @@ bool PNS_KICAD_IFACE_BASE::ImportSizes( PNS::SIZES_SETTINGS& aSizes, PNS::ITEM* 
     }
 
     aSizes.SetDiffPairHoleToHole( std::max( holeToHoleMin, aSizes.GetHoleToHole() ) );
+
+    // Seed with the board hole-to-copper minimum so a null DRC engine still constrains the gap,
+    // matching how the hole-to-hole block above falls back to bds.m_HoleToHoleMin.
+    int copperToHole = bds.m_HoleClearance;
+
+    // A net-scoped rule may bind the two vias asymmetrically, so query both orderings the way
+    // the DRC copper-clearance provider tests each hole in turn.
+    for( PNS::CONSTRAINT_TYPE type :
+         { PNS::CONSTRAINT_TYPE::CT_HOLE_CLEARANCE, PNS::CONSTRAINT_TYPE::CT_PHYSICAL_HOLE_CLEARANCE } )
+    {
+        if( m_ruleResolver->QueryConstraint( type, &dummyVia, &coupledVia, UNDEFINED_LAYER, &constraint ) )
+        {
+            copperToHole = std::max( copperToHole, constraint.m_Value.Min() );
+        }
+
+        if( m_ruleResolver->QueryConstraint( type, &coupledVia, &dummyVia, UNDEFINED_LAYER, &constraint ) )
+        {
+            copperToHole = std::max( copperToHole, constraint.m_Value.Min() );
+        }
+    }
+
+    aSizes.SetDiffPairCopperToHole( copperToHole );
 
     return true;
 }

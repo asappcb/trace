@@ -812,14 +812,12 @@ std::string FormatDiffAsText( const DOCUMENT_DIFF& aDiff, const wxString& aLabel
     ss << "diff " << aLabelA.ToStdString() << " " << aLabelB.ToStdString() << "\n";
     ss << aDiff.changes.size() << " change(s)\n";
 
-    std::function<void( const ITEM_CHANGE&, int )> writeChange;
-
-    writeChange = [&]( const ITEM_CHANGE& aChange, int aDepth )
+    std::function<void( const ITEM_CHANGE&, int )> writeChange = [&]( const ITEM_CHANGE& aChange, int aDepth )
     {
         std::string indent( static_cast<std::size_t>( 2 + aDepth * 2 ), ' ' );
 
-        ss << indent << ChangeKindToString( aChange.kind ) << " " << aChange.typeName.ToStdString()
-           << " " << aChange.id.AsString().ToStdString();
+        ss << indent << ChangeKindToString( aChange.kind ) << " " << aChange.typeName.ToStdString() << " "
+           << aChange.id.AsString().ToStdString();
 
         if( aChange.refdes.has_value() )
             ss << " [" << aChange.refdes->ToStdString() << "]";
@@ -830,9 +828,8 @@ std::string FormatDiffAsText( const DOCUMENT_DIFF& aDiff, const wxString& aLabel
 
         for( const PROPERTY_DELTA& p : aChange.properties )
         {
-            ss << propIndent << p.name.ToStdString() << ": "
-               << p.before.ToDisplayString( aUnits, aScale ).ToStdString() << " -> "
-               << p.after.ToDisplayString( aUnits, aScale ).ToStdString() << "\n";
+            ss << propIndent << p.name.ToStdString() << ": " << p.before.ToDisplayString( aUnits, aScale ).ToStdString()
+               << " -> " << p.after.ToDisplayString( aUnits, aScale ).ToStdString() << "\n";
         }
 
         for( const ITEM_CHANGE& child : aChange.children )

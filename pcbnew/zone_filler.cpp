@@ -2209,15 +2209,6 @@ void ZONE_FILLER::buildCopperItemClearances( const ZONE* aZone, PCB_LAYER_ID aLa
 
                     gap = std::max( gap, evalRulesForItems( HOLE_CLEARANCE_CONSTRAINT, aZone, aPad, aLayer ) );
 
-                    // Oblong NPTH holes are milled rather than drilled, so they need
-                    // edge clearance in addition to hole clearance
-                    if( aPad->GetAttribute() == PAD_ATTRIB::NPTH
-                        && aPad->GetDrillSize().x != aPad->GetDrillSize().y )
-                    {
-                        gap = std::max( gap, evalRulesForItems( EDGE_CLEARANCE_CONSTRAINT, aZone,
-                                                                aPad, aLayer ) );
-                    }
-
                     if( gap >= 0 )
                         addHoleKnockout( aPad, gap + extra_margin, aHoles );
                 }
@@ -4409,7 +4400,29 @@ bool ZONE_FILLER::refillZoneFromCache( ZONE* aZone, PCB_LAYER_ID aLayer, SHAPE_P
 
                 if( otherZone->SameNet( aZone ) )
                 {
-                    sameNetKnockouts.Append( *fillPtr );
+                    if( otherZone->GetFillMode() == ZONE_FILL_MODE::HATCH_PATTERN )
+                    {
+                        // A hatched fill leaves intentional windows, knock out the pre-hatch
+                        // solid extent so the lower zone cannot pour through them (issue 24935).
+                        SHAPE_POLY_SET solidExtent;
+
+                        {
+                            std::lock_guard<std::mutex> lock( m_cacheMutex );
+                            auto                        sit = m_preHatchSolidFillCache.find( { otherZone, aLayer } );
+
+                            if( sit != m_preHatchSolidFillCache.end() )
+                                solidExtent = sit->second;
+                        }
+
+                        if( solidExtent.OutlineCount() > 0 )
+                            sameNetKnockouts.Append( solidExtent );
+                        else
+                            appendZoneOutlineWithoutArcs( otherZone, sameNetKnockouts );
+                    }
+                    else
+                    {
+                        sameNetKnockouts.Append( *fillPtr );
+                    }
                 }
                 else
                 {

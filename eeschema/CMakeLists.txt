@@ -90,7 +90,9 @@ set( EESCHEMA_SCH_IO
 
     # EasyEDA Pro IO plugin
     sch_io/easyedapro/sch_easyedapro_parser.cpp
+    sch_io/easyedapro/sch_easyedapro_v3_parser.cpp
     sch_io/easyedapro/sch_io_easyedapro.cpp
+    sch_io/easyedapro/sch_io_easyedapro_v3.cpp
 
     # PADS Logic IO plugin
     sch_io/pads/sch_io_pads.cpp
@@ -105,6 +107,17 @@ set( EESCHEMA_SCH_IO
     # P-CAD 2006 ASCII IO plugin
     sch_io/pcad/sch_io_pcad.cpp
     sch_io/pcad/pcad_sch_parser.cpp
+
+    # OrCAD IO plugin
+    sch_io/orcad/orcad_cache.cpp
+    sch_io/orcad/orcad_converter_sheet.cpp
+    sch_io/orcad/orcad_converter_symbols.cpp
+    sch_io/orcad/orcad_library.cpp
+    sch_io/orcad/orcad_ole.cpp
+    sch_io/orcad/orcad_page.cpp
+    sch_io/orcad/orcad_stream.cpp
+    sch_io/orcad/orcad_structures.cpp
+    sch_io/orcad/sch_io_orcad.cpp
     )
 
 set( EESCHEMA_DLGS
@@ -432,6 +445,7 @@ set( EESCHEMA_SRCS
     sch_draw_panel.cpp
     sch_edit_frame.cpp
     sch_field.cpp
+    sch_footprint_field_reconciler.cpp
     sch_group.cpp
     sch_item.cpp
     sch_item_alignment.cpp
@@ -502,6 +516,7 @@ set( EESCHEMA_SRCS
     tools/assign_footprints.cpp
     tools/backannotate.cpp
     tools/sch_align_tool.cpp
+    tools/ee_graphic_tool.cpp
     tools/ee_grid_helper.cpp
     tools/rule_area_create_helper.cpp
     tools/sch_actions.cpp
@@ -652,6 +667,7 @@ target_include_directories( eeschema_kiface_objects
 target_link_libraries( eeschema_kiface_objects
     PUBLIC
         common
+        libwmf_orcad
         pads_common
         pcm )
 

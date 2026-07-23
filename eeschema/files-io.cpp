@@ -46,9 +46,11 @@
 #include <project_rescue.h>
 #include <project_sch.h>
 #include <dialog_HTML_reporter_base.h>
+#include <import_proj_properties.h>
 #include <io/common/plugin_common_choose_project.h>
 #include <reporter.h>
 #include <richio.h>
+#include <sch_footprint_field_reconciler.h>
 #include <sch_bus_entry.h>
 #include <sch_commit.h>
 #include <sch_edit_frame.h>
@@ -111,9 +113,6 @@ bool SCH_EDIT_FRAME::OpenProjectFiles( const std::vector<wxString>& aFileSet, in
 
     wxString   fullFileName( aFileSet[0] );
     wxFileName wx_filename( fullFileName );
-
-    if( !Prj().IsNullProject() )
-        Kiway().LocalHistory().Init( Prj().GetProjectPath() );
 
     // We insist on caller sending us an absolute path, if it does not, we say it's a bug.
     wxASSERT_MSG( wx_filename.IsAbsolute(), wxS( "Path is not absolute!" ) );
@@ -1556,10 +1555,12 @@ bool SCH_EDIT_FRAME::importFile( const wxString& aFileName, int aFileType,
     case SCH_IO_MGR::SCH_LTSPICE:
     case SCH_IO_MGR::SCH_EASYEDA:
     case SCH_IO_MGR::SCH_EASYEDAPRO:
+    case SCH_IO_MGR::SCH_EASYEDAPRO_V3:
     case SCH_IO_MGR::SCH_PADS:
     case SCH_IO_MGR::SCH_GEDA:
     case SCH_IO_MGR::SCH_DIPTRACE:
     case SCH_IO_MGR::SCH_PCAD:
+    case SCH_IO_MGR::SCH_ORCAD:
     {
         // We insist on caller sending us an absolute path, if it does not, we say it's a bug.
         // Unless we are passing the files in aproperties, in which case aFileName can be empty.
@@ -1602,6 +1603,16 @@ bool SCH_EDIT_FRAME::importFile( const wxString& aFileName, int aFileType,
                 // that back to the returned sheet.
                 if( !loadedIsTopLevel && !loadedIsVirtualRoot )
                     Schematic().SetTopLevelSheets( { loadedSheet } );
+
+                // re-link footprint fields to the project lib so update-from-schematic works
+                {
+                    wxString              cacheNick;
+                    std::vector<wxString> sourceFpLibs;
+                    IMPORT_PROJ_PROPS::ReadFootprintProps( aProperties, cacheNick, sourceFpLibs );
+
+                    SCH_FOOTPRINT_FIELD_RECONCILER fpReconciler( cacheNick, sourceFpLibs, &loadReporter );
+                    fpReconciler.Reconcile( Schematic() );
+                }
 
                 if( errorReporter.m_Reporter->HasMessage() )
                 {

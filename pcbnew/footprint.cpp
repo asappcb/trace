@@ -58,6 +58,7 @@
 #include <pcb_edit_frame.h>
 #include <pcb_field.h>
 #include <pcb_group.h>
+#include <constraints/pcb_constraint.h>
 #include <pcb_marker.h>
 #include <pcb_point.h>
 #include <pcb_reference_image.h>
@@ -231,6 +232,11 @@ FOOTPRINT::FOOTPRINT( const FOOTPRINT& aFootprint ) :
         Add( newGroup, ADD_MODE::APPEND ); // Append to ensure indexes are identical
     }
 
+    // Copy constraints.  Clone preserves the uuid, so each constraint's KIID members still
+    // resolve to the matching cloned items.
+    for( PCB_CONSTRAINT* constraint : aFootprint.Constraints() )
+        Add( static_cast<PCB_CONSTRAINT*>( constraint->Clone() ), ADD_MODE::APPEND );
+
     for( PCB_POINT* point : aFootprint.Points() )
     {
         PCB_POINT* newPoint = static_cast<PCB_POINT*>( point->Clone() );
@@ -290,6 +296,11 @@ FOOTPRINT::~FOOTPRINT()
         delete group;
 
     m_groups.clear();
+
+    for( PCB_CONSTRAINT* constraint : m_constraints )
+        delete constraint;
+
+    m_constraints.clear();
 
     for( PCB_POINT* point : m_points )
         delete point;
@@ -610,6 +621,7 @@ bool FOOTPRINT::Deserialize( const google::protobuf::Any &aContainer )
     GraphicalItems().clear();
     Zones().clear();
     Groups().clear();
+    Constraints().clear();
     Models().clear();
     Points().clear();
 
@@ -923,6 +935,17 @@ FOOTPRINT& FOOTPRINT::operator=( FOOTPRINT&& aOther )
 
     aOther.Groups().clear();
 
+    // Move the constraints
+    for( PCB_CONSTRAINT* constraint : m_constraints )
+        delete constraint;
+
+    m_constraints.clear();
+
+    for( PCB_CONSTRAINT* constraint : aOther.Constraints() )
+        Add( constraint );
+
+    aOther.Constraints().clear();
+
     // Move the points
     for( PCB_POINT* point : m_points )
         delete point;
@@ -1067,6 +1090,16 @@ FOOTPRINT& FOOTPRINT::operator=( const FOOTPRINT& aOther )
 
         Add( newGroup );
     }
+
+    // Copy constraints.  Members reference items by KIID, which Clone preserves, so the
+    // copies still point at the matching cloned items by uuid (resolved on next use).
+    for( PCB_CONSTRAINT* constraint : m_constraints )
+        delete constraint;
+
+    m_constraints.clear();
+
+    for( PCB_CONSTRAINT* constraint : aOther.Constraints() )
+        Add( static_cast<PCB_CONSTRAINT*>( constraint->Clone() ) );
 
     // Copy points
     for( PCB_POINT* point : m_points )
@@ -1454,6 +1487,14 @@ void FOOTPRINT::Add( BOARD_ITEM* aBoardItem, ADD_MODE aMode, bool aSkipConnectiv
 
         break;
 
+    case PCB_CONSTRAINT_T:
+        if( aMode == ADD_MODE::APPEND )
+            m_constraints.push_back( static_cast<PCB_CONSTRAINT*>( aBoardItem ) );
+        else
+            m_constraints.insert( m_constraints.begin(), static_cast<PCB_CONSTRAINT*>( aBoardItem ) );
+
+        break;
+
     case PCB_MARKER_T:
         wxFAIL_MSG( wxT( "FOOTPRINT::Add(): Markers go at the board level, even in the footprint editor" ) );
         return;
@@ -1545,6 +1586,18 @@ void FOOTPRINT::Remove( BOARD_ITEM* aBoardItem, REMOVE_MODE aMode )
             if( *it == static_cast<ZONE*>( aBoardItem ) )
             {
                 m_zones.erase( it );
+                break;
+            }
+        }
+
+        break;
+
+    case PCB_CONSTRAINT_T:
+        for( auto it = m_constraints.begin(); it != m_constraints.end(); ++it )
+        {
+            if( *it == static_cast<PCB_CONSTRAINT*>( aBoardItem ) )
+            {
+                m_constraints.erase( it );
                 break;
             }
         }
@@ -2729,6 +2782,15 @@ INSPECT_RESULT FOOTPRINT::Visit( INSPECTOR inspector, void* testData,
 
             break;
 
+        case PCB_CONSTRAINT_T:
+            if( IterateForward<PCB_CONSTRAINT*>( m_constraints, inspector, testData, { scanType } )
+                == INSPECT_RESULT::QUIT )
+            {
+                return INSPECT_RESULT::QUIT;
+            }
+
+            break;
+
         case PCB_POINT_T:
             if( IterateForward<PCB_POINT*>( m_points, inspector, testData, { scanType } )
                     == INSPECT_RESULT::QUIT )
@@ -2793,6 +2855,9 @@ void FOOTPRINT::RunOnChildren( const std::function<void( BOARD_ITEM* )>& aFuncti
 
         for( PCB_GROUP* group : m_groups )
             aFunction( group );
+
+        for( PCB_CONSTRAINT* constraint : m_constraints )
+            aFunction( constraint );
 
         for( PCB_POINT* point : m_points )
             aFunction( point );
@@ -3304,11 +3369,21 @@ BOARD_ITEM* FOOTPRINT::Duplicate( bool addToParentGroup, BOARD_COMMIT* aCommit )
 {
     FOOTPRINT* dupe = static_cast<FOOTPRINT*>( BOARD_ITEM::Duplicate( addToParentGroup, aCommit ) );
 
-    dupe->RunOnChildren( [&]( BOARD_ITEM* child )
-                            {
-                                child->ResetUuidDirect();
-                            },
-                            RECURSE_MODE::RECURSE );
+    // Clones keep child UUIDs so cloned constraints still resolve to them
+    // Map old ids to new before reset else constraints below strand
+    std::map<KIID, KIID> idMap;
+
+    dupe->RunOnChildren(
+            [&]( BOARD_ITEM* child )
+            {
+                KIID oldId = child->m_Uuid;
+                child->ResetUuidDirect();
+                idMap[oldId] = child->m_Uuid;
+            },
+            RECURSE_MODE::RECURSE );
+
+    for( PCB_CONSTRAINT* constraint : dupe->Constraints() )
+        constraint->RemapKIIDs( idMap );
 
     return dupe;
 }
@@ -3962,8 +4037,11 @@ void FOOTPRINT::BuildNetTieCache()
         if( it == map.end() || it->second < 0 )
             continue;
 
-        for( size_t jj = ii + 1; jj < m_pads.size(); ++jj )
+        for( size_t jj = 0; jj < m_pads.size(); ++jj )
         {
+            if( jj == ii )
+                continue;
+
             PAD* other = m_pads[ jj ];
 
             auto it2 = map.find( other->GetNumber() );

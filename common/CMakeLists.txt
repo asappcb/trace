@@ -171,8 +171,10 @@ set( KICOMMON_SRCS
     jobs/job_export_sch_netlist.cpp
     jobs/job_export_sch_plot.cpp
     jobs/job_export_sch_pythonbom.cpp
+    jobs/job_special_archive.cpp
     jobs/job_special_copyfiles.cpp
     jobs/job_special_execute.cpp
+    jobs/job_unknown.cpp
     jobs/jobset.cpp
     jobs/job_fp_export_svg.cpp
     jobs/job_fp_upgrade.cpp
@@ -699,6 +701,8 @@ set( COMMON_PREVIEW_ITEMS_SRCS
     preview_items/angle_item.cpp
     preview_items/arc_assistant.cpp
     preview_items/arc_geom_manager.cpp
+    preview_items/ellipse_assistant.cpp
+    preview_items/ellipse_geom_manager.cpp
     preview_items/bezier_assistant.cpp
     preview_items/bezier_geom_manager.cpp
     preview_items/centreline_rect_item.cpp
@@ -752,6 +756,7 @@ set( COMMON_IO_SRCS
     # EasyEDA pro
     io/easyedapro/easyedapro_parser.cpp
     io/easyedapro/easyedapro_import_utils.cpp
+    io/easyedapro/easyedapro_v3_parser.cpp
 
     # DipTrace
     io/diptrace/diptrace_binary_reader.cpp
@@ -1028,6 +1033,9 @@ set( PCB_COMMON_SRCS
     ${CMAKE_SOURCE_DIR}/pcbnew/pcb_dimension.cpp
     ${CMAKE_SOURCE_DIR}/pcbnew/pcb_shape.cpp
     ${CMAKE_SOURCE_DIR}/pcbnew/pcb_group.cpp
+    ${CMAKE_SOURCE_DIR}/pcbnew/constraints/constraint_builder.cpp
+    ${CMAKE_SOURCE_DIR}/pcbnew/constraints/constraint_copy.cpp
+    ${CMAKE_SOURCE_DIR}/pcbnew/constraints/pcb_constraint.cpp
     ${CMAKE_SOURCE_DIR}/pcbnew/pcb_marker.cpp
     ${CMAKE_SOURCE_DIR}/pcbnew/footprint.cpp
     ${CMAKE_SOURCE_DIR}/pcbnew/footprint_courtyard_index.cpp

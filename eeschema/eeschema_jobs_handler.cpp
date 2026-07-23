@@ -622,30 +622,26 @@ int EESCHEMA_JOBS_HANDLER::JobExportBom( JOB* aJob )
 
     // Build our data model
     FIELDS_EDITOR_GRID_DATA_MODEL dataModel( referenceList, nullptr );
+    dataModel.SetCurrentVariant( currentVariant );
 
     // Mandatory fields first
     for( FIELD_T fieldId : MANDATORY_FIELDS )
-    {
-        dataModel.AddColumn( GetCanonicalFieldName( fieldId ), GetDefaultFieldName( fieldId, DO_TRANSLATE ), false,
-                             currentVariant );
-    }
+        dataModel.AddColumn( GetCanonicalFieldName( fieldId ), GetDefaultFieldName( fieldId, DO_TRANSLATE ), false );
 
     // Generated/virtual fields (e.g. ${QUANTITY}, ${ITEM_NUMBER}) present only in the fields table
     dataModel.AddColumn( FIELDS_EDITOR_GRID_DATA_MODEL::QUANTITY_VARIABLE,
-                         GetGeneratedFieldDisplayName( FIELDS_EDITOR_GRID_DATA_MODEL::QUANTITY_VARIABLE ), false,
-                         currentVariant );
+                         GetGeneratedFieldDisplayName( FIELDS_EDITOR_GRID_DATA_MODEL::QUANTITY_VARIABLE ), false );
     dataModel.AddColumn( FIELDS_EDITOR_GRID_DATA_MODEL::ITEM_NUMBER_VARIABLE,
-                         GetGeneratedFieldDisplayName( FIELDS_EDITOR_GRID_DATA_MODEL::ITEM_NUMBER_VARIABLE ), false,
-                         currentVariant );
+                         GetGeneratedFieldDisplayName( FIELDS_EDITOR_GRID_DATA_MODEL::ITEM_NUMBER_VARIABLE ), false );
 
     // Attribute fields (boolean flags on symbols)
-    dataModel.AddColumn( wxS( "${DNP}" ), GetGeneratedFieldDisplayName( wxS( "${DNP}" ) ), false, currentVariant );
+    dataModel.AddColumn( wxS( "${DNP}" ), GetGeneratedFieldDisplayName( wxS( "${DNP}" ) ), false );
     dataModel.AddColumn( wxS( "${EXCLUDE_FROM_BOM}" ), GetGeneratedFieldDisplayName( wxS( "${EXCLUDE_FROM_BOM}" ) ),
-                         false, currentVariant );
+                         false );
     dataModel.AddColumn( wxS( "${EXCLUDE_FROM_BOARD}" ), GetGeneratedFieldDisplayName( wxS( "${EXCLUDE_FROM_BOARD}" ) ),
-                         false, currentVariant );
+                         false );
     dataModel.AddColumn( wxS( "${EXCLUDE_FROM_SIM}" ), GetGeneratedFieldDisplayName( wxS( "${EXCLUDE_FROM_SIM}" ) ),
-                         false, currentVariant );
+                         false );
 
     // User field names in symbols second
     std::set<wxString> userFieldNames;
@@ -662,7 +658,7 @@ int EESCHEMA_JOBS_HANDLER::JobExportBom( JOB* aJob )
     }
 
     for( const wxString& fieldName : userFieldNames )
-        dataModel.AddColumn( fieldName, GetGeneratedFieldDisplayName( fieldName ), true, currentVariant );
+        dataModel.AddColumn( fieldName, GetGeneratedFieldDisplayName( fieldName ), true );
 
     // Add any templateFieldNames which aren't already present in the userFieldNames
     for( const TEMPLATE_FIELDNAME& templateFieldname : sch->Settings().m_TemplateFieldNames.GetTemplateFieldNames() )
@@ -670,7 +666,7 @@ int EESCHEMA_JOBS_HANDLER::JobExportBom( JOB* aJob )
         if( userFieldNames.count( templateFieldname.m_Name ) == 0 )
         {
             dataModel.AddColumn( templateFieldname.m_Name, GetGeneratedFieldDisplayName( templateFieldname.m_Name ),
-                                 false, currentVariant );
+                                 false );
         }
     }
 
@@ -888,7 +884,8 @@ int EESCHEMA_JOBS_HANDLER::JobExportBom( JOB* aJob )
         std::vector<wxString> singleVariant = { variantName };
         dataModel.SetVariantNames( singleVariant );
         dataModel.SetCurrentVariant( variantName );
-        dataModel.ApplyBomPreset( preset, variantName );
+        dataModel.UpdateReferences( dataModel.GetReferenceList() );
+        dataModel.ApplyBomPreset( preset );
 
         wxString outPath;
 
@@ -1496,6 +1493,7 @@ int EESCHEMA_JOBS_HANDLER::JobImport( JOB* aJob )
     case JOB_SCH_IMPORT::FORMAT::PADS:       fileType = SCH_IO_MGR::SCH_PADS;            break;
     case JOB_SCH_IMPORT::FORMAT::DIPTRACE:   fileType = SCH_IO_MGR::SCH_DIPTRACE;        break;
     case JOB_SCH_IMPORT::FORMAT::PCAD:       fileType = SCH_IO_MGR::SCH_PCAD;            break;
+    case JOB_SCH_IMPORT::FORMAT::ORCAD: fileType = SCH_IO_MGR::SCH_ORCAD; break;
     }
 
     if( fileType == SCH_IO_MGR::SCH_FILE_UNKNOWN )
