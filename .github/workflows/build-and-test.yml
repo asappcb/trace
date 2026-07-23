@@ -152,8 +152,8 @@ jobs:
         # xfail list. It is ~15 of 140 tests, in `pcb export svg/png/drill` and most `sch export`
         # subcommands, and does not reproduce outside this container.
         #
-        # Re-enable by deleting qa_cli from the regexes below once #68 is fixed; the deps and
-        # locale this job now sets are what qa_cli needs to run at all.
+          # Re-enable by deleting qa_cli from the regexes below once #68 is fixed; the deps and
+        # locale this job now sets are what qa_cli needs to run at all. See #140.
         run: |
           cd build/qa
           if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
