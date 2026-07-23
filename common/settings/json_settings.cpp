@@ -947,8 +947,7 @@ void JSON_SETTINGS::AddNestedSettings( NESTED_SETTINGS* aSettings )
     // SetParent() registers, and can be called again on an already-parented child.  Registering
     // twice leaves a second entry behind when the child deregisters itself exactly once as it is
     // destroyed, and that survivor dangles.
-    if( std::find( m_nested_settings.begin(), m_nested_settings.end(), aSettings )
-        != m_nested_settings.end() )
+    if( std::find( m_nested_settings.begin(), m_nested_settings.end(), aSettings ) != m_nested_settings.end() )
     {
         return;
     }
