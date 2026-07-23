@@ -2731,13 +2731,15 @@ int PCBNEW_JOBS_HANDLER::JobPcbRatsnest( JOB* aJob )
 
     if( ratsnestJob->GetConfiguredOutputPath().IsEmpty() )
     {
-        // No --output: stream to stdout so the report composes in a shell pipeline.
+        // No --output: the report is the sole stdout content, so `--format json` stays
+        // machine-parseable in a pipeline.  The CLI reporter sends everything but errors to
+        // stdout, so the human summary below is intentionally skipped in this path.
         m_reporter->Report( output, RPT_SEVERITY_ACTION );
     }
     else
     {
-        wxString   outPath = resolveJobOutputPath( aJob, brd );
-        wxFFile    file( outPath, wxT( "wb" ) );
+        wxString outPath = resolveJobOutputPath( aJob, brd );
+        wxFFile  file( outPath, wxT( "wb" ) );
 
         if( !file.IsOpened() || !file.Write( output ) )
         {
@@ -2745,10 +2747,11 @@ int PCBNEW_JOBS_HANDLER::JobPcbRatsnest( JOB* aJob )
                                 RPT_SEVERITY_ERROR );
             return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
         }
-    }
 
-    m_reporter->Report( wxString::Format( _( "Found %u unconnected connection(s)\n" ), total ),
-                        RPT_SEVERITY_INFO );
+        // The report went to a file, so stdout is free for a human-readable summary.
+        m_reporter->Report( wxString::Format( _( "Found %u unconnected connection(s)\n" ), total ),
+                            RPT_SEVERITY_INFO );
+    }
 
     if( ratsnestJob->m_exitCodeViolations && total > 0 )
         return CLI::EXIT_CODES::ERR_RC_VIOLATIONS;

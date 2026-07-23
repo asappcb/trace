@@ -280,6 +280,8 @@ static std::vector<COMMAND_ENTRY> commandStack = {
             },
             {
                 &pcbDrcCmd
+            },
+            {
                 &pcbRatsnestCmd
             },
             {
