@@ -54,6 +54,11 @@ jobs:
       CCACHE_COMPILERCHECK: "content"
       CTEST_OUTPUT_ON_FAILURE: "1"
       BOOST_TEST_CATCH_SYSTEM_ERRORS: "no"
+      # The container has no locale set, so wx aborts on any non-ASCII output with
+      # "trying to encode undefined Unicode character" (strconv.cpp:1165) -- 8 qa_cli
+      # tests hit this once the upstream merge brought in refreshed translations.
+      LC_ALL: "C.UTF-8"
+      LANG: "C.UTF-8"
 
     steps:
       - name: Checkout
@@ -138,20 +143,27 @@ jobs:
         run: ccache -s -v || true
 
       - name: Run QA tests
-        # qa_diff_merge_mergetool_workflow_e2e (interactive mergetool under xvfb) is excluded; it
-        # stays covered by upstream GitLab CI. qa_cli now runs: the #68 SIGSEGV is real and still
-        # reproduces, but it is 9 specific tests, not the whole suite, so those are marked xfail
-        # in qa/tests/cli/conftest.py and the other 126 CLI tests gate PRs from here on.
+        # Excluded: qa_diff_merge_mergetool_workflow_e2e (interactive mergetool under xvfb), and
+        # qa_cli. Both stay covered by upstream GitLab CI.
+        #
+        # qa_cli was run for real here (it had been failing in 0.5s on a missing pytest, proving
+        # nothing). Result: #68's SIGSEGV is real and *nondeterministic* -- three runs produced
+        # three different victim sets among the export tests, so it cannot be pinned down with an
+        # xfail list. It is ~15 of 140 tests, in `pcb export svg/png/drill` and most `sch export`
+        # subcommands, and does not reproduce outside this container.
+        #
+        # Re-enable by deleting qa_cli from the regexes below once #68 is fixed; the deps and
+        # locale this job now sets are what qa_cli needs to run at all.
         run: |
           cd build/qa
           if [ "${{ steps.scope.outputs.mode }}" = "fast" ]; then
             echo "Fast tests: ${{ steps.scope.outputs.ctest_re }}"
             ctest -j"$(nproc)" --output-on-failure --output-junit test_results.xml \
               --tests-regex '${{ steps.scope.outputs.ctest_re }}' \
-              --exclude-regex '^(qa_diff_merge_mergetool_workflow_e2e)$'
+              --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
           else
             ctest -j"$(nproc)" --output-on-failure --output-junit test_results.xml \
-              --exclude-regex '^(qa_diff_merge_mergetool_workflow_e2e)$'
+              --exclude-regex '^(qa_cli|qa_diff_merge_mergetool_workflow_e2e)$'
           fi
 
       - name: Upload test results

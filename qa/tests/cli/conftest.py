@@ -111,35 +111,3 @@ if os.name == 'nt':
     for p in os.environ[ 'KICAD_BUILD_PATHS' ].split( ':' ):
         if os.path.isdir( p ):
             os.add_dll_directory( p )
-
-
-# ---------------------------------------------------------------------------
-# Known kicad-cli crashes on the Fedora CI container (issue #68)
-#
-# qa_cli used to be excluded from CI wholesale because "it SIGSEGVs in this
-# container".  With the suite actually running, 126 of 140 tests pass and
-# exactly these 9 abort kicad-cli with SIGSEGV (pytest sees exit code -11).
-# They are marked xfail rather than skipped so they keep running and stay
-# visible: if #68 is fixed, they turn into XPASS and this list can go.
-#
-# Not reproducible outside the container so far -- the same commands exit 0 on
-# macOS -- so the trigger is environment-dependent.
-# ---------------------------------------------------------------------------
-KNOWN_CRASHES_68 = {
-    "test_jobset_run_relative_project_path",
-    "test_pcb_export_svg[cli/artwork_generation_regressions/ZoneFill-Legacy.brd-layers_to_test1]",
-    "test_pcb_export_png[cli/artwork_generation_regressions/ZoneFill-4.0.7.kicad_pcb-layers_to_test0]",
-    "test_pcb_export_gerber[cli/artwork_generation_regressions/ZoneFill-4.0.7.kicad_pcb-layers_to_test0-0.5]",
-    "test_pcb_export_gerber[cli/artwork_generation_regressions/ZoneFill-Legacy.brd-layers_to_test1-0.5]",
-    "test_pcb_export_gerber[cli/artwork_generation_regressions/Issue24143.kicad_pcb-layers_to_test2-0.0]",
-    "test_pcb_export_drill[cli/basic_test/basic_test.kicad_pcb-basic_test_excellon_mirror.drl-basic_test/drills/excellon_mirror/-5-cli_args2]",
-    "test_pcb_export_drill[cli/basic_test/basic_test.kicad_pcb-basic_test-PTH-drl.gbr-basic_test/drills/gerber_default/-9-cli_args3]",
-    "test_pcb_optimize_swaps",
-}
-
-
-def pytest_collection_modifyitems( config, items ):
-    for item in items:
-        if item.name in KNOWN_CRASHES_68:
-            item.add_marker( pytest.mark.xfail( reason="kicad-cli SIGSEGV, issue #68",
-                                                strict=False ) )
