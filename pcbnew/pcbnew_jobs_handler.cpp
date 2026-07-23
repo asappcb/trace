@@ -378,7 +378,10 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
                   return true;
               } );
     Register( "ratsnest", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbRatsnest, this, std::placeholders::_1 ),
-              []( JOB*, wxWindow* ) -> bool { return false; } );
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
     Register( "drc", std::bind( &PCBNEW_JOBS_HANDLER::JobExportDrc, this, std::placeholders::_1 ),
               []( JOB* job, wxWindow* aParent ) -> bool
               {
@@ -2714,9 +2717,8 @@ int PCBNEW_JOBS_HANDLER::JobPcbRatsnest( JOB* aJob )
 
         for( const NET_RATSNEST& n : perNet )
         {
-            report["nets"].push_back( { { "net", n.name.ToUTF8() },
-                                        { "code", n.code },
-                                        { "unconnected", n.unconnected } } );
+            report["nets"].push_back(
+                    { { "net", n.name.ToUTF8() }, { "code", n.code }, { "unconnected", n.unconnected } } );
         }
 
         output = wxString::FromUTF8( report.dump( 2 ).c_str() );
@@ -2749,8 +2751,7 @@ int PCBNEW_JOBS_HANDLER::JobPcbRatsnest( JOB* aJob )
         }
 
         // The report went to a file, so stdout is free for a human-readable summary.
-        m_reporter->Report( wxString::Format( _( "Found %u unconnected connection(s)\n" ), total ),
-                            RPT_SEVERITY_INFO );
+        m_reporter->Report( wxString::Format( _( "Found %u unconnected connection(s)\n" ), total ), RPT_SEVERITY_INFO );
     }
 
     if( ratsnestJob->m_exitCodeViolations && total > 0 )
