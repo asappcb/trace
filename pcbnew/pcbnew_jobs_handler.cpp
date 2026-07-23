@@ -1794,15 +1794,27 @@ int PCBNEW_JOBS_HANDLER::JobExportJson( JOB* aJob )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
 
     // All geometry is emitted in mm; internal units are nm.
-    auto mm = []( int aIU ) { return pcbIUScale.IUTomm( aIU ); };
-    auto pt = [&]( const VECTOR2I& aPos ) { return nlohmann::json::array( { mm( aPos.x ), mm( aPos.y ) } ); };
+    auto mm = []( int aIU )
+    {
+        return pcbIUScale.IUTomm( aIU );
+    };
+    auto pt = [&]( const VECTOR2I& aPos )
+    {
+        return nlohmann::json::array( { mm( aPos.x ), mm( aPos.y ) } );
+    };
 
     // Copy every wxString into a std::string up front.  Several getters (GetLayerName,
     // GetFPIDAsString, GetFileName, ...) return by value, and calling .ToUTF8() on that temporary
     // yields a buffer that dangles the moment the temporary dies -- which nlohmann then stores as
     // garbage bytes.  utf8_str() into a std::string copies while the source is still alive.
-    auto str = []( const wxString& aStr ) { return std::string( aStr.utf8_str() ); };
-    auto layerName = [&]( PCB_LAYER_ID aLayer ) { return str( brd->GetLayerName( aLayer ) ); };
+    auto str = []( const wxString& aStr )
+    {
+        return std::string( aStr.utf8_str() );
+    };
+    auto layerName = [&]( PCB_LAYER_ID aLayer )
+    {
+        return str( brd->GetLayerName( aLayer ) );
+    };
 
     nlohmann::json doc;
     doc["source"] = str( brd->GetFileName() );
@@ -1912,8 +1924,7 @@ int PCBNEW_JOBS_HANDLER::JobExportJson( JOB* aJob )
 
     // Board data can carry a stray non-UTF-8 byte (legacy Latin-1 fields); replace rather than
     // throw, so a single bad glyph never fails the whole export.
-    wxString output = wxString::FromUTF8(
-            doc.dump( 2, ' ', false, nlohmann::json::error_handler_t::replace ).c_str() );
+    wxString output = wxString::FromUTF8( doc.dump( 2, ' ', false, nlohmann::json::error_handler_t::replace ).c_str() );
 
     if( jsonJob->GetConfiguredOutputPath().IsEmpty() )
     {
