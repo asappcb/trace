@@ -132,7 +132,7 @@ SYMBOL_EDIT_FRAME::SYMBOL_EDIT_FRAME( KIWAY* aKiway, wxWindow* aParent ) :
     m_unit = 1;
     m_bodyStyle = 1;
     m_syncLibrariesInProgress = false;
-    m_aboutTitle = _HKI( "KiCad Symbol Editor" );
+    m_aboutTitle = _HKI( "trace Symbol Editor" );
 
     wxIcon icon;
     wxIconBundle icon_bundle;
