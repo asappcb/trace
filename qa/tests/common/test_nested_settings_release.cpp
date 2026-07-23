@@ -55,6 +55,9 @@ public:
     {
         return false;
     }
+
+    /// The registration bookkeeping under test; m_nested_settings is protected on the base.
+    size_t NestedCount() const { return m_nested_settings.size(); }
 };
 
 
@@ -125,6 +128,34 @@ BOOST_AUTO_TEST_CASE( ChildDestroyedWithoutManagerDoesNotDangle )
     SETTINGS_MANAGER manager;
     parent->SetManager( &manager );
 
+    parent.reset();
+}
+
+
+// The crash actually seen in `kicad-cli pcb diff`: ~BOARD detaches its design settings with
+// SetParent( nullptr ).  Forgetting the parent without de-registering left the child in the
+// parent's list with no way to ever remove itself, and PROJECT_FILE's destructor then flushed an
+// object that had died with the board.
+BOOST_AUTO_TEST_CASE( DetachingViaSetParentDeregisters )
+{
+    SETTINGS_MANAGER manager;
+
+    auto parent = std::make_unique<TEST_PARENT_SETTINGS>();
+    parent->SetManager( &manager );
+
+    {
+        TEST_NESTED_SETTINGS child( "detached", parent.get() );
+        BOOST_REQUIRE_EQUAL( child.GetParent(), parent.get() );
+
+        child.SetParent( nullptr );
+        BOOST_CHECK_EQUAL( child.GetParent(), nullptr );
+
+        // Detaching must drop the registration too, or nothing can ever remove it: the child no
+        // longer knows the parent, so its destructor won't.
+        BOOST_CHECK_EQUAL( parent->NestedCount(), 0u );
+    }
+
+    // The detached child is gone; destroying the parent must not touch it.
     parent.reset();
 }
 
