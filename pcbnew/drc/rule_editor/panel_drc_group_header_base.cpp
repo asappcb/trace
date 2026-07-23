@@ -11,22 +11,22 @@
 
 PANEL_DRC_GROUP_HEADER_BASE::PANEL_DRC_GROUP_HEADER_BASE( wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name ) : wxPanel( parent, id, pos, size, style, name )
 {
-	wxBoxSizer* mainSizer;
-	mainSizer = new wxBoxSizer( wxHORIZONTAL );
+    wxBoxSizer* mainSizer;
+    mainSizer = new wxBoxSizer( wxHORIZONTAL );
 
-	m_dataGrid = new wxGrid( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0 );
+    m_dataGrid = new wxGrid( this, wxID_ANY, wxDefaultPosition, wxDefaultSize, 0 );
 
-	// Grid
-	m_dataGrid->CreateGrid( 0, 3 );
+    // Grid
+    m_dataGrid->CreateGrid( 0, 3 );
     m_dataGrid->EnableEditing( false );
     m_dataGrid->EnableGridLines( true );
     m_dataGrid->EnableDragGridSize( false );
-	m_dataGrid->SetMargins( 0, 0 );
+    m_dataGrid->SetMargins( 0, 0 );
 
-	// Columns
-	m_dataGrid->AutoSizeColumns();
-	m_dataGrid->EnableDragColMove( false );
-	m_dataGrid->EnableDragColSize( true );
+    // Columns
+    m_dataGrid->AutoSizeColumns();
+    m_dataGrid->EnableDragColMove( false );
+    m_dataGrid->EnableDragColSize( true );
     m_dataGrid->SetColLabelValue( 0, _( "Rule Type" ) );
     m_dataGrid->SetColLabelValue( 1, _( "Rule Name" ) );
     m_dataGrid->SetColLabelValue( 2, _( "Comment" ) );
@@ -37,28 +37,28 @@ PANEL_DRC_GROUP_HEADER_BASE::PANEL_DRC_GROUP_HEADER_BASE( wxWindow* parent, wxWi
     m_dataGrid->AutoSizeRows();
     m_dataGrid->EnableDragRowSize( true );
     m_dataGrid->SetRowLabelSize( 0 );
-	m_dataGrid->SetRowLabelAlignment( wxALIGN_CENTER, wxALIGN_CENTER );
+    m_dataGrid->SetRowLabelAlignment( wxALIGN_CENTER, wxALIGN_CENTER );
 
-	// Label Appearance
+    // Label Appearance
 
-	// Cell Defaults
-	m_dataGrid->SetDefaultCellAlignment( wxALIGN_LEFT, wxALIGN_TOP );
-	mainSizer->Add( m_dataGrid, 1, wxEXPAND, 5 );
+    // Cell Defaults
+    m_dataGrid->SetDefaultCellAlignment( wxALIGN_LEFT, wxALIGN_TOP );
+    mainSizer->Add( m_dataGrid, 1, wxEXPAND, 5 );
 
 
-	this->SetSizer( mainSizer );
-	this->Layout();
-	mainSizer->Fit( this );
+    this->SetSizer( mainSizer );
+    this->Layout();
+    mainSizer->Fit( this );
 
-	// Connect Events
-	this->Connect( wxEVT_SIZE, wxSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnSize ) );
-	m_dataGrid->Connect( wxEVT_GRID_COL_SIZE, wxGridSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnGridSize ), NULL, this );
+    // Connect Events
+    this->Connect( wxEVT_SIZE, wxSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnSize ) );
+    m_dataGrid->Connect( wxEVT_GRID_COL_SIZE, wxGridSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnGridSize ), NULL, this );
 }
 
 PANEL_DRC_GROUP_HEADER_BASE::~PANEL_DRC_GROUP_HEADER_BASE()
 {
-	// Disconnect Events
-	this->Disconnect( wxEVT_SIZE, wxSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnSize ) );
-	m_dataGrid->Disconnect( wxEVT_GRID_COL_SIZE, wxGridSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnGridSize ), NULL, this );
+    // Disconnect Events
+    this->Disconnect( wxEVT_SIZE, wxSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnSize ) );
+    m_dataGrid->Disconnect( wxEVT_GRID_COL_SIZE, wxGridSizeEventHandler( PANEL_DRC_GROUP_HEADER_BASE::OnGridSize ), NULL, this );
 
 }
