@@ -183,6 +183,18 @@ bool NESTED_SETTINGS::SaveToFile( const wxString& aDirectory, bool aForce )
 
 void NESTED_SETTINGS::SetParent( JSON_SETTINGS* aParent, bool aLoadFromFile )
 {
+    // Detaching has to de-register, not merely forget the parent.  ~NESTED_SETTINGS only
+    // de-registers while it still has a parent, so a child detached this way -- ~BOARD does
+    // exactly that with its design settings -- would stay in the old parent's nested list and
+    // dangle as soon as it dies.
+    if( JSON_SETTINGS* oldParent = m_parent; oldParent && oldParent != aParent )
+    {
+        // Clear first: ReleaseNestedSettings() calls back into SetParent( nullptr ), and that
+        // re-entry has to find nothing left to detach or it recurses forever.
+        m_parent = nullptr;
+        oldParent->ReleaseNestedSettings( this );
+    }
+
     m_parent = aParent;
 
     if( m_parent )

@@ -595,6 +595,19 @@ SCH_EDIT_FRAME::~SCH_EDIT_FRAME()
     if( m_schematic )
         Kiway().LocalHistory().UnregisterSaver( m_schematic );
 
+    // A forced teardown (wx deletes every top level window at session end) skips doCloseWindow,
+    // leaving live tools.  When we SetScreen(nullptr), we dispatch another tool call, potentially
+    // crashing when the frame is gone
+    if( m_toolManager )
+    {
+        GetCanvas()->SetEvtHandlerEnabled( false );
+        GetCanvas()->StopDrawing();
+        m_toolManager->ShutdownAllTools();
+
+        delete m_toolManager;
+        m_toolManager = nullptr;
+    }
+
     m_hierarchy->Unbind( wxEVT_SIZE, &SCH_EDIT_FRAME::OnResizeHierarchyNavigator, this );
 
     // Ensure m_canvasType is up to date, to save it in config
@@ -2362,7 +2375,9 @@ SELECTION& SCH_EDIT_FRAME::GetCurrentSelection()
 
 void SCH_EDIT_FRAME::onSize( wxSizeEvent& aEvent )
 {
-    if( IsShown() )
+    // doCloseWindow() destroys the tool manager and then updates the AUI layout, which can
+    // dispatch a deferred size event back to this still-bound handler.
+    if( IsShown() && GetToolManager() )
     {
         // We only need this until the frame is done resizing and the final client size is
         // established.

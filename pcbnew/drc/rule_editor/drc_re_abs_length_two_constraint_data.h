@@ -53,8 +53,8 @@ public:
         return {
             { 80 + DRC_RE_OVERLAY_XO, 120 + DRC_RE_OVERLAY_XO, 115 + DRC_RE_OVERLAY_YO, 1, wxS( "mm" ),
               LABEL_POSITION::RIGHT }, // opt_length
-            { 160 + DRC_RE_OVERLAY_XO, 200 + DRC_RE_OVERLAY_XO, 115 + DRC_RE_OVERLAY_YO, 2, wxS( "mm" ),
-              LABEL_POSITION::RIGHT }, // tolerance
+            { 180 + DRC_RE_OVERLAY_XO, 220 + DRC_RE_OVERLAY_XO, 115 + DRC_RE_OVERLAY_YO, 2, wxS( "mm" ),
+              LABEL_POSITION::RIGHT, wxS( "\u00B1" ) }, // tolerance (±)
         };
     }
 
@@ -142,10 +142,12 @@ public:
         return {
             { 80 + DRC_RE_OVERLAY_XO, 120 + DRC_RE_OVERLAY_XO, 130 + DRC_RE_OVERLAY_YO, 1, wxS( "mm" ),
               LABEL_POSITION::RIGHT }, // opt_length
-            { 160 + DRC_RE_OVERLAY_XO, 200 + DRC_RE_OVERLAY_XO, 130 + DRC_RE_OVERLAY_YO, 2, wxS( "mm" ),
-              LABEL_POSITION::RIGHT }, // tolerance
-            { 25 + DRC_RE_OVERLAY_XO, 65 + DRC_RE_OVERLAY_XO, 0 + DRC_RE_OVERLAY_YO, 3, wxS( "mm" ),
+            { 180 + DRC_RE_OVERLAY_XO, 220 + DRC_RE_OVERLAY_XO, 130 + DRC_RE_OVERLAY_YO, 2, wxS( "mm" ),
+              LABEL_POSITION::RIGHT, wxS( "\u00B1" ) }, // tolerance (±)
+            { 20 + DRC_RE_OVERLAY_XO, 60 + DRC_RE_OVERLAY_XO, 0 + DRC_RE_OVERLAY_YO, 3, wxS( "mm" ),
               LABEL_POSITION::RIGHT }, // max_skew
+            { 115 + DRC_RE_OVERLAY_XO, 300 + DRC_RE_OVERLAY_XO, 2 + DRC_RE_OVERLAY_YO, 4, _( "Within diff pairs" ),
+              LABEL_POSITION::RIGHT }, // checkbox (within_diff_pairs)
         };
     }
 
