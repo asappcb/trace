@@ -90,6 +90,7 @@ set( KICAD_CLI_SRCS
     cli/command_pcb_export_svg.cpp
     cli/command_pcb_upgrade.cpp
     cli/command_pcb_optimize_swaps.cpp
+    cli/command_pcb_edit_set_track_width.cpp
     cli/command_pcb_import.cpp
     cli/command_sch_import.cpp
     cli/command_import.cpp

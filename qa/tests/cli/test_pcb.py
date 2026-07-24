@@ -412,3 +412,43 @@ def test_pcb_zone_fill( kitest: KiTestFixture, tmp_path ):
     _, _, drc_exit = utils.run_and_capture(
             [utils.kicad_cli(), "pcb", "drc", str( out )] )
     assert drc_exit in ( 0, 5 )   # 5 == DRC violations exist, still a successful load
+
+
+def test_pcb_edit_set_track_width( kitest: KiTestFixture ):
+    """`pcb edit set-track-width --net N --width W` sets the width of every track on the named net
+    and writes the board back, leaving other nets untouched."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_set_track_width/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "edited.kicad_pcb"
+
+    command = [utils.kicad_cli(), "pcb", "edit", "set-track-width",
+               "--net", "Net-(Q2-C)", "--width", "0.5",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode == 0
+    assert "Set width" in stdout
+    assert out_file.exists()
+
+    # Every track on the target net must now be 0.5 mm; at least one other net keeps a different
+    # width (proving the --net filter, not a blanket change).
+    txt = out_file.read_text()
+    target_widths = set()
+    other_has_non_half = False
+
+    for blk in re.finditer( r'\((?:segment|arc)\b.*?\n\s*\)', txt, re.S ):
+        b = blk.group( 0 )
+        w = re.search( r'\(width ([0-9.]+)\)', b )
+        n = re.search( r'\(net "([^"]*)"\)', b )
+
+        if not w or not n:
+            continue
+
+        if n.group( 1 ) == "Net-(Q2-C)":
+            target_widths.add( float( w.group( 1 ) ) )
+        elif abs( float( w.group( 1 ) ) - 0.5 ) > 1e-6:
+            other_has_non_half = True
+
+    assert target_widths == { 0.5 }, "target net widths: {}".format( target_widths )
+    assert other_has_non_half, "expected some other-net track to keep a non-0.5 width"
