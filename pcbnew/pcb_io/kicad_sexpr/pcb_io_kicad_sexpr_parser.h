@@ -146,6 +146,15 @@ public:
     /// Handler to remap an appended board's layers onto the destination board, used on mismatch.
     void SetLayerMappingHandler( LAYER_MAPPING_HANDLER aHandler ) { m_layerMappingHandler = std::move( aHandler ); }
 
+    /**
+     * Load a file whose format version is newer than this build supports instead of hard-refusing
+     * it. The version integer alone is not treated as fatal: parsing proceeds and only fails if the
+     * file actually uses a token this build does not understand. A one-time warning is recorded in
+     * GetParseWarnings(). Used by kicad-cli's --allow-newer-format so a board saved on a newer
+     * nightly, but using only known constructs, loads instead of blocking the whole command.
+     */
+    void SetAllowNewerFormat( bool aAllow ) { m_allowNewerFormat = aAllow; }
+
 private:
 
     // Group membership info refers to other Uuids in the file.
@@ -465,6 +474,8 @@ private:
     std::set<wxString>  m_undefinedLayers;  ///< set of layers not defined in layers section
     std::vector<int>    m_netCodes;         ///< net codes mapping for boards being loaded
     bool                m_tooRecent;        ///< true if version parses as later than supported
+    bool                m_allowNewerFormat = false; ///< load a too-recent file instead of refusing
+    bool                m_warnedNewerFormat = false; ///< emitted the one-time newer-format warning
     int                 m_requiredVersion;  ///< set to the KiCad format version this board requires
     wxString            m_generatorVersion; ///< Set to the generator version this board requires
     bool                m_appendToExisting; ///< reading into an existing board; reset UUIDs

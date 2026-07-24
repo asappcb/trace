@@ -41,6 +41,11 @@ namespace PCB_IO_LOAD_PROPERTIES
 // It will NOT keep the stackup from being changed in all cases, as a copper layer increase may require
 // the stackup to grow
 inline constexpr char APPEND_PRESERVE_DESTINATION_STACKUP[] = "append_preserve_destination_stackup";
+
+// When present, a file whose format version is newer than this build supports is loaded (with a
+// warning) instead of hard-refused, as long as it uses only known tokens. Set by kicad-cli's
+// --allow-newer-format. The value is ignored; presence of the key is the signal.
+inline constexpr char ALLOW_NEWER_FORMAT[] = "allow_newer_format";
 }
 
 /**
