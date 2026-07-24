@@ -90,6 +90,7 @@
 #include "cli/command_pcb_optimize_swaps.h"
 #include "cli/command_pcb_edit.h"
 #include "cli/command_pcb_edit_set_track_width.h"
+#include "cli/command_pcb_edit_add_via.h"
 #include "cli/command_pcb_import.h"
 #include "cli/command_sch_import.h"
 #include "cli/command_import.h"
@@ -165,6 +166,7 @@ static CLI::PCB_UPGRADE_COMMAND          pcbUpgradeCmd{};
 static CLI::PCB_OPTIMIZE_SWAPS_COMMAND   pcbOptimizeSwapsCmd{};
 static CLI::PCB_EDIT_COMMAND                 pcbEditCmd{};
 static CLI::PCB_EDIT_SET_TRACK_WIDTH_COMMAND pcbEditSetTrackWidthCmd{};
+static CLI::PCB_EDIT_ADD_VIA_COMMAND         pcbEditAddViaCmd{};
 static CLI::PCB_IMPORT_COMMAND           pcbImportCmd{};
 static CLI::SCH_IMPORT_COMMAND           schImportCmd{};
 static CLI::IMPORT_COMMAND               importCmd{};
@@ -345,7 +347,8 @@ static std::vector<COMMAND_ENTRY> commandStack = {
             {
                 &pcbEditCmd,
                 {
-                    &pcbEditSetTrackWidthCmd
+                    &pcbEditSetTrackWidthCmd,
+                    &pcbEditAddViaCmd
                 }
             }
         }

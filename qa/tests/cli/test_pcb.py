@@ -452,3 +452,57 @@ def test_pcb_edit_set_track_width( kitest: KiTestFixture ):
 
     assert target_widths == { 0.5 }, "target net widths: {}".format( target_widths )
     assert other_has_non_half, "expected some other-net track to keep a non-0.5 width"
+
+
+def test_pcb_edit_add_via( kitest: KiTestFixture ):
+    """`pcb edit add-via --net N --at X,Y` drops one through via on the net at the given point and
+    writes the board back."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_add_via/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "withvia.kicad_pcb"
+
+    # Count via items only ( \(via followed by space/newline/paren ), not "(viasonmask" in setup.
+    def count_vias( s ):
+        return len( re.findall( r'\(via[\s(]', s ) )
+
+    vias_before = count_vias( input_file.read_text() )
+
+    command = [utils.kicad_cli(), "pcb", "edit", "add-via",
+               "--net", "GND", "--at", "150,95", "--size", "0.8", "--drill", "0.4",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode == 0
+    assert "Added a" in stdout and "via" in stdout
+    assert out_file.exists()
+
+    txt = out_file.read_text()
+    # Exactly one via was added.
+    assert count_vias( txt ) == vias_before + 1
+
+    # A via block at (150, 95) carrying the requested size/drill, on the GND net.
+    via_ok = False
+    for blk in re.finditer( r'\(via\b.*?\n\s*\)', txt, re.S ):
+        b = blk.group( 0 )
+        if re.search( r'\(at 150 95\)', b ) and '(net "GND")' in b \
+                and '(size 0.8)' in b and '(drill 0.4)' in b:
+            via_ok = True
+
+    assert via_ok, "expected a GND via at 150,95 with size 0.8 / drill 0.4"
+
+
+def test_pcb_edit_add_via_bad_net( kitest: KiTestFixture ):
+    """add-via fails cleanly on an unknown net rather than writing a bogus board."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_add_via_bad/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "nope.kicad_pcb"
+
+    command = [utils.kicad_cli(), "pcb", "edit", "add-via",
+               "--net", "DOES_NOT_EXIST", "--at", "150,95",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode != 0
+    assert not out_file.exists()
