@@ -348,6 +348,31 @@ KICOMMON_API std::string FormatDiffAsText( const DOCUMENT_DIFF& aDiff, const wxS
 
 
 /**
+ * Build a review-oriented rollup of a `DOCUMENT_DIFF` for the `--format json`
+ * CLI output. The canonical per-item `changes` array is exhaustive but flat: a
+ * reviewer wanting "which footprints moved" or "which nets rerouted" must
+ * reconstruct it from hundreds of records. This walks the change tree once and
+ * answers the board-review checklist directly:
+ *
+ *  - `counts`          total + per-kind + per-typeName tallies (all doc types)
+ *  - `footprintsMoved` refdes + Δx/Δy (mm) + Δrotation (deg) for each moved
+ *                      footprint (kicad_pcb only)
+ *  - `netsRerouted`    per-net track/via added/removed counts, keyed by the
+ *                      net name carried on each track/via/arc record
+ *                      (kicad_pcb only)
+ *  - `layerChanges`    items whose copper/technical layer changed (kicad_pcb only)
+ *  - `zoneChanges`     zone add/remove/modify tally + per-zone records
+ *                      (kicad_pcb only)
+ *
+ * Derived, presentation-only data: it is emitted alongside `changes` in the CLI
+ * JSON but is deliberately NOT part of `DOCUMENT_DIFF::ToJson()` / `FromJson()`,
+ * so the canonical wire format (used by the merge pipeline) is unchanged and
+ * still round-trips. Distances are reported in millimetres, angles in degrees.
+ */
+KICOMMON_API nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff );
+
+
+/**
  * Write diff/merge text output to @p aOutputPath, or to stdout when the path is
  * empty. Returns false only when a non-empty path cannot be opened for writing.
  */

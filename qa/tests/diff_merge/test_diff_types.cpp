@@ -25,8 +25,11 @@
 
 #include <diff_merge/kicad_diff_types.h>
 
+#include <base_units.h>
+#include <layer_ids.h>
 #include <nlohmann/json.hpp>
 
+#include <cmath>
 #include <cstdio>
 
 #ifndef _WIN32
@@ -575,6 +578,211 @@ BOOST_AUTO_TEST_CASE( ItemChangeEqualityChildrenSensitive )
     // Now make A's child match B's: equal again.
     a.children.back() = child;
     BOOST_CHECK( a == b );
+}
+
+
+// BuildReviewSummary() is the #146 review rollup: it walks a DOCUMENT_DIFF once
+// and answers "what moved / rerouted / changed layer / changed zone" so the
+// --format json CLI output is a direct substitute for eyeballing a git diff.
+BOOST_AUTO_TEST_CASE( ReviewSummaryRollupPcb )
+{
+    DOCUMENT_DIFF diff;
+    diff.path = wxS( "board.kicad_pcb" );
+    diff.docType = wxS( "kicad_pcb" );
+
+    // A footprint that moved +2mm in X, -1mm in Y and rotated 90°. Position is
+    // carried as INT internal units (COORD), orientation as DOUBLE degrees —
+    // exactly what the property differ emits for a top-level footprint.
+    {
+        ITEM_CHANGE fp;
+        fp.id = KIID_PATH( wxS( "/11111111-1111-4111-8111-111111111111" ) );
+        fp.typeName = wxS( "FOOTPRINT" );
+        fp.kind = CHANGE_KIND::MODIFIED;
+        fp.refdes = wxS( "U1" );
+
+        PROPERTY_DELTA px;
+        px.name = wxS( "Position X" );
+        px.before = DIFF_VALUE::FromInt( pcbIUScale.mmToIU( 10.0 ) );
+        px.after = DIFF_VALUE::FromInt( pcbIUScale.mmToIU( 12.0 ) );
+        fp.properties.push_back( px );
+
+        PROPERTY_DELTA py;
+        py.name = wxS( "Position Y" );
+        py.before = DIFF_VALUE::FromInt( pcbIUScale.mmToIU( 5.0 ) );
+        py.after = DIFF_VALUE::FromInt( pcbIUScale.mmToIU( 4.0 ) );
+        fp.properties.push_back( py );
+
+        PROPERTY_DELTA po;
+        po.name = wxS( "Orientation" );
+        po.before = DIFF_VALUE::FromDouble( 0.0 );
+        po.after = DIFF_VALUE::FromDouble( 90.0 );
+        fp.properties.push_back( po );
+
+        diff.changes.push_back( fp );
+    }
+
+    // A footprint that changed but did NOT move (value edit only) must not be
+    // reported as moved.
+    {
+        ITEM_CHANGE fp;
+        fp.id = KIID_PATH( wxS( "/22222222-2222-4222-8222-222222222222" ) );
+        fp.typeName = wxS( "FOOTPRINT" );
+        fp.kind = CHANGE_KIND::MODIFIED;
+        fp.refdes = wxS( "U2" );
+
+        PROPERTY_DELTA pv;
+        pv.name = wxS( "Value" );
+        pv.before = DIFF_VALUE::FromString( std::string( "10k" ) );
+        pv.after = DIFF_VALUE::FromString( std::string( "22k" ) );
+        fp.properties.push_back( pv );
+
+        diff.changes.push_back( fp );
+    }
+
+    // GND net: three tracks removed, one track added, one via added. Each
+    // track/via record carries its net name in refdes (as PCB_DIFFER emits).
+    auto makeTrackChange = [&]( const char* aUuid, const wxString& aType, CHANGE_KIND aKind,
+                                const wxString& aNet )
+    {
+        ITEM_CHANGE c;
+        c.id = KIID_PATH( wxString( wxS( "/" ) ) + wxString::FromUTF8( aUuid ) );
+        c.typeName = aType;
+        c.kind = aKind;
+        c.refdes = aNet;
+        diff.changes.push_back( c );
+    };
+
+    makeTrackChange( "33333333-3333-4333-8333-333333333331", wxS( "PCB_TRACK" ),
+                     CHANGE_KIND::REMOVED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333332", wxS( "PCB_TRACK" ),
+                     CHANGE_KIND::REMOVED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333333", wxS( "PCB_ARC" ),
+                     CHANGE_KIND::REMOVED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333334", wxS( "PCB_TRACK" ),
+                     CHANGE_KIND::ADDED, wxS( "GND" ) );
+    makeTrackChange( "44444444-4444-4444-8444-444444444441", wxS( "PCB_VIA" ),
+                     CHANGE_KIND::ADDED, wxS( "GND" ) );
+
+    // A track whose layer flipped F.Cu -> B.Cu: a MODIFIED with a Layer delta.
+    // It must land in layerChanges, NOT in netsRerouted (it wasn't added/removed).
+    {
+        ITEM_CHANGE c;
+        c.id = KIID_PATH( wxS( "/55555555-5555-4555-8555-555555555555" ) );
+        c.typeName = wxS( "PCB_TRACK" );
+        c.kind = CHANGE_KIND::MODIFIED;
+        c.refdes = wxS( "SIG1" );
+
+        PROPERTY_DELTA pl;
+        pl.name = wxS( "Layer" );
+        pl.before = DIFF_VALUE::FromLayer( F_Cu );
+        pl.after = DIFF_VALUE::FromLayer( B_Cu );
+        c.properties.push_back( pl );
+
+        diff.changes.push_back( c );
+    }
+
+    // A modified zone (outline edited) and an added zone.
+    {
+        ITEM_CHANGE z;
+        z.id = KIID_PATH( wxS( "/66666666-6666-4666-8666-666666666661" ) );
+        z.typeName = wxS( "ZONE" );
+        z.kind = CHANGE_KIND::MODIFIED;
+
+        PROPERTY_DELTA po;
+        po.name = wxS( "Outline" );
+        z.properties.push_back( po );
+
+        diff.changes.push_back( z );
+    }
+    {
+        ITEM_CHANGE z;
+        z.id = KIID_PATH( wxS( "/66666666-6666-4666-8666-666666666662" ) );
+        z.typeName = wxS( "ZONE" );
+        z.kind = CHANGE_KIND::ADDED;
+        diff.changes.push_back( z );
+    }
+
+    nlohmann::json s = BuildReviewSummary( diff );
+
+    // --- counts ---
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "total" ).get<int>(), 10 );
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "added" ).get<int>(), 3 );    // 1 track + 1 via + 1 zone
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "removed" ).get<int>(), 3 );  // 2 tracks + 1 arc
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "modified" ).get<int>(), 4 ); // 2 fp + 1 track + 1 zone
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "byType" ).at( "PCB_TRACK" ).at( "removed" ).get<int>(),
+                       2 );
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "byType" ).at( "PCB_ARC" ).at( "removed" ).get<int>(),
+                       1 );
+
+    // --- footprintsMoved: only U1, with the right deltas ---
+    const nlohmann::json& moved = s.at( "footprintsMoved" );
+    BOOST_REQUIRE_EQUAL( moved.size(), 1u );
+    BOOST_CHECK_EQUAL( moved[0].at( "refdes" ).get<std::string>(), "U1" );
+    BOOST_CHECK( std::abs( moved[0].at( "dx" ).get<double>() - 2.0 ) < 1e-6 );
+    BOOST_CHECK( std::abs( moved[0].at( "dy" ).get<double>() - ( -1.0 ) ) < 1e-6 );
+    BOOST_CHECK( std::abs( moved[0].at( "rotation" ).get<double>() - 90.0 ) < 1e-6 );
+
+    // --- netsRerouted: GND with 3 tracks removed, 1 track added, 1 via added ---
+    const nlohmann::json& nets = s.at( "netsRerouted" );
+    BOOST_REQUIRE_EQUAL( nets.size(), 1u );
+    BOOST_CHECK_EQUAL( nets[0].at( "net" ).get<std::string>(), "GND" );
+    BOOST_CHECK_EQUAL( nets[0].at( "tracksRemoved" ).get<int>(), 3 ); // PCB_TRACK + PCB_ARC
+    BOOST_CHECK_EQUAL( nets[0].at( "tracksAdded" ).get<int>(), 1 );
+    BOOST_CHECK_EQUAL( nets[0].at( "viasAdded" ).get<int>(), 1 );
+    BOOST_CHECK_EQUAL( nets[0].at( "viasRemoved" ).get<int>(), 0 );
+
+    // --- layerChanges: the flipped SIG1 track ---
+    const nlohmann::json& layers = s.at( "layerChanges" );
+    BOOST_REQUIRE_EQUAL( layers.size(), 1u );
+    BOOST_CHECK_EQUAL( layers[0].at( "type" ).get<std::string>(), "PCB_TRACK" );
+    BOOST_CHECK_EQUAL( layers[0].at( "from" ).get<std::string>(), "F.Cu" );
+    BOOST_CHECK_EQUAL( layers[0].at( "to" ).get<std::string>(), "B.Cu" );
+
+    // --- zoneChanges: 1 added, 1 modified (with "Outline" in changed) ---
+    BOOST_CHECK_EQUAL( s.at( "zoneChanges" ).at( "added" ).get<int>(), 1 );
+    BOOST_CHECK_EQUAL( s.at( "zoneChanges" ).at( "modified" ).get<int>(), 1 );
+    BOOST_CHECK_EQUAL( s.at( "zoneChanges" ).at( "removed" ).get<int>(), 0 );
+
+    bool sawOutline = false;
+
+    for( const nlohmann::json& item : s.at( "zoneChanges" ).at( "items" ) )
+    {
+        if( item.at( "kind" ).get<std::string>() == "modified" )
+        {
+            for( const nlohmann::json& ch : item.at( "changed" ) )
+            {
+                if( ch.get<std::string>() == "Outline" )
+                    sawOutline = true;
+            }
+        }
+    }
+
+    BOOST_CHECK( sawOutline );
+}
+
+
+// A non-PCB diff gets the universal `counts` but none of the board-specific
+// rollups (a schematic diff has no tracks / footprints / zones to summarize).
+BOOST_AUTO_TEST_CASE( ReviewSummaryNonPcbHasCountsOnly )
+{
+    DOCUMENT_DIFF diff;
+    diff.path = wxS( "sheet.kicad_sch" );
+    diff.docType = wxS( "kicad_sch" );
+
+    ITEM_CHANGE c;
+    c.id = KIID_PATH( wxS( "/77777777-7777-4777-8777-777777777777" ) );
+    c.typeName = wxS( "SCH_SYMBOL" );
+    c.kind = CHANGE_KIND::ADDED;
+    diff.changes.push_back( c );
+
+    nlohmann::json s = BuildReviewSummary( diff );
+
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "total" ).get<int>(), 1 );
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "added" ).get<int>(), 1 );
+    BOOST_CHECK( !s.contains( "footprintsMoved" ) );
+    BOOST_CHECK( !s.contains( "netsRerouted" ) );
+    BOOST_CHECK( !s.contains( "layerChanges" ) );
+    BOOST_CHECK( !s.contains( "zoneChanges" ) );
 }
 
 

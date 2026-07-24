@@ -20,6 +20,7 @@
 
 #include <diff_merge/kicad_diff_types.h>
 
+#include <base_units.h>
 #include <core/wx_stl_compat.h>
 #include <eda_units.h>
 #include <geometry/eda_angle.h>
@@ -32,6 +33,8 @@
 #include <wx/crt.h>
 #include <wx/file.h>
 
+#include <array>
+#include <cmath>
 #include <functional>
 #include <cstdio>
 #include <sstream>
@@ -843,6 +846,286 @@ std::string FormatDiffAsText( const DOCUMENT_DIFF& aDiff, const wxString& aLabel
         writeChange( c, 0 );
 
     return ss.str();
+}
+
+
+namespace
+{
+
+/// Coerce an INT / INT64 / DOUBLE DIFF_VALUE to a double; nullopt for any other
+/// (or NONE) type, so callers can skip non-numeric before/after cleanly.
+std::optional<double> numericValue( const DIFF_VALUE& aValue )
+{
+    switch( aValue.GetType() )
+    {
+    case DIFF_VALUE::T::INT:    return static_cast<double>( aValue.AsInt() );
+    case DIFF_VALUE::T::INT64:  return static_cast<double>( aValue.AsInt64() );
+    case DIFF_VALUE::T::DOUBLE: return aValue.AsDouble();
+    default:                    return std::nullopt;
+    }
+}
+
+
+/// First property delta on @p aChange whose name equals @p aName, or nullptr.
+const PROPERTY_DELTA* findProperty( const ITEM_CHANGE& aChange, const wxString& aName )
+{
+    for( const PROPERTY_DELTA& p : aChange.properties )
+    {
+        if( p.name == aName )
+            return &p;
+    }
+
+    return nullptr;
+}
+
+} // namespace
+
+
+nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff )
+{
+    nlohmann::json summary;
+
+    // --- counts: universal across doc types, top-level records only so `total`
+    // matches the "N change(s)" a reviewer sees. byType[typeName] = per-kind. ---
+    int total = 0, added = 0, removed = 0, modified = 0;
+    std::map<std::string, std::array<int, 3>> byType;   // {added, removed, modified}
+
+    for( const ITEM_CHANGE& c : aDiff.changes )
+    {
+        ++total;
+        std::array<int, 3>& slot = byType[c.typeName.ToStdString()];
+
+        switch( c.kind )
+        {
+        case CHANGE_KIND::ADDED:    ++added;    ++slot[0]; break;
+        case CHANGE_KIND::REMOVED:  ++removed;  ++slot[1]; break;
+        case CHANGE_KIND::MODIFIED: ++modified; ++slot[2]; break;
+        default:                                           break;
+        }
+    }
+
+    nlohmann::json counts;
+    counts["total"] = total;
+    counts["added"] = added;
+    counts["removed"] = removed;
+    counts["modified"] = modified;
+
+    nlohmann::json byTypeJson = nlohmann::json::object();
+
+    for( const auto& [type, arr] : byType )
+        byTypeJson[type] = { { "added", arr[0] }, { "removed", arr[1] }, { "modified", arr[2] } };
+
+    counts["byType"] = std::move( byTypeJson );
+    summary["counts"] = std::move( counts );
+
+    // Board-specific rollups only make sense for a PCB diff; a schematic /
+    // symbol diff carries no tracks, vias, footprints or zones. Leave the
+    // universal `counts` and return.
+    if( aDiff.docType != wxS( "kicad_pcb" ) )
+        return summary;
+
+    summary["units"] = { { "distance", "mm" }, { "rotation", "deg" } };
+
+    // --- footprintsMoved: refdes + Δposition (mm) + Δrotation (deg). Top-level
+    // FOOTPRINT MODIFIED records keep Position X/Y and Orientation deltas (the
+    // noise filter only strips those *inside* a footprint). ---
+    nlohmann::json footprintsMoved = nlohmann::json::array();
+
+    for( const ITEM_CHANGE& c : aDiff.changes )
+    {
+        if( c.kind != CHANGE_KIND::MODIFIED || c.typeName != wxS( "FOOTPRINT" ) )
+            continue;
+
+        const PROPERTY_DELTA* px = findProperty( c, wxS( "Position X" ) );
+        const PROPERTY_DELTA* py = findProperty( c, wxS( "Position Y" ) );
+        const PROPERTY_DELTA* po = findProperty( c, wxS( "Orientation" ) );
+
+        double dx = 0.0, dy = 0.0, drot = 0.0;
+        bool   moved = false;
+
+        if( px )
+        {
+            std::optional<double> b = numericValue( px->before );
+            std::optional<double> a = numericValue( px->after );
+
+            if( b && a )
+            {
+                dx = pcbIUScale.IUTomm( static_cast<int>( *a ) - static_cast<int>( *b ) );
+                moved = true;
+            }
+        }
+
+        if( py )
+        {
+            std::optional<double> b = numericValue( py->before );
+            std::optional<double> a = numericValue( py->after );
+
+            if( b && a )
+            {
+                dy = pcbIUScale.IUTomm( static_cast<int>( *a ) - static_cast<int>( *b ) );
+                moved = true;
+            }
+        }
+
+        if( po )
+        {
+            std::optional<double> b = numericValue( po->before );
+            std::optional<double> a = numericValue( po->after );
+
+            if( b && a )
+            {
+                drot = *a - *b;
+                moved = true;
+            }
+        }
+
+        if( !moved )
+            continue;
+
+        nlohmann::json e;
+
+        if( c.refdes.has_value() )
+            e["refdes"] = *c.refdes;
+
+        e["id"] = c.id.AsString();
+        e["dx"] = dx;
+        e["dy"] = dy;
+        e["distance"] = std::sqrt( dx * dx + dy * dy );
+        e["rotation"] = drot;
+        footprintsMoved.push_back( std::move( e ) );
+    }
+
+    summary["footprintsMoved"] = std::move( footprintsMoved );
+
+    // --- netsRerouted: per-net track/via added/removed counts. Each track /
+    // arc / via record carries its net name in `refdes` (see
+    // PCB_DIFFER::itemRefdes); group the ADDED/REMOVED records by it. ---
+    struct NET_TALLY
+    {
+        int tracksAdded = 0, tracksRemoved = 0, viasAdded = 0, viasRemoved = 0;
+    };
+
+    std::map<wxString, NET_TALLY> nets;   // keyed by net name, sorted for stable output
+
+    for( const ITEM_CHANGE& c : aDiff.changes )
+    {
+        const bool isVia = c.typeName == wxS( "PCB_VIA" );
+        const bool isTrack = c.typeName == wxS( "PCB_TRACK" ) || c.typeName == wxS( "PCB_ARC" );
+
+        if( !isVia && !isTrack )
+            continue;
+
+        if( c.kind != CHANGE_KIND::ADDED && c.kind != CHANGE_KIND::REMOVED )
+            continue;
+
+        NET_TALLY& t = nets[c.refdes.value_or( wxS( "<no net>" ) )];
+
+        if( isVia && c.kind == CHANGE_KIND::ADDED )
+            ++t.viasAdded;
+        else if( isVia )
+            ++t.viasRemoved;
+        else if( c.kind == CHANGE_KIND::ADDED )
+            ++t.tracksAdded;
+        else
+            ++t.tracksRemoved;
+    }
+
+    nlohmann::json netsRerouted = nlohmann::json::array();
+
+    for( const auto& [net, t] : nets )
+    {
+        netsRerouted.push_back( { { "net", net },
+                                  { "tracksAdded", t.tracksAdded },
+                                  { "tracksRemoved", t.tracksRemoved },
+                                  { "viasAdded", t.viasAdded },
+                                  { "viasRemoved", t.viasRemoved } } );
+    }
+
+    summary["netsRerouted"] = std::move( netsRerouted );
+
+    // --- layerChanges: any modified item whose Layer property changed. Walk
+    // children too, though footprint-child layer shifts are filtered as noise
+    // upstream so in practice these are top-level tracks / text / shapes. ---
+    nlohmann::json layerChanges = nlohmann::json::array();
+
+    std::function<void( const ITEM_CHANGE& )> walkLayers =
+            [&]( const ITEM_CHANGE& c )
+            {
+                if( c.kind == CHANGE_KIND::MODIFIED )
+                {
+                    const PROPERTY_DELTA* pl = findProperty( c, wxS( "Layer" ) );
+
+                    if( pl && pl->before.GetType() == DIFF_VALUE::T::LAYER
+                        && pl->after.GetType() == DIFF_VALUE::T::LAYER )
+                    {
+                        nlohmann::json e;
+                        e["id"] = c.id.AsString();
+                        e["type"] = c.typeName;
+
+                        if( c.refdes.has_value() )
+                            e["refdes"] = *c.refdes;
+
+                        e["from"] = LayerName( pl->before.AsLayer() );
+                        e["to"] = LayerName( pl->after.AsLayer() );
+                        layerChanges.push_back( std::move( e ) );
+                    }
+                }
+
+                for( const ITEM_CHANGE& kid : c.children )
+                    walkLayers( kid );
+            };
+
+    for( const ITEM_CHANGE& c : aDiff.changes )
+        walkLayers( c );
+
+    summary["layerChanges"] = std::move( layerChanges );
+
+    // --- zoneChanges: add/remove/modify tally plus one record per zone. For a
+    // modified zone, list the changed aspects by property name (Outline,
+    // "Filled Area (<layer>)", etc.) so a reviewer sees *what* about the zone
+    // moved without decoding the polygon deltas. ---
+    int            zoneAdded = 0, zoneRemoved = 0, zoneModified = 0;
+    nlohmann::json zoneItems = nlohmann::json::array();
+
+    for( const ITEM_CHANGE& c : aDiff.changes )
+    {
+        if( c.typeName != wxS( "ZONE" ) )
+            continue;
+
+        switch( c.kind )
+        {
+        case CHANGE_KIND::ADDED:    ++zoneAdded;    break;
+        case CHANGE_KIND::REMOVED:  ++zoneRemoved;  break;
+        case CHANGE_KIND::MODIFIED: ++zoneModified; break;
+        default:                                    break;
+        }
+
+        nlohmann::json e;
+        e["id"] = c.id.AsString();
+        e["kind"] = ChangeKindToString( c.kind );
+
+        if( c.refdes.has_value() )
+            e["net"] = *c.refdes;
+
+        if( c.kind == CHANGE_KIND::MODIFIED )
+        {
+            nlohmann::json changed = nlohmann::json::array();
+
+            for( const PROPERTY_DELTA& p : c.properties )
+                changed.push_back( p.name );
+
+            e["changed"] = std::move( changed );
+        }
+
+        zoneItems.push_back( std::move( e ) );
+    }
+
+    summary["zoneChanges"] = { { "added", zoneAdded },
+                               { "removed", zoneRemoved },
+                               { "modified", zoneModified },
+                               { "items", std::move( zoneItems ) } };
+
+    return summary;
 }
 
 
