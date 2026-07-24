@@ -641,8 +641,7 @@ BOOST_AUTO_TEST_CASE( ReviewSummaryRollupPcb )
 
     // GND net: three tracks removed, one track added, one via added. Each
     // track/via record carries its net name in refdes (as PCB_DIFFER emits).
-    auto makeTrackChange = [&]( const char* aUuid, const wxString& aType, CHANGE_KIND aKind,
-                                const wxString& aNet )
+    auto makeTrackChange = [&]( const char* aUuid, const wxString& aType, CHANGE_KIND aKind, const wxString& aNet )
     {
         ITEM_CHANGE c;
         c.id = KIID_PATH( wxString( wxS( "/" ) ) + wxString::FromUTF8( aUuid ) );
@@ -652,16 +651,11 @@ BOOST_AUTO_TEST_CASE( ReviewSummaryRollupPcb )
         diff.changes.push_back( c );
     };
 
-    makeTrackChange( "33333333-3333-4333-8333-333333333331", wxS( "PCB_TRACK" ),
-                     CHANGE_KIND::REMOVED, wxS( "GND" ) );
-    makeTrackChange( "33333333-3333-4333-8333-333333333332", wxS( "PCB_TRACK" ),
-                     CHANGE_KIND::REMOVED, wxS( "GND" ) );
-    makeTrackChange( "33333333-3333-4333-8333-333333333333", wxS( "PCB_ARC" ),
-                     CHANGE_KIND::REMOVED, wxS( "GND" ) );
-    makeTrackChange( "33333333-3333-4333-8333-333333333334", wxS( "PCB_TRACK" ),
-                     CHANGE_KIND::ADDED, wxS( "GND" ) );
-    makeTrackChange( "44444444-4444-4444-8444-444444444441", wxS( "PCB_VIA" ),
-                     CHANGE_KIND::ADDED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333331", wxS( "PCB_TRACK" ), CHANGE_KIND::REMOVED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333332", wxS( "PCB_TRACK" ), CHANGE_KIND::REMOVED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333333", wxS( "PCB_ARC" ), CHANGE_KIND::REMOVED, wxS( "GND" ) );
+    makeTrackChange( "33333333-3333-4333-8333-333333333334", wxS( "PCB_TRACK" ), CHANGE_KIND::ADDED, wxS( "GND" ) );
+    makeTrackChange( "44444444-4444-4444-8444-444444444441", wxS( "PCB_VIA" ), CHANGE_KIND::ADDED, wxS( "GND" ) );
 
     // A track whose layer flipped F.Cu -> B.Cu: a MODIFIED with a Layer delta.
     // It must land in layerChanges, NOT in netsRerouted (it wasn't added/removed).
@@ -709,10 +703,8 @@ BOOST_AUTO_TEST_CASE( ReviewSummaryRollupPcb )
     BOOST_CHECK_EQUAL( s.at( "counts" ).at( "added" ).get<int>(), 3 );    // 1 track + 1 via + 1 zone
     BOOST_CHECK_EQUAL( s.at( "counts" ).at( "removed" ).get<int>(), 3 );  // 2 tracks + 1 arc
     BOOST_CHECK_EQUAL( s.at( "counts" ).at( "modified" ).get<int>(), 4 ); // 2 fp + 1 track + 1 zone
-    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "byType" ).at( "PCB_TRACK" ).at( "removed" ).get<int>(),
-                       2 );
-    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "byType" ).at( "PCB_ARC" ).at( "removed" ).get<int>(),
-                       1 );
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "byType" ).at( "PCB_TRACK" ).at( "removed" ).get<int>(), 2 );
+    BOOST_CHECK_EQUAL( s.at( "counts" ).at( "byType" ).at( "PCB_ARC" ).at( "removed" ).get<int>(), 1 );
 
     // --- footprintsMoved: only U1, with the right deltas ---
     const nlohmann::json& moved = s.at( "footprintsMoved" );

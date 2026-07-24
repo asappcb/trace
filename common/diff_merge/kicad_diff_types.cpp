@@ -852,31 +852,31 @@ std::string FormatDiffAsText( const DOCUMENT_DIFF& aDiff, const wxString& aLabel
 namespace
 {
 
-/// Coerce an INT / INT64 / DOUBLE DIFF_VALUE to a double; nullopt for any other
-/// (or NONE) type, so callers can skip non-numeric before/after cleanly.
-std::optional<double> numericValue( const DIFF_VALUE& aValue )
-{
-    switch( aValue.GetType() )
+    /// Coerce an INT / INT64 / DOUBLE DIFF_VALUE to a double; nullopt for any other
+    /// (or NONE) type, so callers can skip non-numeric before/after cleanly.
+    std::optional<double> numericValue( const DIFF_VALUE& aValue )
     {
-    case DIFF_VALUE::T::INT:    return static_cast<double>( aValue.AsInt() );
-    case DIFF_VALUE::T::INT64:  return static_cast<double>( aValue.AsInt64() );
-    case DIFF_VALUE::T::DOUBLE: return aValue.AsDouble();
-    default:                    return std::nullopt;
-    }
-}
-
-
-/// First property delta on @p aChange whose name equals @p aName, or nullptr.
-const PROPERTY_DELTA* findProperty( const ITEM_CHANGE& aChange, const wxString& aName )
-{
-    for( const PROPERTY_DELTA& p : aChange.properties )
-    {
-        if( p.name == aName )
-            return &p;
+        switch( aValue.GetType() )
+        {
+        case DIFF_VALUE::T::INT: return static_cast<double>( aValue.AsInt() );
+        case DIFF_VALUE::T::INT64: return static_cast<double>( aValue.AsInt64() );
+        case DIFF_VALUE::T::DOUBLE: return aValue.AsDouble();
+        default: return std::nullopt;
+        }
     }
 
-    return nullptr;
-}
+
+    /// First property delta on @p aChange whose name equals @p aName, or nullptr.
+    const PROPERTY_DELTA* findProperty( const ITEM_CHANGE& aChange, const wxString& aName )
+    {
+        for( const PROPERTY_DELTA& p : aChange.properties )
+        {
+            if( p.name == aName )
+                return &p;
+        }
+
+        return nullptr;
+    }
 
 } // namespace
 
@@ -887,8 +887,8 @@ nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff )
 
     // --- counts: universal across doc types, top-level records only so `total`
     // matches the "N change(s)" a reviewer sees. byType[typeName] = per-kind. ---
-    int total = 0, added = 0, removed = 0, modified = 0;
-    std::map<std::string, std::array<int, 3>> byType;   // {added, removed, modified}
+    int                                       total = 0, added = 0, removed = 0, modified = 0;
+    std::map<std::string, std::array<int, 3>> byType; // {added, removed, modified}
 
     for( const ITEM_CHANGE& c : aDiff.changes )
     {
@@ -897,10 +897,19 @@ nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff )
 
         switch( c.kind )
         {
-        case CHANGE_KIND::ADDED:    ++added;    ++slot[0]; break;
-        case CHANGE_KIND::REMOVED:  ++removed;  ++slot[1]; break;
-        case CHANGE_KIND::MODIFIED: ++modified; ++slot[2]; break;
-        default:                                           break;
+        case CHANGE_KIND::ADDED:
+            ++added;
+            ++slot[0];
+            break;
+        case CHANGE_KIND::REMOVED:
+            ++removed;
+            ++slot[1];
+            break;
+        case CHANGE_KIND::MODIFIED:
+            ++modified;
+            ++slot[2];
+            break;
+        default: break;
         }
     }
 
@@ -1005,7 +1014,7 @@ nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff )
         int tracksAdded = 0, tracksRemoved = 0, viasAdded = 0, viasRemoved = 0;
     };
 
-    std::map<wxString, NET_TALLY> nets;   // keyed by net name, sorted for stable output
+    std::map<wxString, NET_TALLY> nets; // keyed by net name, sorted for stable output
 
     for( const ITEM_CHANGE& c : aDiff.changes )
     {
@@ -1048,32 +1057,30 @@ nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff )
     // upstream so in practice these are top-level tracks / text / shapes. ---
     nlohmann::json layerChanges = nlohmann::json::array();
 
-    std::function<void( const ITEM_CHANGE& )> walkLayers =
-            [&]( const ITEM_CHANGE& c )
+    std::function<void( const ITEM_CHANGE& )> walkLayers = [&]( const ITEM_CHANGE& c )
+    {
+        if( c.kind == CHANGE_KIND::MODIFIED )
+        {
+            const PROPERTY_DELTA* pl = findProperty( c, wxS( "Layer" ) );
+
+            if( pl && pl->before.GetType() == DIFF_VALUE::T::LAYER && pl->after.GetType() == DIFF_VALUE::T::LAYER )
             {
-                if( c.kind == CHANGE_KIND::MODIFIED )
-                {
-                    const PROPERTY_DELTA* pl = findProperty( c, wxS( "Layer" ) );
+                nlohmann::json e;
+                e["id"] = c.id.AsString();
+                e["type"] = c.typeName;
 
-                    if( pl && pl->before.GetType() == DIFF_VALUE::T::LAYER
-                        && pl->after.GetType() == DIFF_VALUE::T::LAYER )
-                    {
-                        nlohmann::json e;
-                        e["id"] = c.id.AsString();
-                        e["type"] = c.typeName;
+                if( c.refdes.has_value() )
+                    e["refdes"] = *c.refdes;
 
-                        if( c.refdes.has_value() )
-                            e["refdes"] = *c.refdes;
+                e["from"] = LayerName( pl->before.AsLayer() );
+                e["to"] = LayerName( pl->after.AsLayer() );
+                layerChanges.push_back( std::move( e ) );
+            }
+        }
 
-                        e["from"] = LayerName( pl->before.AsLayer() );
-                        e["to"] = LayerName( pl->after.AsLayer() );
-                        layerChanges.push_back( std::move( e ) );
-                    }
-                }
-
-                for( const ITEM_CHANGE& kid : c.children )
-                    walkLayers( kid );
-            };
+        for( const ITEM_CHANGE& kid : c.children )
+            walkLayers( kid );
+    };
 
     for( const ITEM_CHANGE& c : aDiff.changes )
         walkLayers( c );
@@ -1094,10 +1101,10 @@ nlohmann::json BuildReviewSummary( const DOCUMENT_DIFF& aDiff )
 
         switch( c.kind )
         {
-        case CHANGE_KIND::ADDED:    ++zoneAdded;    break;
-        case CHANGE_KIND::REMOVED:  ++zoneRemoved;  break;
+        case CHANGE_KIND::ADDED: ++zoneAdded; break;
+        case CHANGE_KIND::REMOVED: ++zoneRemoved; break;
         case CHANGE_KIND::MODIFIED: ++zoneModified; break;
-        default:                                    break;
+        default: break;
         }
 
         nlohmann::json e;
