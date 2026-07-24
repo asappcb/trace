@@ -1,0 +1,53 @@
+** Drc report for filled.kicad_pcb **
+** Created on 2026-07-23T17:03:35 **
+** Report includes: Errors, Warnings **
+
+** Found 6 DRC violations **
+[courtyards_overlap]: Courtyards overlap
+    Rule: board setup constraints courtyard; error
+    @(133.6200 mm, 68.7900 mm): Footprint J1
+    @(138.7400 mm, 75.2200 mm): Footprint REF**
+[lib_footprint_issues]: The current configuration does not include the footprint library 'digikey-footprints'
+    Local override; warning
+    @(133.6200 mm, 68.7900 mm): Footprint J1
+[lib_footprint_issues]: The footprint library 'MountingHole' is not enabled in the current configuration
+    Local override; warning
+    @(137.8700 mm, 81.9900 mm): Footprint H1
+[lib_footprint_issues]: The footprint library 'Connector_PinHeader_2.54mm' is not enabled in the current configuration
+    Local override; warning
+    @(128.2400 mm, 75.1000 mm): Footprint J3
+[lib_footprint_issues]: The current configuration does not include the footprint library 'qli-footprints'
+    Local override; warning
+    @(138.7400 mm, 75.2200 mm): Footprint REF**
+[lib_footprint_issues]: The footprint library 'Connector_PinHeader_2.54mm' is not enabled in the current configuration
+    Local override; warning
+    @(147.1600 mm, 75.6300 mm): Footprint J2
+
+** Found 4 unconnected pads **
+[unconnected_items]: Missing connection between items
+    Local override; error
+    @(133.6200 mm, 68.7900 mm): PTH pad 1 [Net-(J3-Pad4)] of J1
+    @(126.5850 mm, 76.3700 mm): Pad 4 [Net-(J3-Pad4)] of J3 on F.Cu
+[unconnected_items]: Missing connection between items
+    Local override; error
+    @(141.2400 mm, 68.7900 mm): PTH pad 4 [Net-(J3-Pad4)] of J1
+    @(133.6200 mm, 68.7900 mm): PTH pad 1 [Net-(J3-Pad4)] of J1
+[unconnected_items]: Missing connection between items
+    Local override; error
+    @(145.5050 mm, 76.9000 mm): Pad 4 [Net-(J3-Pad4)] of J2 on F.Cu
+    @(141.2400 mm, 68.7900 mm): PTH pad 4 [Net-(J3-Pad4)] of J1
+[unconnected_items]: Missing connection between items
+    Local override; error
+    @(129.8950 mm, 68.7500 mm): Pad 1 [Net-(J3-Pad1)] of J3 on F.Cu
+    @(136.1600 mm, 68.7900 mm): PTH pad 2 [Net-(J3-Pad1)] of J1
+
+** Found 0 Footprint errors **
+
+** Ignored checks **
+    - Footprint has no courtyard defined
+    - Track endpoint not centered on via
+    - Tuning profile track geometries
+    - Footprint doesn't match symbol's footprint filters
+    - Footprint component type doesn't match footprint pads
+
+** End of Report **

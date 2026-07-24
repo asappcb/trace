@@ -374,3 +374,41 @@ def test_pcb_export_json( kitest: KiTestFixture ):
     assert filled
     ring = next( iter( filled[0]["filled_polygons"].values() ) )[0]
     assert len( ring ) >= 3 and len( ring[0] ) == 2
+def _strip_zone_fill( text: str ) -> str:
+    """Remove balanced (filled_polygon ...) blocks so the board loads but is unfilled."""
+    out, i = [], 0
+    while i < len( text ):
+        j = text.find( "(filled_polygon", i )
+        if j < 0:
+            out.append( text[i:] ); break
+        out.append( text[i:j] )
+        depth, k = 0, j
+        while k < len( text ):
+            if text[k] == "(": depth += 1
+            elif text[k] == ")":
+                depth -= 1
+                if depth == 0: k += 1; break
+            k += 1
+        i = k
+    return "".join( out )
+
+
+def test_pcb_zone_fill( kitest: KiTestFixture, tmp_path ):
+    """`pcb zone fill` fills copper zones and writes a valid board back."""
+    src = kitest.get_data_file_path( "pcbnew/issue7086.kicad_pcb" ).read_text()
+
+    # Start from an unfilled copy so the test proves fill actually creates the pour, not a no-op.
+    unfilled = tmp_path / "unfilled.kicad_pcb"
+    unfilled.write_text( _strip_zone_fill( src ) )
+    assert "filled_polygon" not in unfilled.read_text()
+
+    out = tmp_path / "filled.kicad_pcb"
+    _, _, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "zone", "fill", str( unfilled ), "-o", str( out )] )
+    assert exitcode == 0
+    assert "filled_polygon" in out.read_text()   # 0 -> N: the pour was created
+
+    # And the written board is valid (DRC can load it).
+    _, _, drc_exit = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "drc", str( out )] )
+    assert drc_exit in ( 0, 5 )   # 5 == DRC violations exist, still a successful load

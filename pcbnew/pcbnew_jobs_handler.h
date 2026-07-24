@@ -63,6 +63,7 @@ public:
     int JobExportIpcD356( JOB* aJob );
     int JobExportStats( JOB* aJob );
     int JobExportJson( JOB* aJob );
+    int JobPcbFillZones( JOB* aJob );
     int JobUpgrade( JOB* aJob );
     int JobOptimizeSwaps( JOB* aJob );
     int JobImport( JOB* aJob );

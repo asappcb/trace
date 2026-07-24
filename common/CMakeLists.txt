@@ -162,6 +162,7 @@ set( KICOMMON_SRCS
     jobs/job_export_pcb_png.cpp
     jobs/job_export_pcb_stats.cpp
     jobs/job_export_pcb_json.cpp
+    jobs/job_pcb_fill_zones.cpp
     jobs/job_export_pcb_plot.cpp
     jobs/job_export_pcb_pos.cpp
     jobs/job_export_pcb_ps.cpp

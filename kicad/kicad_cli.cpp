@@ -55,6 +55,8 @@
 #include "cli/command_release_verify.h"
 #include "cli/command_pcb.h"
 #include "cli/command_pcb_export.h"
+#include "cli/command_pcb_zone.h"
+#include "cli/command_pcb_zone_fill.h"
 #include "cli/command_fp_diff.h"
 #include "cli/command_pcb_diff.h"
 #include "cli/command_pcb_drc.h"
@@ -198,6 +200,8 @@ static CLI::PCB_EXPORT_IPC2581_COMMAND   exportPcbIpc2581Cmd{};
 static CLI::PCB_EXPORT_IPCD356_COMMAND   exportPcbIpcD356Cmd{};
 static CLI::PCB_EXPORT_ODB_COMMAND       exportPcbOdbCmd{};
 static CLI::PCB_EXPORT_COMMAND           exportPcbCmd{};
+static CLI::PCB_ZONE_COMMAND              pcbZoneCmd{};
+static CLI::PCB_ZONE_FILL_COMMAND         pcbZoneFillCmd{};
 static CLI::SCH_EXPORT_COMMAND           exportSchCmd{};
 static CLI::SCH_COMMAND                  schCmd{};
 static CLI::SCH_DIFF_COMMAND             schDiffCmd{};
@@ -320,6 +324,12 @@ static std::vector<COMMAND_ENTRY> commandStack = {
                     &exportPcbStepzCmd,
                     &exportPcbU3DCmd,
                     &exportPcb3DPDFCmd
+                }
+            },
+            {
+                &pcbZoneCmd,
+                {
+                    &pcbZoneFillCmd
                 }
             },
             {

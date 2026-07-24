@@ -85,6 +85,8 @@ set( KICAD_CLI_SRCS
     cli/command_pcb_export_ps.cpp
     cli/command_pcb_export_stats.cpp
     cli/command_pcb_export_json.cpp
+    cli/command_pcb_zone.h
+    cli/command_pcb_zone_fill.cpp
     cli/command_pcb_export_svg.cpp
     cli/command_pcb_upgrade.cpp
     cli/command_pcb_optimize_swaps.cpp

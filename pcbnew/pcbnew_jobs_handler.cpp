@@ -62,6 +62,7 @@
 #include <jobs/job_export_pcb_ps.h>
 #include <jobs/job_export_pcb_stats.h>
 #include <jobs/job_export_pcb_json.h>
+#include <jobs/job_pcb_fill_zones.h>
 #include <zone.h>
 #include <geometry/shape_poly_set.h>
 #include <geometry/shape_line_chain.h>
@@ -271,6 +272,11 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
                   return dlg.ShowModal() == wxID_OK;
               } );
     Register( "json", std::bind( &PCBNEW_JOBS_HANDLER::JobExportJson, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "fill_zones", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbFillZones, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -1945,6 +1951,45 @@ int PCBNEW_JOBS_HANDLER::JobExportJson( JOB* aJob )
 
         m_reporter->Report( wxString::Format( _( "Wrote board JSON to %s\n" ), outPath ), RPT_SEVERITY_INFO );
     }
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbFillZones( JOB* aJob )
+{
+    JOB_PCB_FILL_ZONES* fillJob = dynamic_cast<JOB_PCB_FILL_ZONES*>( aJob );
+
+    if( fillJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( fillJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    // Fill via the zone-filler tool, exactly as DRC's --refill-zones and the plot paths do.
+    TOOL_MANAGER* toolManager = getToolManager( brd );
+
+    if( !toolManager->FindTool( ZONE_FILLER_TOOL_NAME ) )
+        toolManager->RegisterTool( new ZONE_FILLER_TOOL );
+
+    toolManager->GetTool<ZONE_FILLER_TOOL>()->FillAllZones( nullptr, m_progressReporter, true );
+
+    // Write back to --output, or over the input when omitted (the point of the command).
+    wxString outPath = fillJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = fillJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Filled zones and wrote %s\n" ), outPath ), RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }
