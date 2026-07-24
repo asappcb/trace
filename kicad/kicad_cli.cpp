@@ -163,7 +163,7 @@ static CLI::GIT_MERGEDRIVER_COMMAND      gitMergeDriverCmd{};
 static CLI::PCB_RENDER_COMMAND           pcbRenderCmd{};
 static CLI::PCB_UPGRADE_COMMAND          pcbUpgradeCmd{};
 static CLI::PCB_OPTIMIZE_SWAPS_COMMAND   pcbOptimizeSwapsCmd{};
-static CLI::PCB_EDIT_COMMAND             pcbEditCmd{};
+static CLI::PCB_EDIT_COMMAND                 pcbEditCmd{};
 static CLI::PCB_EDIT_SET_TRACK_WIDTH_COMMAND pcbEditSetTrackWidthCmd{};
 static CLI::PCB_IMPORT_COMMAND           pcbImportCmd{};
 static CLI::SCH_IMPORT_COMMAND           schImportCmd{};
