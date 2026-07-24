@@ -479,7 +479,7 @@ TOOL_MANAGER* PCBNEW_JOBS_HANDLER::getToolManager( BOARD* aBrd )
 }
 
 
-BOARD* PCBNEW_JOBS_HANDLER::getBoard( const wxString& aPath )
+BOARD* PCBNEW_JOBS_HANDLER::getBoard( const wxString& aPath, bool aAllowNewerFormat )
 {
     BOARD*            brd = nullptr;
     SETTINGS_MANAGER& settingsManager = Pgm().GetSettingsManager();
@@ -513,7 +513,18 @@ BOARD* PCBNEW_JOBS_HANDLER::getBoard( const wxString& aPath )
 
         try
         {
-            std::unique_ptr<BOARD> loadedBoard = BOARD_LOADER::Load( aBoardPath, pluginType, project );
+            // --allow-newer-format: pass the load property so the sexpr parser accepts a file whose
+            // version integer is newer than this build, as long as it uses only known tokens.
+            BOARD_LOADER::OPTIONS       opts;
+            std::map<std::string, UTF8> props;
+
+            if( aAllowNewerFormat )
+            {
+                props[PCB_IO_LOAD_PROPERTIES::ALLOW_NEWER_FORMAT] = "1";
+                opts.properties = &props;
+            }
+
+            std::unique_ptr<BOARD> loadedBoard = BOARD_LOADER::Load( aBoardPath, pluginType, project, opts );
             return loadedBoard.release();
         }
         catch( const IO_ERROR& ioe )
@@ -645,7 +656,7 @@ int PCBNEW_JOBS_HANDLER::JobExportStep( JOB* aJob )
     if( aStepJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aStepJob->m_filename );
+    BOARD* brd = getBoard( aStepJob->m_filename, aStepJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -771,7 +782,7 @@ int PCBNEW_JOBS_HANDLER::JobExportRender( JOB* aJob )
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
-    BOARD* brd = getBoard( aRenderJob->m_filename );
+    BOARD* brd = getBoard( aRenderJob->m_filename, aRenderJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1039,7 +1050,7 @@ int PCBNEW_JOBS_HANDLER::JobExportSvg( JOB* aJob )
     if( aSvgJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD*        brd = getBoard( aSvgJob->m_filename );
+    BOARD*        brd = getBoard( aSvgJob->m_filename, aSvgJob->GetAllowNewerFormat() );
     TOOL_MANAGER* toolManager = getToolManager( brd );
 
     if( !brd )
@@ -1131,7 +1142,7 @@ int PCBNEW_JOBS_HANDLER::JobExportDxf( JOB* aJob )
     if( aDxfJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aDxfJob->m_filename );
+    BOARD* brd = getBoard( aDxfJob->m_filename, aDxfJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1226,7 +1237,7 @@ int PCBNEW_JOBS_HANDLER::JobExportPdf( JOB* aJob )
     if( pdfJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( pdfJob->m_filename );
+    BOARD* brd = getBoard( pdfJob->m_filename, pdfJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1321,7 +1332,7 @@ int PCBNEW_JOBS_HANDLER::JobExportPng( JOB* aJob )
     if( pngJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( pngJob->m_filename );
+    BOARD* brd = getBoard( pngJob->m_filename, pngJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1395,7 +1406,7 @@ int PCBNEW_JOBS_HANDLER::JobExportPs( JOB* aJob )
     if( psJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( psJob->m_filename );
+    BOARD* brd = getBoard( psJob->m_filename, psJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1491,7 +1502,7 @@ int PCBNEW_JOBS_HANDLER::JobExportGerbers( JOB* aJob )
     if( aGerberJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aGerberJob->m_filename );
+    BOARD* brd = getBoard( aGerberJob->m_filename, aGerberJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1660,7 +1671,7 @@ int PCBNEW_JOBS_HANDLER::JobExportGencad( JOB* aJob )
     if( aGencadJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aGencadJob->m_filename );
+    BOARD* brd = getBoard( aGencadJob->m_filename, aGencadJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -1716,7 +1727,7 @@ int PCBNEW_JOBS_HANDLER::JobExportStats( JOB* aJob )
     if( statsJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( statsJob->m_filename );
+    BOARD* brd = getBoard( statsJob->m_filename, statsJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -2002,7 +2013,7 @@ int PCBNEW_JOBS_HANDLER::JobExportGerber( JOB* aJob )
     if( aGerberJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aGerberJob->m_filename );
+    BOARD* brd = getBoard( aGerberJob->m_filename, aGerberJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -2101,7 +2112,7 @@ int PCBNEW_JOBS_HANDLER::JobExportDrill( JOB* aJob )
     if( aDrillJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aDrillJob->m_filename );
+    BOARD* brd = getBoard( aDrillJob->m_filename, aDrillJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -2251,7 +2262,7 @@ int PCBNEW_JOBS_HANDLER::JobExportPos( JOB* aJob )
     if( aPosJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( aPosJob->m_filename );
+    BOARD* brd = getBoard( aPosJob->m_filename, aPosJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -2666,7 +2677,7 @@ int PCBNEW_JOBS_HANDLER::JobExportDrc( JOB* aJob )
     if( drcJob == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( drcJob->m_filename );
+    BOARD* brd = getBoard( drcJob->m_filename, drcJob->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -2990,7 +3001,7 @@ int PCBNEW_JOBS_HANDLER::JobExportIpc2581( JOB* aJob )
     if( job == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( job->m_filename );
+    BOARD* brd = getBoard( job->m_filename, job->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -3028,7 +3039,7 @@ int PCBNEW_JOBS_HANDLER::JobExportIpcD356( JOB* aJob )
     if( job == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( job->m_filename );
+    BOARD* brd = getBoard( job->m_filename, job->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -3075,7 +3086,7 @@ int PCBNEW_JOBS_HANDLER::JobExportOdb( JOB* aJob )
     if( job == nullptr )
         return CLI::EXIT_CODES::ERR_UNKNOWN;
 
-    BOARD* brd = getBoard( job->m_filename );
+    BOARD* brd = getBoard( job->m_filename, job->GetAllowNewerFormat() );
 
     if( !brd )
         return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
@@ -3148,7 +3159,7 @@ int PCBNEW_JOBS_HANDLER::JobUpgrade( JOB* aJob )
     try
     {
         IO_RELEASER<PCB_IO> pi( PCB_IO_MGR::FindPlugin( PCB_IO_MGR::KICAD_SEXP ) );
-        BOARD*              brd = getBoard( job->m_filename );
+        BOARD*              brd = getBoard( job->m_filename, job->GetAllowNewerFormat() );
         if( brd->GetFileFormatVersionAtLoad() < SEXPR_BOARD_FILE_VERSION )
             shouldSave = true;
 
@@ -3183,7 +3194,7 @@ int PCBNEW_JOBS_HANDLER::JobOptimizeSwaps( JOB* aJob )
     try
     {
         IO_RELEASER<PCB_IO> pi( PCB_IO_MGR::FindPlugin( PCB_IO_MGR::KICAD_SEXP ) );
-        BOARD*              brd = getBoard( job->m_filename );
+        BOARD*              brd = getBoard( job->m_filename, job->GetAllowNewerFormat() );
 
         if( !brd )
             return CLI::EXIT_CODES::ERR_UNKNOWN;
@@ -3590,11 +3601,11 @@ int PCBNEW_JOBS_HANDLER::JobImport( JOB* aJob )
 // (drawing-sheet path, DRC severities, net classes). The destructor severs the
 // BOARD->project link in the right order. Used by every PCB diff/merge job.
 static SCRATCH_DOC<BOARD> loadScratchBoard( SETTINGS_MANAGER& aMgr, const wxString& aPath,
-                                            bool aInitializeAfterLoad = true )
+                                            bool aInitializeAfterLoad = true, bool aAllowNewerFormat = false )
 {
     return LoadScratchDoc<BOARD>(
             aMgr, aPath,
-            [aPath, aInitializeAfterLoad]( PROJECT* aProject ) -> std::unique_ptr<BOARD>
+            [aPath, aInitializeAfterLoad, aAllowNewerFormat]( PROJECT* aProject ) -> std::unique_ptr<BOARD>
             {
                 PCB_IO_MGR::PCB_FILE_T pluginType =
                         PCB_IO_MGR::FindPluginTypeFromBoardPath( aPath, KICTL_KICAD_ONLY );
@@ -3602,8 +3613,17 @@ static SCRATCH_DOC<BOARD> loadScratchBoard( SETTINGS_MANAGER& aMgr, const wxStri
                 if( !aProject || pluginType == PCB_IO_MGR::FILE_TYPE_NONE )
                     return nullptr;
 
-                BOARD_LOADER::OPTIONS opts;
+                BOARD_LOADER::OPTIONS       opts;
+                std::map<std::string, UTF8> props;
                 opts.initialize_after_load = aInitializeAfterLoad;
+
+                // --allow-newer-format: accept a too-recent version integer when the file uses only
+                // known tokens (see PCB_IO_KICAD_SEXPR_PARSER::SetAllowNewerFormat).
+                if( aAllowNewerFormat )
+                {
+                    props[PCB_IO_LOAD_PROPERTIES::ALLOW_NEWER_FORMAT] = "1";
+                    opts.properties = &props;
+                }
 
                 try
                 {
@@ -3635,8 +3655,8 @@ int PCBNEW_JOBS_HANDLER::JobDiff( JOB* aJob )
     // ClearProject-up-front path would null those out before the differ ran.
     SETTINGS_MANAGER& diffMgr = Pgm().GetSettingsManager();
 
-    SCRATCH_DOC<BOARD> aScratch = loadScratchBoard( diffMgr, diffJob->m_inputA );
-    SCRATCH_DOC<BOARD> bScratch = loadScratchBoard( diffMgr, diffJob->m_inputB );
+    SCRATCH_DOC<BOARD> aScratch = loadScratchBoard( diffMgr, diffJob->m_inputA, true, diffJob->GetAllowNewerFormat() );
+    SCRATCH_DOC<BOARD> bScratch = loadScratchBoard( diffMgr, diffJob->m_inputB, true, diffJob->GetAllowNewerFormat() );
 
     BOARD* boardA = aScratch.doc.get();
     BOARD* boardB = bScratch.doc.get();

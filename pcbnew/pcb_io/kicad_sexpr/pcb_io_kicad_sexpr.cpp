@@ -3477,6 +3477,9 @@ BOARD* PCB_IO_KICAD_SEXPR::DoLoad( LINE_READER& aReader, BOARD* aAppendToMe,
 
     parser.SetLayerMappingHandler( m_layer_mapping_handler );
 
+    if( aProperties && aProperties->contains( PCB_IO_LOAD_PROPERTIES::ALLOW_NEWER_FORMAT ) )
+        parser.SetAllowNewerFormat( true );
+
     std::set<BOARD_ITEM*>   itemsBefore;
     std::set<NETINFO_ITEM*> netsBefore;
 

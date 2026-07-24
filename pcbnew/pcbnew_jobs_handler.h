@@ -94,7 +94,7 @@ public:
     void ClearCachedBoard();
 
 private:
-    BOARD* getBoard( const wxString& aPath = wxEmptyString );
+    BOARD* getBoard( const wxString& aPath = wxEmptyString, bool aAllowNewerFormat = false );
     LSEQ convertLayerArg( wxString& aLayerString, BOARD* aBoard ) const;
 
     void populateGerberPlotOptionsFromJob( PCB_PLOT_PARAMS&  aPlotOpts,

@@ -30,4 +30,5 @@ CLI::PCB_DIFF_COMMAND::PCB_DIFF_COMMAND() :
                       "file2", _( "Comparison PCB file" ), "FILE2",
                       KIWAY::FACE_PCB )
 {
+    addAllowNewerFormatArg();
 }

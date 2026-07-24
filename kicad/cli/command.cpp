@@ -224,6 +224,26 @@ void CLI::COMMAND::addDefineArg()
 }
 
 
+void CLI::COMMAND::addAllowNewerFormatArg()
+{
+    m_hasAllowNewerFormatArg = true;
+
+    m_argParser.add_argument( ARG_ALLOW_NEWER_FORMAT )
+            .help( UTF8STDSTR( _( "Load a board whose file-format version is newer than this build supports, "
+                                  "with a warning, instead of refusing it. The file is still rejected if it "
+                                  "uses a construct this build does not understand." ) ) )
+            .flag();
+}
+
+
+bool CLI::COMMAND::allowNewerFormat() const
+{
+    // Safe to call from a shared command base: returns false when the arg was never added, so a
+    // diff/export base can populate the job's flag without every subclass having opted in.
+    return m_hasAllowNewerFormatArg && m_argParser.get<bool>( ARG_ALLOW_NEWER_FORMAT );
+}
+
+
 void CLI::COMMAND::addVariantsArg()
 {
     m_hasVariantArg = true;

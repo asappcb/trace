@@ -36,6 +36,7 @@
 #define ARG_DEFINE_VAR_SHORT "-D"
 #define ARG_DEFINE_VAR_LONG "--define-var"
 #define ARG_VARIANT "--variant"
+#define ARG_ALLOW_NEWER_FORMAT "--allow-newer-format"
 
 namespace CLI
 {
@@ -98,6 +99,19 @@ protected:
     void addVariantsArg();
 
     /**
+     * Set up the --allow-newer-format flag used by board-loading commands. When passed, a board
+     * whose file-format version is newer than this build is loaded (with a warning) instead of
+     * hard-refused, as long as it uses only known tokens. Read with allowNewerFormat().
+     */
+    void addAllowNewerFormatArg();
+
+    /**
+     * @return true if --allow-newer-format was passed. Only meaningful when addAllowNewerFormatArg()
+     *         was called in the command's constructor.
+     */
+    bool allowNewerFormat() const;
+
+    /**
      * The internal handler that should be overloaded to implement command specific
      * processing and work.
      *
@@ -156,6 +170,12 @@ protected:
      * Whether or not the input argument for variant names was added for parsing.
      */
     bool                     m_hasVariantArg;
+
+    /**
+     * Whether addAllowNewerFormatArg() was called, so allowNewerFormat() can be called
+     * unconditionally (e.g. from a shared command base) and returns false where the arg is absent.
+     */
+    bool m_hasAllowNewerFormatArg = false;
 
     /**
      * The list of variant names to output.

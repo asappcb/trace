@@ -257,10 +257,20 @@ public:
 
     bool GetOutputPathIsDirectory() const { return m_outputPathIsDirectory; }
 
+    /**
+     * Whether the board / footprint loader should accept a file whose format version is newer than
+     * this build supports — loading it with a warning instead of hard-refusing on the version
+     * integer — as long as it uses only known tokens. Wired to kicad-cli's --allow-newer-format.
+     * Transient (not serialized): it is a per-invocation load option, not a saved job setting.
+     */
+    bool GetAllowNewerFormat() const { return m_allowNewerFormat; }
+    void SetAllowNewerFormat( bool aAllow ) { m_allowNewerFormat = aAllow; }
+
 protected:
     std::string                  m_type;
     std::map<wxString, wxString> m_varOverrides;
     TITLE_BLOCK                  m_titleBlock;
+    bool                         m_allowNewerFormat = false;
 
     wxString m_tempOutputDirectory;
 

@@ -45,6 +45,7 @@ CLI::PCB_DRC_COMMAND::PCB_DRC_COMMAND() : COMMAND( "drc" )
 {
     addCommonArgs( true, true, IO_TYPE::FILE, IO_TYPE::FILE );
     addDefineArg();
+    addAllowNewerFormatArg();
 
     m_argParser.add_description( UTF8STDSTR( _( "Runs the Design Rules Check (DRC) on the PCB "
                                                 "and creates a report" ) ) );
@@ -108,6 +109,7 @@ int CLI::PCB_DRC_COMMAND::doPerform( KIWAY& aKiway )
     drcJob->SetConfiguredOutputPath( m_argOutput );
     drcJob->m_filename = m_argInput;
     drcJob->SetVarOverrides( m_argDefineVars );
+    drcJob->SetAllowNewerFormat( allowNewerFormat() );
     drcJob->m_reportAllTrackErrors = m_argParser.get<bool>( ARG_ALL_TRACK_ERRORS );
     drcJob->m_exitCodeViolations = m_argParser.get<bool>( ARG_EXIT_CODE_VIOLATIONS );
 

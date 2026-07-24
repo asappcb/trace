@@ -1130,6 +1130,25 @@ BOARD* PCB_IO_KICAD_SEXPR_PARSER::parseBOARD_unchecked()
             {
                 if( m_requiredVersion > SEXPR_BOARD_FILE_VERSION )
                 {
+                    // --allow-newer-format: don't refuse on the version integer alone. Parsing
+                    // continues and only fails if the file actually uses a token this build does
+                    // not understand (handled by the PARSE_ERROR wrapper, which still raises
+                    // FUTURE_FORMAT_ERROR because m_tooRecent stays set). Warn once.
+                    if( m_allowNewerFormat )
+                    {
+                        if( !m_warnedNewerFormat )
+                        {
+                            m_warnedNewerFormat = true;
+                            m_parseWarnings.push_back(
+                                    wxString::Format( _( "File format version %d is newer than the supported version "
+                                                         "%d; loading anyway (--allow-newer-format). Saving may "
+                                                         "downgrade the file or drop unrecognized data." ),
+                                                      m_requiredVersion, SEXPR_BOARD_FILE_VERSION ) );
+                        }
+
+                        return;
+                    }
+
                     throw FUTURE_FORMAT_ERROR( fmt::format( "{}", m_requiredVersion ),
                                                m_generatorVersion );
                 }
@@ -5434,6 +5453,25 @@ FOOTPRINT* PCB_IO_KICAD_SEXPR_PARSER::parseFOOTPRINT_unchecked( wxArrayString* a
             {
                 if( m_requiredVersion > SEXPR_BOARD_FILE_VERSION )
                 {
+                    // --allow-newer-format: don't refuse on the version integer alone. Parsing
+                    // continues and only fails if the file actually uses a token this build does
+                    // not understand (handled by the PARSE_ERROR wrapper, which still raises
+                    // FUTURE_FORMAT_ERROR because m_tooRecent stays set). Warn once.
+                    if( m_allowNewerFormat )
+                    {
+                        if( !m_warnedNewerFormat )
+                        {
+                            m_warnedNewerFormat = true;
+                            m_parseWarnings.push_back(
+                                    wxString::Format( _( "File format version %d is newer than the supported version "
+                                                         "%d; loading anyway (--allow-newer-format). Saving may "
+                                                         "downgrade the file or drop unrecognized data." ),
+                                                      m_requiredVersion, SEXPR_BOARD_FILE_VERSION ) );
+                        }
+
+                        return;
+                    }
+
                     throw FUTURE_FORMAT_ERROR( fmt::format( "{}", m_requiredVersion ),
                                                m_generatorVersion );
                 }

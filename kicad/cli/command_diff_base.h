@@ -92,6 +92,9 @@ protected:
         job->m_inputB       = From_UTF8( m_argParser.get<std::string>( m_argB ).c_str() );
         job->m_exitCodeOnly = m_argParser.get<bool>( "--exit-code-only" );
 
+        // No-op unless a subclass added the arg (e.g. PCB_DIFF_COMMAND); safe for sch/sym/fp diff.
+        job->SetAllowNewerFormat( allowNewerFormat() );
+
         job->SetConfiguredOutputPath( From_UTF8( m_argParser.get<std::string>( "--output" ).c_str() ) );
 
         std::string fmt = m_argParser.get<std::string>( "--format" );
