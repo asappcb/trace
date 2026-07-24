@@ -95,11 +95,25 @@ int EmitDiffResult( const DOCUMENT_DIFF& aResult, const DIFF_EMIT_OPTIONS& aOpti
     // Text output renders distance/coordinate/angle deltas in user units. Units
     // are not yet configurable on the diff jobs, so default to mm; the IU scale
     // tracks the source document kind (PCB vs schematic) already threaded here.
-    std::string output =
-            ( aOptions.format == FORMAT::JSON )
-                    ? aResult.ToJson().dump( 2 )
-                    : FormatDiffAsText( aResult, aOptions.labelA, aOptions.labelB, EDA_UNITS::MM,
-                                        IuScaleForDocKind( aOptions.docKind ) );
+    std::string output;
+
+    if( aOptions.format == FORMAT::JSON )
+    {
+        // Emit the canonical per-item `changes` alongside a review-oriented
+        // `summary` rollup (what moved / rerouted / changed layer / zone
+        // deltas) so the JSON answers a board review directly without the
+        // consumer re-aggregating hundreds of records. The summary is
+        // derived, emit-only data and is not part of the round-tripping
+        // DOCUMENT_DIFF wire format.
+        nlohmann::json j = aResult.ToJson();
+        j["summary"] = BuildReviewSummary( aResult );
+        output = j.dump( 2 );
+    }
+    else
+    {
+        output = FormatDiffAsText( aResult, aOptions.labelA, aOptions.labelB, EDA_UNITS::MM,
+                                   IuScaleForDocKind( aOptions.docKind ) );
+    }
 
     if( !WriteDiffOutput( output, aOptions.outputPath ) )
         return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
