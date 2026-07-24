@@ -201,7 +201,8 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               {
                   return false;
               } );
-    Register( "edit_add_via", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddVia, this, std::placeholders::_1 ),
+    Register( "edit_add_via",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddVia, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -1825,7 +1826,7 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddVia( JOB* aJob )
     // then the default netclass, so the via matches the board's design rules.
     const NETCLASS*                      netClass = net->GetNetClass();
     const std::shared_ptr<NET_SETTINGS>& netSettings = brd->GetDesignSettings().m_NetSettings;
-    const NETCLASS*                      defaultClass = netSettings ? netSettings->GetDefaultNetclass().get() : nullptr;
+    const NETCLASS* defaultClass = netSettings ? netSettings->GetDefaultNetclass().get() : nullptr;
 
     auto resolve = [&]( double aExplicitMM, int ( NETCLASS::*aGetter )() const ) -> int
     {
@@ -1846,22 +1847,25 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddVia( JOB* aJob )
 
     if( sizeIU <= 0 || drillIU <= 0 )
     {
-        m_reporter->Report( _( "Could not determine via size/drill from the netclass; pass --size and --drill\n" ),
-                            RPT_SEVERITY_ERROR );
+        m_reporter->Report(
+                _( "Could not determine via size/drill from the netclass; pass --size and --drill\n" ),
+                RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
     if( drillIU >= sizeIU )
     {
-        m_reporter->Report( wxString::Format( _( "Via drill (%.3f mm) must be smaller than its diameter (%.3f mm)\n" ),
-                                              pcbIUScale.IUTomm( drillIU ), pcbIUScale.IUTomm( sizeIU ) ),
+        m_reporter->Report( wxString::Format(
+                                    _( "Via drill (%.3f mm) must be smaller than its diameter (%.3f mm)\n" ),
+                                    pcbIUScale.IUTomm( drillIU ), pcbIUScale.IUTomm( sizeIU ) ),
                             RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
     PCB_VIA* via = new PCB_VIA( brd );
     via->SetViaType( VIATYPE::THROUGH );
-    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( addJob->m_x ), pcbIUScale.mmToIU( addJob->m_y ) ) );
+    via->SetPosition(
+            VECTOR2I( pcbIUScale.mmToIU( addJob->m_x ), pcbIUScale.mmToIU( addJob->m_y ) ) );
     via->SetWidth( sizeIU );
     via->SetDrill( drillIU );
     via->SetLayerPair( F_Cu, B_Cu );
@@ -1875,14 +1879,16 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddVia( JOB* aJob )
 
     if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
     {
-        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ),
+                            RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
     }
 
     m_reporter->Report(
-            wxString::Format( _( "Added a %.3f mm via (drill %.3f mm) on net '%s' at (%.3f, %.3f) and wrote %s\n" ),
-                              pcbIUScale.IUTomm( sizeIU ), pcbIUScale.IUTomm( drillIU ), addJob->m_net, addJob->m_x,
-                              addJob->m_y, outPath ),
+            wxString::Format(
+                    _( "Added a %.3f mm via (drill %.3f mm) on net '%s' at (%.3f, %.3f) and wrote %s\n" ),
+                    pcbIUScale.IUTomm( sizeIU ), pcbIUScale.IUTomm( drillIU ), addJob->m_net, addJob->m_x,
+                    addJob->m_y, outPath ),
             RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;

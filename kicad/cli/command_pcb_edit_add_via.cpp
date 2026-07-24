@@ -32,14 +32,14 @@
 #define ARG_SIZE "--size"
 #define ARG_DRILL "--drill"
 
-CLI::PCB_EDIT_ADD_VIA_COMMAND::PCB_EDIT_ADD_VIA_COMMAND() :
-        COMMAND( "add-via" )
+CLI::PCB_EDIT_ADD_VIA_COMMAND::PCB_EDIT_ADD_VIA_COMMAND() : COMMAND( "add-via" )
 {
     // --output optional: when omitted the edited board is written back over the input.
     addCommonArgs( true, true, IO_TYPE::FILE, IO_TYPE::FILE );
 
-    m_argParser.add_description( UTF8STDSTR( _( "Add a through via on a net at a point and write the board back "
-                                                "(overwrites the input when --output is omitted)" ) ) );
+    m_argParser.add_description(
+            UTF8STDSTR( _( "Add a through via on a net at a point and write the board back "
+                           "(overwrites the input when --output is omitted)" ) ) );
 
     m_argParser.add_argument( ARG_NET )
             .default_value( std::string() )
