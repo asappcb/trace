@@ -79,6 +79,8 @@
 #include <jobs/job_import_utils.h>
 #include <jobs/job_pcb_upgrade.h>
 #include <jobs/job_pcb_optimize_swaps.h>
+#include <jobs/job_pcb_edit_set_track_width.h>
+#include <netinfo.h>
 #include <board_swap_metrics.h>
 #include <gate_swap.h>
 #include <eda_units.h>
@@ -187,6 +189,12 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               []( JOB* job, wxWindow* aParent ) -> bool
               {
                   return true;
+              } );
+    Register( "edit_set_track_width",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetTrackWidth, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
               } );
     Register( "pcb_import", std::bind( &PCBNEW_JOBS_HANDLER::JobImport, this, std::placeholders::_1 ),
               []( JOB* job, wxWindow* aParent ) -> bool
@@ -1715,6 +1723,68 @@ int PCBNEW_JOBS_HANDLER::JobExportGencad( JOB* aJob )
 
     aJob->AddOutput( outPath );
     m_reporter->Report( _( "Successfully created genCAD file\n" ), RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditSetTrackWidth( JOB* aJob )
+{
+    JOB_PCB_EDIT_SET_TRACK_WIDTH* editJob = dynamic_cast<JOB_PCB_EDIT_SET_TRACK_WIDTH*>( aJob );
+
+    if( editJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( editJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    int widthIU = pcbIUScale.mmToIU( editJob->m_widthMM );
+    int netCode = -1; // -1 == change every net
+
+    if( !editJob->m_net.IsEmpty() )
+    {
+        NETINFO_ITEM* net = brd->FindNet( editJob->m_net );
+
+        if( !net )
+        {
+            m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), editJob->m_net ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_ARGS;
+        }
+
+        netCode = net->GetNetCode();
+    }
+
+    int changed = 0;
+
+    for( PCB_TRACK* track : brd->Tracks() )
+    {
+        // Vias carry a diameter, not a track width; a dedicated op handles those.
+        if( track->Type() == PCB_VIA_T )
+            continue;
+
+        if( netCode >= 0 && track->GetNetCode() != netCode )
+            continue;
+
+        track->SetWidth( widthIU );
+        changed++;
+    }
+
+    wxString outPath = editJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = editJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Set width on %d track(s) and wrote %s\n" ), changed, outPath ),
+                        RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }
