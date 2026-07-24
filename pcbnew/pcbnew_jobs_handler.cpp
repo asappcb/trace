@@ -1984,8 +1984,7 @@ int PCBNEW_JOBS_HANDLER::JobPcbFillZones( JOB* aJob )
 
     if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
     {
-        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ),
-                            RPT_SEVERITY_ERROR );
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
     }
 
