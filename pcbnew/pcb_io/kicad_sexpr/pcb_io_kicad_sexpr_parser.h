@@ -474,8 +474,8 @@ private:
     std::set<wxString>  m_undefinedLayers;  ///< set of layers not defined in layers section
     std::vector<int>    m_netCodes;         ///< net codes mapping for boards being loaded
     bool                m_tooRecent;        ///< true if version parses as later than supported
-    bool                m_allowNewerFormat = false; ///< load a too-recent file instead of refusing
-    bool                m_warnedNewerFormat = false; ///< emitted the one-time newer-format warning
+    bool                  m_allowNewerFormat = false;  ///< load a too-recent file instead of refusing
+    bool                  m_warnedNewerFormat = false; ///< emitted the one-time newer-format warning
     int                 m_requiredVersion;  ///< set to the KiCad format version this board requires
     wxString            m_generatorVersion; ///< Set to the generator version this board requires
     bool                m_appendToExisting; ///< reading into an existing board; reset UUIDs

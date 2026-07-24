@@ -1139,11 +1139,11 @@ BOARD* PCB_IO_KICAD_SEXPR_PARSER::parseBOARD_unchecked()
                         if( !m_warnedNewerFormat )
                         {
                             m_warnedNewerFormat = true;
-                            m_parseWarnings.push_back( wxString::Format(
-                                    _( "File format version %d is newer than the supported version "
-                                       "%d; loading anyway (--allow-newer-format). Saving may "
-                                       "downgrade the file or drop unrecognized data." ),
-                                    m_requiredVersion, SEXPR_BOARD_FILE_VERSION ) );
+                            m_parseWarnings.push_back(
+                                    wxString::Format( _( "File format version %d is newer than the supported version "
+                                                         "%d; loading anyway (--allow-newer-format). Saving may "
+                                                         "downgrade the file or drop unrecognized data." ),
+                                                      m_requiredVersion, SEXPR_BOARD_FILE_VERSION ) );
                         }
 
                         return;
@@ -5462,11 +5462,11 @@ FOOTPRINT* PCB_IO_KICAD_SEXPR_PARSER::parseFOOTPRINT_unchecked( wxArrayString* a
                         if( !m_warnedNewerFormat )
                         {
                             m_warnedNewerFormat = true;
-                            m_parseWarnings.push_back( wxString::Format(
-                                    _( "File format version %d is newer than the supported version "
-                                       "%d; loading anyway (--allow-newer-format). Saving may "
-                                       "downgrade the file or drop unrecognized data." ),
-                                    m_requiredVersion, SEXPR_BOARD_FILE_VERSION ) );
+                            m_parseWarnings.push_back(
+                                    wxString::Format( _( "File format version %d is newer than the supported version "
+                                                         "%d; loading anyway (--allow-newer-format). Saving may "
+                                                         "downgrade the file or drop unrecognized data." ),
+                                                      m_requiredVersion, SEXPR_BOARD_FILE_VERSION ) );
                         }
 
                         return;

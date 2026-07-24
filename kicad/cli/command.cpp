@@ -229,10 +229,9 @@ void CLI::COMMAND::addAllowNewerFormatArg()
     m_hasAllowNewerFormatArg = true;
 
     m_argParser.add_argument( ARG_ALLOW_NEWER_FORMAT )
-            .help( UTF8STDSTR(
-                    _( "Load a board whose file-format version is newer than this build supports, "
-                       "with a warning, instead of refusing it. The file is still rejected if it "
-                       "uses a construct this build does not understand." ) ) )
+            .help( UTF8STDSTR( _( "Load a board whose file-format version is newer than this build supports, "
+                                  "with a warning, instead of refusing it. The file is still rejected if it "
+                                  "uses a construct this build does not understand." ) ) )
             .flag();
 }
 

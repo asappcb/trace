@@ -175,7 +175,7 @@ protected:
      * Whether addAllowNewerFormatArg() was called, so allowNewerFormat() can be called
      * unconditionally (e.g. from a shared command base) and returns false where the arg is absent.
      */
-    bool                     m_hasAllowNewerFormatArg = false;
+    bool m_hasAllowNewerFormatArg = false;
 
     /**
      * The list of variant names to output.

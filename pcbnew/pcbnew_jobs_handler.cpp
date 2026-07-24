@@ -518,8 +518,7 @@ BOARD* PCBNEW_JOBS_HANDLER::getBoard( const wxString& aPath, bool aAllowNewerFor
                 opts.properties = &props;
             }
 
-            std::unique_ptr<BOARD> loadedBoard =
-                    BOARD_LOADER::Load( aBoardPath, pluginType, project, opts );
+            std::unique_ptr<BOARD> loadedBoard = BOARD_LOADER::Load( aBoardPath, pluginType, project, opts );
             return loadedBoard.release();
         }
         catch( const IO_ERROR& ioe )
@@ -3558,8 +3557,7 @@ int PCBNEW_JOBS_HANDLER::JobImport( JOB* aJob )
 // (drawing-sheet path, DRC severities, net classes). The destructor severs the
 // BOARD->project link in the right order. Used by every PCB diff/merge job.
 static SCRATCH_DOC<BOARD> loadScratchBoard( SETTINGS_MANAGER& aMgr, const wxString& aPath,
-                                            bool aInitializeAfterLoad = true,
-                                            bool aAllowNewerFormat = false )
+                                            bool aInitializeAfterLoad = true, bool aAllowNewerFormat = false )
 {
     return LoadScratchDoc<BOARD>(
             aMgr, aPath,
@@ -3613,10 +3611,8 @@ int PCBNEW_JOBS_HANDLER::JobDiff( JOB* aJob )
     // ClearProject-up-front path would null those out before the differ ran.
     SETTINGS_MANAGER& diffMgr = Pgm().GetSettingsManager();
 
-    SCRATCH_DOC<BOARD> aScratch =
-            loadScratchBoard( diffMgr, diffJob->m_inputA, true, diffJob->GetAllowNewerFormat() );
-    SCRATCH_DOC<BOARD> bScratch =
-            loadScratchBoard( diffMgr, diffJob->m_inputB, true, diffJob->GetAllowNewerFormat() );
+    SCRATCH_DOC<BOARD> aScratch = loadScratchBoard( diffMgr, diffJob->m_inputA, true, diffJob->GetAllowNewerFormat() );
+    SCRATCH_DOC<BOARD> bScratch = loadScratchBoard( diffMgr, diffJob->m_inputB, true, diffJob->GetAllowNewerFormat() );
 
     BOARD* boardA = aScratch.doc.get();
     BOARD* boardB = bScratch.doc.get();
