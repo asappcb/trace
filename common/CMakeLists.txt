@@ -202,6 +202,17 @@ set( KICOMMON_SRCS
     jobs/job_pcb_optimize_swaps.cpp
     jobs/job_pcb_edit_set_track_width.cpp
     jobs/job_pcb_edit_add_via.cpp
+    jobs/job_pcb_edit_add_stitching_vias.cpp
+    jobs/job_pcb_edit_set_copper_layers.cpp
+    jobs/job_pcb_edit_move_footprint.cpp
+    jobs/job_pcb_edit_add_track.cpp
+    jobs/job_pcb_edit_remove_tracks.cpp
+    jobs/job_pcb_edit_delete_footprint.cpp
+    jobs/job_pcb_edit_cleanup_tracks.cpp
+    jobs/job_pcb_edit_set_fp_attribute.cpp
+    jobs/job_pcb_edit_set_field.cpp
+    jobs/job_pcb_edit_set_via_size.cpp
+    jobs/job_pcb_edit_set_lock.cpp
     jobs/job_sch_upgrade.cpp
 
     # Release management

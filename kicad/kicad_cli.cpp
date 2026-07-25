@@ -91,6 +91,18 @@
 #include "cli/command_pcb_edit.h"
 #include "cli/command_pcb_edit_set_track_width.h"
 #include "cli/command_pcb_edit_add_via.h"
+#include "cli/command_pcb_edit_add_stitching_vias.h"
+#include "cli/command_pcb_edit_set_copper_layers.h"
+#include "cli/command_pcb_edit_move_footprint.h"
+#include "cli/command_pcb_edit_add_track.h"
+#include "cli/command_pcb_edit_remove_tracks.h"
+#include "cli/command_pcb_edit_delete_footprint.h"
+#include "cli/command_pcb_edit_cleanup_tracks.h"
+#include "cli/command_pcb_edit_set_fp_attribute.h"
+#include "cli/command_pcb_edit_set_field.h"
+#include "cli/command_pcb_edit_set_via_size.h"
+#include "cli/command_pcb_edit_lock.h"
+#include "cli/command_pcb_edit_unlock.h"
 #include "cli/command_pcb_import.h"
 #include "cli/command_sch_import.h"
 #include "cli/command_import.h"
@@ -167,6 +179,18 @@ static CLI::PCB_OPTIMIZE_SWAPS_COMMAND   pcbOptimizeSwapsCmd{};
 static CLI::PCB_EDIT_COMMAND                 pcbEditCmd{};
 static CLI::PCB_EDIT_SET_TRACK_WIDTH_COMMAND pcbEditSetTrackWidthCmd{};
 static CLI::PCB_EDIT_ADD_VIA_COMMAND         pcbEditAddViaCmd{};
+static CLI::PCB_EDIT_ADD_STITCHING_VIAS_COMMAND pcbEditAddStitchingViasCmd{};
+static CLI::PCB_EDIT_SET_COPPER_LAYERS_COMMAND  pcbEditSetCopperLayersCmd{};
+static CLI::PCB_EDIT_MOVE_FOOTPRINT_COMMAND     pcbEditMoveFootprintCmd{};
+static CLI::PCB_EDIT_ADD_TRACK_COMMAND          pcbEditAddTrackCmd{};
+static CLI::PCB_EDIT_REMOVE_TRACKS_COMMAND      pcbEditRemoveTracksCmd{};
+static CLI::PCB_EDIT_DELETE_FOOTPRINT_COMMAND   pcbEditDeleteFootprintCmd{};
+static CLI::PCB_EDIT_CLEANUP_TRACKS_COMMAND     pcbEditCleanupTracksCmd{};
+static CLI::PCB_EDIT_SET_FP_ATTRIBUTE_COMMAND   pcbEditSetFpAttributeCmd{};
+static CLI::PCB_EDIT_SET_FIELD_COMMAND          pcbEditSetFieldCmd{};
+static CLI::PCB_EDIT_SET_VIA_SIZE_COMMAND       pcbEditSetViaSizeCmd{};
+static CLI::PCB_EDIT_LOCK_COMMAND               pcbEditLockCmd{};
+static CLI::PCB_EDIT_UNLOCK_COMMAND             pcbEditUnlockCmd{};
 static CLI::PCB_IMPORT_COMMAND           pcbImportCmd{};
 static CLI::SCH_IMPORT_COMMAND           schImportCmd{};
 static CLI::IMPORT_COMMAND               importCmd{};
@@ -348,7 +372,19 @@ static std::vector<COMMAND_ENTRY> commandStack = {
                 &pcbEditCmd,
                 {
                     &pcbEditSetTrackWidthCmd,
-                    &pcbEditAddViaCmd
+                    &pcbEditAddViaCmd,
+                    &pcbEditAddStitchingViasCmd,
+                    &pcbEditSetCopperLayersCmd,
+                    &pcbEditMoveFootprintCmd,
+                    &pcbEditAddTrackCmd,
+                    &pcbEditRemoveTracksCmd,
+                    &pcbEditDeleteFootprintCmd,
+                    &pcbEditCleanupTracksCmd,
+                    &pcbEditSetFpAttributeCmd,
+                    &pcbEditSetFieldCmd,
+                    &pcbEditSetViaSizeCmd,
+                    &pcbEditLockCmd,
+                    &pcbEditUnlockCmd
                 }
             }
         }

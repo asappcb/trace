@@ -64,6 +64,17 @@ public:
     int JobExportStats( JOB* aJob );
     int JobPcbEditSetTrackWidth( JOB* aJob );
     int JobPcbEditAddVia( JOB* aJob );
+    int JobPcbEditAddStitchingVias( JOB* aJob );
+    int JobPcbEditSetCopperLayers( JOB* aJob );
+    int JobPcbEditMoveFootprint( JOB* aJob );
+    int JobPcbEditAddTrack( JOB* aJob );
+    int JobPcbEditRemoveTracks( JOB* aJob );
+    int JobPcbEditDeleteFootprint( JOB* aJob );
+    int JobPcbEditCleanupTracks( JOB* aJob );
+    int JobPcbEditSetFpAttribute( JOB* aJob );
+    int JobPcbEditSetField( JOB* aJob );
+    int JobPcbEditSetViaSize( JOB* aJob );
+    int JobPcbEditSetLock( JOB* aJob );
     int JobExportJson( JOB* aJob );
     int JobPcbFillZones( JOB* aJob );
     int JobUpgrade( JOB* aJob );
