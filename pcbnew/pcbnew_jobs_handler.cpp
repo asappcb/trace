@@ -88,6 +88,9 @@
 #include <jobs/job_pcb_edit_add_track.h>
 #include <jobs/job_pcb_edit_remove_tracks.h>
 #include <jobs/job_pcb_edit_delete_footprint.h>
+#include <jobs/job_pcb_edit_cleanup_tracks.h>
+#include <tracks_cleaner.h>
+#include <cleanup_item.h>
 #include <footprint.h>
 #include <lset.h>
 #include <board_stackup_manager/board_stackup.h>
@@ -248,6 +251,12 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               } );
     Register( "edit_delete_footprint",
               std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditDeleteFootprint, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_cleanup_tracks",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditCleanupTracks, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -2446,6 +2455,78 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditDeleteFootprint( JOB* aJob )
 
     m_reporter->Report( wxString::Format( _( "Deleted footprint '%s' and wrote %s\n" ), deleteJob->m_ref, outPath ),
                         RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditCleanupTracks( JOB* aJob )
+{
+    JOB_PCB_EDIT_CLEANUP_TRACKS* cleanJob = dynamic_cast<JOB_PCB_EDIT_CLEANUP_TRACKS*>( aJob );
+
+    if( cleanJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( cleanJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    int netCode = -1;
+
+    if( !cleanJob->m_net.IsEmpty() )
+    {
+        NETINFO_ITEM* net = brd->FindNet( cleanJob->m_net );
+
+        if( !net )
+        {
+            m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), cleanJob->m_net ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_ARGS;
+        }
+
+        netCode = net->GetNetCode();
+    }
+
+    // The cleaner walks connectivity, so make sure it is current for a freshly-loaded board.
+    brd->BuildConnectivity();
+
+    TOOL_MANAGER*  toolManager = getToolManager( brd );
+    BOARD_COMMIT   commit( toolManager );
+    TRACKS_CLEANER cleaner( brd, commit );
+
+    if( netCode >= 0 )
+    {
+        // filterItem() returning true means "skip", so exclude everything not on the target net.
+        cleaner.SetFilter(
+                [netCode]( BOARD_CONNECTED_ITEM* aItem )
+                {
+                    return !aItem || aItem->GetNetCode() != netCode;
+                } );
+    }
+
+    std::vector<std::shared_ptr<CLEANUP_ITEM>> items;
+    cleaner.CleanupBoard( /*aDryRun=*/false, &items,
+                          /*aCleanVias/short-circuit*/ true, /*mis-connected*/ true,
+                          /*mergeSegments*/ true, /*deleteUnconnected*/ true,
+                          /*deleteTracksInPad*/ true, /*deleteDanglingVias*/ true, m_reporter );
+
+    commit.Push( _( "Clean up tracks" ) );
+
+    wxString outPath = cleanJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = cleanJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report(
+            wxString::Format( _( "Cleaned up %d item(s) and wrote %s\n" ), static_cast<int>( items.size() ), outPath ),
+            RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }

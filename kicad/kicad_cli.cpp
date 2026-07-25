@@ -97,6 +97,7 @@
 #include "cli/command_pcb_edit_add_track.h"
 #include "cli/command_pcb_edit_remove_tracks.h"
 #include "cli/command_pcb_edit_delete_footprint.h"
+#include "cli/command_pcb_edit_cleanup_tracks.h"
 #include "cli/command_pcb_import.h"
 #include "cli/command_sch_import.h"
 #include "cli/command_import.h"
@@ -179,6 +180,7 @@ static CLI::PCB_EDIT_MOVE_FOOTPRINT_COMMAND     pcbEditMoveFootprintCmd{};
 static CLI::PCB_EDIT_ADD_TRACK_COMMAND          pcbEditAddTrackCmd{};
 static CLI::PCB_EDIT_REMOVE_TRACKS_COMMAND      pcbEditRemoveTracksCmd{};
 static CLI::PCB_EDIT_DELETE_FOOTPRINT_COMMAND   pcbEditDeleteFootprintCmd{};
+static CLI::PCB_EDIT_CLEANUP_TRACKS_COMMAND     pcbEditCleanupTracksCmd{};
 static CLI::PCB_IMPORT_COMMAND           pcbImportCmd{};
 static CLI::SCH_IMPORT_COMMAND           schImportCmd{};
 static CLI::IMPORT_COMMAND               importCmd{};
@@ -366,7 +368,8 @@ static std::vector<COMMAND_ENTRY> commandStack = {
                     &pcbEditMoveFootprintCmd,
                     &pcbEditAddTrackCmd,
                     &pcbEditRemoveTracksCmd,
-                    &pcbEditDeleteFootprintCmd
+                    &pcbEditDeleteFootprintCmd,
+                    &pcbEditCleanupTracksCmd
                 }
             }
         }

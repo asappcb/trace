@@ -705,3 +705,34 @@ def test_pcb_edit_delete_footprint( kitest: KiTestFixture ):
              "-o", str( bad_out ), str( input_file )] )
     assert bad_exit != 0
     assert not bad_out.exists()
+
+
+def test_pcb_edit_cleanup_tracks( kitest: KiTestFixture ):
+    """`pcb edit cleanup-tracks` removes dangling/redundant segments and is idempotent."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_cleanup_tracks/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    stub = output_dir / "stub.kicad_pcb"
+    cleaned = output_dir / "cleaned.kicad_pcb"
+    again = output_dir / "again.kicad_pcb"
+
+    # Introduce a floating GND stub (dangling at both ends), then clean it up.
+    _, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "add-track", "--net", "GND",
+             "--start", "90,90", "--end", "96,90", "--layer", "F.Cu",
+             "-o", str( stub ), str( input_file )] )
+    assert e == 0
+    n_stub = stub.read_text().count( "(segment" )
+
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "cleanup-tracks", "-o", str( cleaned ), str( stub )] )
+    assert e == 0
+    m = re.search( r"Cleaned up (\d+) item", stdout )
+    assert m is not None and int( m.group( 1 ) ) > 0
+    assert cleaned.read_text().count( "(segment" ) < n_stub   # at least the stub is gone
+
+    # Idempotent: cleaning an already-clean board removes nothing.
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "cleanup-tracks", "-o", str( again ), str( cleaned )] )
+    assert e == 0
+    assert re.search( r"Cleaned up 0 item", stdout )
