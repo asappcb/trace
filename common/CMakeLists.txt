@@ -202,6 +202,7 @@ set( KICOMMON_SRCS
     jobs/job_pcb_optimize_swaps.cpp
     jobs/job_pcb_edit_set_track_width.cpp
     jobs/job_pcb_edit_add_via.cpp
+    jobs/job_pcb_edit_add_stitching_vias.cpp
     jobs/job_sch_upgrade.cpp
 
     # Release management

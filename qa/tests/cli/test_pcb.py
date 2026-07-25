@@ -506,3 +506,50 @@ def test_pcb_edit_add_via_bad_net( kitest: KiTestFixture ):
     stdout, stderr, exitcode = utils.run_and_capture( command )
     assert exitcode != 0
     assert not out_file.exists()
+
+
+def test_pcb_edit_add_stitching_vias( kitest: KiTestFixture ):
+    """`pcb edit add-stitching-vias --net N --spacing S` floods the net's copper zones with a grid
+    of vias on the net, on the requested pitch."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_stitching/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "stitched.kicad_pcb"
+
+    def count_vias( s ):
+        return len( re.findall( r'\(via[\s(]', s ) )
+
+    vias_before = count_vias( input_file.read_text() )
+
+    command = [utils.kicad_cli(), "pcb", "edit", "add-stitching-vias",
+               "--net", "GND", "--spacing", "2.5", "--size", "0.6", "--drill", "0.3",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode == 0
+
+    m = re.search( r'Added (\d+) stitching via', stdout )
+    assert m is not None
+    added = int( m.group( 1 ) )
+    assert added > 0
+
+    txt = out_file.read_text()
+    assert count_vias( txt ) == vias_before + added
+
+    # Every added via sits on the 2.5 mm grid, carries the GND net, and has the requested size.
+    grid_nm = round( 2.5 * 1e6 )
+    on_grid_gnd = 0
+
+    for blk in re.finditer( r'\(via\b.*?\n\s*\)', txt, re.S ):
+        b = blk.group( 0 )
+        at = re.search( r'\(at ([\d.-]+) ([\d.-]+)\)', b )
+
+        if at and '(net "GND")' in b and '(size 0.6)' in b:
+            x = round( float( at.group( 1 ) ) * 1e6 )
+            y = round( float( at.group( 2 ) ) * 1e6 )
+
+            if x % grid_nm == 0 and y % grid_nm == 0:
+                on_grid_gnd += 1
+
+    assert on_grid_gnd >= added, \
+        "expected all {} stitching vias on the GND grid, found {}".format( added, on_grid_gnd )

@@ -74,6 +74,7 @@
 #include <connectivity/connectivity_data.h>
 #include <ratsnest/ratsnest_data.h>
 #include <netinfo.h>
+#include <set>
 #include <wx/ffile.h>
 #include <jobs/job_pcb_import.h>
 #include <jobs/job_import_utils.h>
@@ -81,11 +82,13 @@
 #include <jobs/job_pcb_optimize_swaps.h>
 #include <jobs/job_pcb_edit_set_track_width.h>
 #include <jobs/job_pcb_edit_add_via.h>
+#include <jobs/job_pcb_edit_add_stitching_vias.h>
 #include <board_design_settings.h>
 #include <board_connected_item.h>
 #include <netclass.h>
 #include <project/net_settings.h>
 #include <netinfo.h>
+#include <set>
 #include <board_swap_metrics.h>
 #include <gate_swap.h>
 #include <eda_units.h>
@@ -201,8 +204,13 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               {
                   return false;
               } );
-    Register( "edit_add_via",
-              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddVia, this, std::placeholders::_1 ),
+    Register( "edit_add_via", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddVia, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_add_stitching_vias",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddStitchingVias, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -1826,7 +1834,7 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddVia( JOB* aJob )
     // then the default netclass, so the via matches the board's design rules.
     const NETCLASS*                      netClass = net->GetNetClass();
     const std::shared_ptr<NET_SETTINGS>& netSettings = brd->GetDesignSettings().m_NetSettings;
-    const NETCLASS* defaultClass = netSettings ? netSettings->GetDefaultNetclass().get() : nullptr;
+    const NETCLASS*                      defaultClass = netSettings ? netSettings->GetDefaultNetclass().get() : nullptr;
 
     auto resolve = [&]( double aExplicitMM, int ( NETCLASS::*aGetter )() const ) -> int
     {
@@ -1847,25 +1855,22 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddVia( JOB* aJob )
 
     if( sizeIU <= 0 || drillIU <= 0 )
     {
-        m_reporter->Report(
-                _( "Could not determine via size/drill from the netclass; pass --size and --drill\n" ),
-                RPT_SEVERITY_ERROR );
+        m_reporter->Report( _( "Could not determine via size/drill from the netclass; pass --size and --drill\n" ),
+                            RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
     if( drillIU >= sizeIU )
     {
-        m_reporter->Report( wxString::Format(
-                                    _( "Via drill (%.3f mm) must be smaller than its diameter (%.3f mm)\n" ),
-                                    pcbIUScale.IUTomm( drillIU ), pcbIUScale.IUTomm( sizeIU ) ),
+        m_reporter->Report( wxString::Format( _( "Via drill (%.3f mm) must be smaller than its diameter (%.3f mm)\n" ),
+                                              pcbIUScale.IUTomm( drillIU ), pcbIUScale.IUTomm( sizeIU ) ),
                             RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
     PCB_VIA* via = new PCB_VIA( brd );
     via->SetViaType( VIATYPE::THROUGH );
-    via->SetPosition(
-            VECTOR2I( pcbIUScale.mmToIU( addJob->m_x ), pcbIUScale.mmToIU( addJob->m_y ) ) );
+    via->SetPosition( VECTOR2I( pcbIUScale.mmToIU( addJob->m_x ), pcbIUScale.mmToIU( addJob->m_y ) ) );
     via->SetWidth( sizeIU );
     via->SetDrill( drillIU );
     via->SetLayerPair( F_Cu, B_Cu );
@@ -1879,17 +1884,231 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddVia( JOB* aJob )
 
     if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
     {
-        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ),
-                            RPT_SEVERITY_ERROR );
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
         return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
     }
 
     m_reporter->Report(
-            wxString::Format(
-                    _( "Added a %.3f mm via (drill %.3f mm) on net '%s' at (%.3f, %.3f) and wrote %s\n" ),
-                    pcbIUScale.IUTomm( sizeIU ), pcbIUScale.IUTomm( drillIU ), addJob->m_net, addJob->m_x,
-                    addJob->m_y, outPath ),
+            wxString::Format( _( "Added a %.3f mm via (drill %.3f mm) on net '%s' at (%.3f, %.3f) and wrote %s\n" ),
+                              pcbIUScale.IUTomm( sizeIU ), pcbIUScale.IUTomm( drillIU ), addJob->m_net, addJob->m_x,
+                              addJob->m_y, outPath ),
             RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditAddStitchingVias( JOB* aJob )
+{
+    JOB_PCB_EDIT_ADD_STITCHING_VIAS* stitchJob = dynamic_cast<JOB_PCB_EDIT_ADD_STITCHING_VIAS*>( aJob );
+
+    if( stitchJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( stitchJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    NETINFO_ITEM* net = brd->FindNet( stitchJob->m_net );
+
+    if( !net )
+    {
+        m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), stitchJob->m_net ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    const int netCode = net->GetNetCode();
+
+    // Via size/drill: explicit wins, then the net's netclass, then the default netclass (identical
+    // to `pcb edit add-via`).
+    const NETCLASS*                      netClass = net->GetNetClass();
+    const std::shared_ptr<NET_SETTINGS>& netSettings = brd->GetDesignSettings().m_NetSettings;
+    const NETCLASS*                      defaultClass = netSettings ? netSettings->GetDefaultNetclass().get() : nullptr;
+
+    auto resolve = [&]( double aExplicitMM, int ( NETCLASS::*aGetter )() const ) -> int
+    {
+        if( aExplicitMM > 0.0 )
+            return pcbIUScale.mmToIU( aExplicitMM );
+
+        if( netClass && ( netClass->*aGetter )() > 0 )
+            return ( netClass->*aGetter )();
+
+        if( defaultClass && ( defaultClass->*aGetter )() > 0 )
+            return ( defaultClass->*aGetter )();
+
+        return 0;
+    };
+
+    int sizeIU = resolve( stitchJob->m_sizeMM, &NETCLASS::GetViaDiameter );
+    int drillIU = resolve( stitchJob->m_drillMM, &NETCLASS::GetViaDrill );
+    int spacingIU = pcbIUScale.mmToIU( stitchJob->m_spacingMM );
+
+    if( sizeIU <= 0 || drillIU <= 0 )
+    {
+        m_reporter->Report( _( "Could not determine via size/drill from the netclass; pass --size and --drill\n" ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    if( drillIU >= sizeIU || spacingIU <= 0 )
+    {
+        m_reporter->Report( _( "Invalid via geometry: need drill < diameter and spacing > 0\n" ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    // Target zones (the net's copper zones) and exclusion areas (every *other* net's filled
+    // copper). A through via that lands over foreign copper on any layer would short two nets, so
+    // those grid points are skipped rather than placed. Keep the shared_ptr fills alive for the
+    // lifetime of the loop.
+    std::vector<ZONE*>                           zones;
+    std::vector<std::shared_ptr<SHAPE_POLY_SET>> exclusionOwners;
+    std::vector<const SHAPE_POLY_SET*>           exclusions;
+
+    for( ZONE* zone : brd->Zones() )
+    {
+        if( !zone || !zone->IsOnCopperLayer() )
+            continue;
+
+        if( zone->GetNetCode() == netCode )
+        {
+            zones.push_back( zone );
+        }
+        else
+        {
+            for( PCB_LAYER_ID layer : zone->GetLayerSet().Seq() )
+            {
+                std::shared_ptr<SHAPE_POLY_SET> fp = zone->GetFilledPolysList( layer );
+
+                if( fp && fp->OutlineCount() > 0 )
+                {
+                    exclusions.push_back( fp.get() );
+                    exclusionOwners.push_back( std::move( fp ) );
+                }
+            }
+        }
+    }
+
+    if( zones.empty() )
+    {
+        m_reporter->Report( wxString::Format( _( "Net '%s' has no copper zones to stitch\n" ), stitchJob->m_net ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    // Lay a grid aligned to global multiples of the spacing (so points shared by overlapping zones
+    // coincide and dedupe), and drop a via at each grid point that falls inside a zone outline.
+    // Cap the count so a tiny --spacing on a large board fails loud rather than exploding.
+    constexpr int                 VIA_CAP = 100000;
+    std::set<std::pair<int, int>> placed;
+    int                           added = 0;
+    bool                          capped = false;
+
+    for( ZONE* zone : zones )
+    {
+        // Prefer the filled copper: it already respects clearance to other nets and the zone's own
+        // rules, so vias land on real GND copper rather than in the gaps around foreign pads/tracks.
+        // Fall back to the raw outline only when the board hasn't been filled.
+        std::shared_ptr<SHAPE_POLY_SET> filled;
+
+        for( PCB_LAYER_ID layer : zone->GetLayerSet().Seq() )
+        {
+            std::shared_ptr<SHAPE_POLY_SET> fp = zone->GetFilledPolysList( layer );
+
+            if( fp && fp->OutlineCount() > 0 )
+            {
+                filled = fp;
+                break;
+            }
+        }
+
+        const SHAPE_POLY_SET* area = ( filled && filled->OutlineCount() > 0 ) ? filled.get() : zone->Outline();
+
+        if( !area || area->OutlineCount() == 0 )
+            continue;
+
+        BOX2I bb = area->BBox();
+
+        int gx0 = static_cast<int>( std::floor( static_cast<double>( bb.GetLeft() ) / spacingIU ) );
+        int gx1 = static_cast<int>( std::ceil( static_cast<double>( bb.GetRight() ) / spacingIU ) );
+        int gy0 = static_cast<int>( std::floor( static_cast<double>( bb.GetTop() ) / spacingIU ) );
+        int gy1 = static_cast<int>( std::ceil( static_cast<double>( bb.GetBottom() ) / spacingIU ) );
+
+        for( int gy = gy0; gy <= gy1 && !capped; ++gy )
+        {
+            for( int gx = gx0; gx <= gx1; ++gx )
+            {
+                if( placed.count( { gx, gy } ) )
+                    continue;
+
+                VECTOR2I pt( gx * spacingIU, gy * spacingIU );
+
+                if( !area->Contains( pt ) )
+                    continue;
+
+                // Skip points that also sit on another net's copper: a through via there would
+                // short that net to this one.
+                bool onForeignCopper = false;
+
+                for( const SHAPE_POLY_SET* ex : exclusions )
+                {
+                    if( ex->Contains( pt ) )
+                    {
+                        onForeignCopper = true;
+                        break;
+                    }
+                }
+
+                if( onForeignCopper )
+                    continue;
+
+                placed.insert( { gx, gy } );
+
+                PCB_VIA* via = new PCB_VIA( brd );
+                via->SetViaType( VIATYPE::THROUGH );
+                via->SetPosition( pt );
+                via->SetWidth( sizeIU );
+                via->SetDrill( drillIU );
+                via->SetLayerPair( F_Cu, B_Cu );
+                via->SetIsFree( false ); // keep the assigned net; don't inherit from touched copper
+                via->SetNet( net );
+                brd->Add( via, ADD_MODE::INSERT );
+                ++added;
+
+                if( added >= VIA_CAP )
+                {
+                    capped = true;
+                    break;
+                }
+            }
+        }
+
+        if( capped )
+            break;
+    }
+
+    if( capped )
+    {
+        m_reporter->Report(
+                wxString::Format( _( "Reached the %d-via limit; increase --spacing to stitch fewer\n" ), VIA_CAP ),
+                RPT_SEVERITY_WARNING );
+    }
+
+    wxString outPath = stitchJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = stitchJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Added %d stitching via(s) on net '%s' and wrote %s\n" ), added,
+                                          stitchJob->m_net, outPath ),
+                        RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }

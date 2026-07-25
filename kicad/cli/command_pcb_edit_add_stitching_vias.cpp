@@ -17,39 +17,40 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#include "command_pcb_edit_add_via.h"
+#include "command_pcb_edit_add_stitching_vias.h"
 
 #include <cli/exit_codes.h>
-#include <jobs/job_pcb_edit_add_via.h>
+#include <jobs/job_pcb_edit_add_stitching_vias.h>
 #include <wx/crt.h>
 #include <wx/file.h>
 
-#include <cstdlib>
 #include <string>
 
 #define ARG_NET "--net"
-#define ARG_AT "--at"
+#define ARG_SPACING "--spacing"
 #define ARG_SIZE "--size"
 #define ARG_DRILL "--drill"
 
-CLI::PCB_EDIT_ADD_VIA_COMMAND::PCB_EDIT_ADD_VIA_COMMAND() :
-        COMMAND( "add-via" )
+CLI::PCB_EDIT_ADD_STITCHING_VIAS_COMMAND::PCB_EDIT_ADD_STITCHING_VIAS_COMMAND() :
+        COMMAND( "add-stitching-vias" )
 {
     // --output optional: when omitted the edited board is written back over the input.
     addCommonArgs( true, true, IO_TYPE::FILE, IO_TYPE::FILE );
 
-    m_argParser.add_description( UTF8STDSTR( _( "Add a through via on a net at a point and write the board back "
-                                                "(overwrites the input when --output is omitted)" ) ) );
+    m_argParser.add_description(
+            UTF8STDSTR( _( "Flood a net's copper zones with a grid of stitching vias and write the "
+                           "board back (overwrites the input when --output is omitted)" ) ) );
 
     m_argParser.add_argument( ARG_NET )
             .default_value( std::string() )
-            .help( UTF8STDSTR( _( "Net the via connects to (required)" ) ) )
+            .help( UTF8STDSTR( _( "Net whose copper zones get stitched (required)" ) ) )
             .metavar( "NET" );
 
-    m_argParser.add_argument( ARG_AT )
-            .default_value( std::string() )
-            .help( UTF8STDSTR( _( "Via centre as X,Y in millimetres (required), e.g. 25.4,10" ) ) )
-            .metavar( "X,Y" );
+    m_argParser.add_argument( ARG_SPACING )
+            .default_value( 0.0 )
+            .scan<'g', double>()
+            .help( UTF8STDSTR( _( "Grid pitch between vias in millimetres (required, > 0)" ) ) )
+            .metavar( "SPACING_MM" );
 
     m_argParser.add_argument( ARG_SIZE )
             .default_value( 0.0 )
@@ -65,13 +66,14 @@ CLI::PCB_EDIT_ADD_VIA_COMMAND::PCB_EDIT_ADD_VIA_COMMAND() :
 }
 
 
-int CLI::PCB_EDIT_ADD_VIA_COMMAND::doPerform( KIWAY& aKiway )
+int CLI::PCB_EDIT_ADD_STITCHING_VIAS_COMMAND::doPerform( KIWAY& aKiway )
 {
-    std::unique_ptr<JOB_PCB_EDIT_ADD_VIA> job( new JOB_PCB_EDIT_ADD_VIA() );
+    std::unique_ptr<JOB_PCB_EDIT_ADD_STITCHING_VIAS> job( new JOB_PCB_EDIT_ADD_STITCHING_VIAS() );
 
     job->m_filename = m_argInput;
     job->SetConfiguredOutputPath( m_argOutput );
     job->m_net = wxString::FromUTF8( m_argParser.get<std::string>( ARG_NET ).c_str() );
+    job->m_spacingMM = m_argParser.get<double>( ARG_SPACING );
     job->m_sizeMM = m_argParser.get<double>( ARG_SIZE );
     job->m_drillMM = m_argParser.get<double>( ARG_DRILL );
 
@@ -87,30 +89,9 @@ int CLI::PCB_EDIT_ADD_VIA_COMMAND::doPerform( KIWAY& aKiway )
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
-    // Parse "X,Y" (millimetres). Kept deliberately strict so a typo fails loudly rather than
-    // silently dropping a via at the origin.
-    std::string at = m_argParser.get<std::string>( ARG_AT );
-    std::size_t comma = at.find( ',' );
-
-    if( comma == std::string::npos )
+    if( job->m_spacingMM <= 0.0 )
     {
-        wxFprintf( stderr, _( "--at must be given as X,Y in millimetres, e.g. 25.4,10\n" ) );
-        return CLI::EXIT_CODES::ERR_ARGS;
-    }
-
-    try
-    {
-        std::size_t xEnd = 0, yEnd = 0;
-        job->m_x = std::stod( at.substr( 0, comma ), &xEnd );
-        job->m_y = std::stod( at.substr( comma + 1 ), &yEnd );
-
-        // Reject trailing junk ("1,2x") that stod would otherwise silently accept.
-        if( xEnd != at.substr( 0, comma ).size() || yEnd != at.substr( comma + 1 ).size() )
-            throw std::invalid_argument( "trailing characters" );
-    }
-    catch( ... )
-    {
-        wxFprintf( stderr, _( "--at must be two numbers X,Y in millimetres, e.g. 25.4,10\n" ) );
+        wxFprintf( stderr, _( "--spacing must be a positive number of millimetres\n" ) );
         return CLI::EXIT_CODES::ERR_ARGS;
     }
 
