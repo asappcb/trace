@@ -83,6 +83,9 @@
 #include <jobs/job_pcb_edit_set_track_width.h>
 #include <jobs/job_pcb_edit_add_via.h>
 #include <jobs/job_pcb_edit_add_stitching_vias.h>
+#include <jobs/job_pcb_edit_set_copper_layers.h>
+#include <lset.h>
+#include <board_stackup_manager/board_stackup.h>
 #include <board_design_settings.h>
 #include <board_connected_item.h>
 #include <netclass.h>
@@ -211,6 +214,12 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               } );
     Register( "edit_add_stitching_vias",
               std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddStitchingVias, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_set_copper_layers",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetCopperLayers, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -2109,6 +2118,59 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditAddStitchingVias( JOB* aJob )
     m_reporter->Report( wxString::Format( _( "Added %d stitching via(s) on net '%s' and wrote %s\n" ), added,
                                           stitchJob->m_net, outPath ),
                         RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditSetCopperLayers( JOB* aJob )
+{
+    JOB_PCB_EDIT_SET_COPPER_LAYERS* layerJob = dynamic_cast<JOB_PCB_EDIT_SET_COPPER_LAYERS*>( aJob );
+
+    if( layerJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( layerJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    const int target = layerJob->m_copperLayerCount;
+    const int current = brd->GetCopperLayerCount();
+
+    // Copper layers being removed (reduction only): drop their items so a saved 2-layer board
+    // doesn't carry stranded traces / zones on vanished inner layers.
+    LSET removed = LSET::AllCuMask( current ) & ~LSET::AllCuMask( target );
+    LSEQ removedSeq = removed.CuStack();
+
+    for( PCB_LAYER_ID layer : removedSeq )
+        brd->RemoveAllItemsOnLayer( layer );
+
+    // Sets the copper layer count and updates the enabled-copper mask together.
+    brd->SetCopperLayerCount( target );
+
+    // Keep an explicit physical stackup consistent with the new layer count (a no-op when the
+    // board uses the derived default stackup).
+    BOARD_DESIGN_SETTINGS& bds = brd->GetDesignSettings();
+
+    if( bds.m_HasStackup )
+        bds.GetStackupDescriptor().SynchronizeWithBoard( &bds );
+
+    wxString outPath = layerJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = layerJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report(
+            wxString::Format( _( "Set copper layers to %d (was %d); removed %d inner layer(s) and wrote %s\n" ), target,
+                              current, static_cast<int>( removedSeq.size() ), outPath ),
+            RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }

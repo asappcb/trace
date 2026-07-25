@@ -553,3 +553,45 @@ def test_pcb_edit_add_stitching_vias( kitest: KiTestFixture ):
 
     assert on_grid_gnd >= added, \
         "expected all {} stitching vias on the GND grid, found {}".format( added, on_grid_gnd )
+
+
+def test_pcb_edit_set_copper_layers( kitest: KiTestFixture ):
+    """`pcb edit set-copper-layers N` reduces the copper layer count, pruning items on the removed
+    inner layers (the 4->2 conversion)."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue14549_2.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_set_copper_layers/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "twolayer.kicad_pcb"
+
+    src = input_file.read_text()
+    # Precondition: a real 4-layer board with items on the inner copper layers.
+    assert '"In1.Cu"' in src and '"In2.Cu"' in src
+    assert src.count( '(layer "In1.Cu")' ) > 0
+
+    command = [utils.kicad_cli(), "pcb", "edit", "set-copper-layers", "2",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode == 0
+    assert "Set copper layers to 2" in stdout
+    assert out_file.exists()
+
+    out = out_file.read_text()
+    # Inner copper layers, and any items on them, are gone; the outer layers remain.
+    assert '"In1.Cu"' not in out and '"In2.Cu"' not in out
+    assert out.count( '(layer "In1.Cu")' ) == 0 and out.count( '(layer "In2.Cu")' ) == 0
+    assert '"F.Cu"' in out and '"B.Cu"' in out
+
+
+def test_pcb_edit_set_copper_layers_bad_count( kitest: KiTestFixture ):
+    """An odd / out-of-range count is rejected without writing a board."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue14549_2.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_set_copper_bad/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "nope.kicad_pcb"
+
+    stdout, stderr, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "set-copper-layers", "3",
+             "-o", str( out_file ), str( input_file )] )
+    assert exitcode != 0
+    assert not out_file.exists()
