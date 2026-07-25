@@ -63,6 +63,7 @@ public:
     int JobExportIpcD356( JOB* aJob );
     int JobExportStats( JOB* aJob );
     int JobPcbEditSetTrackWidth( JOB* aJob );
+    int JobPcbEditAddVia( JOB* aJob );
     int JobExportJson( JOB* aJob );
     int JobPcbFillZones( JOB* aJob );
     int JobUpgrade( JOB* aJob );
