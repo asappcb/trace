@@ -94,6 +94,10 @@ set( KICAD_CLI_SRCS
     cli/command_pcb_edit_add_via.cpp
     cli/command_pcb_edit_add_stitching_vias.cpp
     cli/command_pcb_edit_set_copper_layers.cpp
+    cli/command_pcb_edit_move_footprint.cpp
+    cli/command_pcb_edit_add_track.cpp
+    cli/command_pcb_edit_remove_tracks.cpp
+    cli/command_pcb_edit_delete_footprint.cpp
     cli/command_pcb_import.cpp
     cli/command_sch_import.cpp
     cli/command_import.cpp

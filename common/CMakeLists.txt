@@ -204,6 +204,10 @@ set( KICOMMON_SRCS
     jobs/job_pcb_edit_add_via.cpp
     jobs/job_pcb_edit_add_stitching_vias.cpp
     jobs/job_pcb_edit_set_copper_layers.cpp
+    jobs/job_pcb_edit_move_footprint.cpp
+    jobs/job_pcb_edit_add_track.cpp
+    jobs/job_pcb_edit_remove_tracks.cpp
+    jobs/job_pcb_edit_delete_footprint.cpp
     jobs/job_sch_upgrade.cpp
 
     # Release management

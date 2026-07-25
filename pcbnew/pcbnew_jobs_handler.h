@@ -66,6 +66,10 @@ public:
     int JobPcbEditAddVia( JOB* aJob );
     int JobPcbEditAddStitchingVias( JOB* aJob );
     int JobPcbEditSetCopperLayers( JOB* aJob );
+    int JobPcbEditMoveFootprint( JOB* aJob );
+    int JobPcbEditAddTrack( JOB* aJob );
+    int JobPcbEditRemoveTracks( JOB* aJob );
+    int JobPcbEditDeleteFootprint( JOB* aJob );
     int JobExportJson( JOB* aJob );
     int JobPcbFillZones( JOB* aJob );
     int JobUpgrade( JOB* aJob );

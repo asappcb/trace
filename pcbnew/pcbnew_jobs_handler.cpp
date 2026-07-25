@@ -84,6 +84,11 @@
 #include <jobs/job_pcb_edit_add_via.h>
 #include <jobs/job_pcb_edit_add_stitching_vias.h>
 #include <jobs/job_pcb_edit_set_copper_layers.h>
+#include <jobs/job_pcb_edit_move_footprint.h>
+#include <jobs/job_pcb_edit_add_track.h>
+#include <jobs/job_pcb_edit_remove_tracks.h>
+#include <jobs/job_pcb_edit_delete_footprint.h>
+#include <footprint.h>
 #include <lset.h>
 #include <board_stackup_manager/board_stackup.h>
 #include <board_design_settings.h>
@@ -220,6 +225,29 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               } );
     Register( "edit_set_copper_layers",
               std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetCopperLayers, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_move_footprint",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditMoveFootprint, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_add_track", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditAddTrack, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_remove_tracks",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditRemoveTracks, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_delete_footprint",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditDeleteFootprint, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -2171,6 +2199,253 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditSetCopperLayers( JOB* aJob )
             wxString::Format( _( "Set copper layers to %d (was %d); removed %d inner layer(s) and wrote %s\n" ), target,
                               current, static_cast<int>( removedSeq.size() ), outPath ),
             RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditMoveFootprint( JOB* aJob )
+{
+    JOB_PCB_EDIT_MOVE_FOOTPRINT* moveJob = dynamic_cast<JOB_PCB_EDIT_MOVE_FOOTPRINT*>( aJob );
+
+    if( moveJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( moveJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    FOOTPRINT* fp = brd->FindFootprintByReference( moveJob->m_ref );
+
+    if( !fp )
+    {
+        m_reporter->Report( wxString::Format( _( "Footprint '%s' not found on the board\n" ), moveJob->m_ref ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    if( moveJob->m_hasAt )
+        fp->SetPosition( VECTOR2I( pcbIUScale.mmToIU( moveJob->m_x ), pcbIUScale.mmToIU( moveJob->m_y ) ) );
+
+    if( moveJob->m_hasRotate )
+        fp->SetOrientationDegrees( moveJob->m_rotateDeg );
+
+    if( moveJob->m_flip )
+        fp->Flip( fp->GetPosition(), FLIP_DIRECTION::TOP_BOTTOM );
+
+    wxString outPath = moveJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = moveJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Moved footprint '%s' and wrote %s\n" ), moveJob->m_ref, outPath ),
+                        RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditAddTrack( JOB* aJob )
+{
+    JOB_PCB_EDIT_ADD_TRACK* trackJob = dynamic_cast<JOB_PCB_EDIT_ADD_TRACK*>( aJob );
+
+    if( trackJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( trackJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    NETINFO_ITEM* net = brd->FindNet( trackJob->m_net );
+
+    if( !net )
+    {
+        m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), trackJob->m_net ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    PCB_LAYER_ID layer = brd->GetLayerID( trackJob->m_layer );
+
+    if( layer == UNDEFINED_LAYER || !IsCopperLayer( layer ) )
+    {
+        m_reporter->Report( wxString::Format( _( "'%s' is not a copper layer on this board\n" ), trackJob->m_layer ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    int widthIU = 0;
+
+    if( trackJob->m_widthMM > 0.0 )
+        widthIU = pcbIUScale.mmToIU( trackJob->m_widthMM );
+    else if( net->GetNetClass() && net->GetNetClass()->GetTrackWidth() > 0 )
+        widthIU = net->GetNetClass()->GetTrackWidth();
+
+    if( widthIU <= 0 )
+        widthIU = brd->GetDesignSettings().GetCurrentTrackWidth();
+
+    if( widthIU <= 0 )
+    {
+        m_reporter->Report( _( "Could not determine a track width; pass --width\n" ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    PCB_TRACK* track = new PCB_TRACK( brd );
+    track->SetStart( VECTOR2I( pcbIUScale.mmToIU( trackJob->m_startX ), pcbIUScale.mmToIU( trackJob->m_startY ) ) );
+    track->SetEnd( VECTOR2I( pcbIUScale.mmToIU( trackJob->m_endX ), pcbIUScale.mmToIU( trackJob->m_endY ) ) );
+    track->SetWidth( widthIU );
+    track->SetLayer( layer );
+    track->SetNet( net );
+    brd->Add( track, ADD_MODE::INSERT );
+
+    wxString outPath = trackJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = trackJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Added a track on net '%s' (%s) and wrote %s\n" ), trackJob->m_net,
+                                          trackJob->m_layer, outPath ),
+                        RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditRemoveTracks( JOB* aJob )
+{
+    JOB_PCB_EDIT_REMOVE_TRACKS* removeJob = dynamic_cast<JOB_PCB_EDIT_REMOVE_TRACKS*>( aJob );
+
+    if( removeJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( removeJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    NETINFO_ITEM* net = brd->FindNet( removeJob->m_net );
+
+    if( !net )
+    {
+        m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), removeJob->m_net ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    const int    netCode = net->GetNetCode();
+    const bool   hasLayer = !removeJob->m_layer.IsEmpty();
+    PCB_LAYER_ID layer = UNDEFINED_LAYER;
+
+    if( hasLayer )
+    {
+        layer = brd->GetLayerID( removeJob->m_layer );
+
+        if( layer == UNDEFINED_LAYER || !IsCopperLayer( layer ) )
+        {
+            m_reporter->Report(
+                    wxString::Format( _( "'%s' is not a copper layer on this board\n" ), removeJob->m_layer ),
+                    RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_ARGS;
+        }
+    }
+
+    // Collect first, then remove: mutating brd->Tracks() mid-iteration is unsafe.
+    std::vector<BOARD_ITEM*> toRemove;
+
+    for( PCB_TRACK* t : brd->Tracks() )
+    {
+        if( t->GetNetCode() != netCode )
+            continue;
+
+        if( t->Type() == PCB_VIA_T )
+        {
+            // A via spans layers, so a --layer filter can't apply to it; only rip vias on a
+            // whole-net removal.
+            if( !hasLayer )
+                toRemove.push_back( t );
+        }
+        else if( !hasLayer || t->GetLayer() == layer )
+        {
+            toRemove.push_back( t );
+        }
+    }
+
+    for( BOARD_ITEM* item : toRemove )
+    {
+        brd->Remove( item );
+        delete item;
+    }
+
+    wxString outPath = removeJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = removeJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Removed %d item(s) on net '%s' and wrote %s\n" ),
+                                          static_cast<int>( toRemove.size() ), removeJob->m_net, outPath ),
+                        RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditDeleteFootprint( JOB* aJob )
+{
+    JOB_PCB_EDIT_DELETE_FOOTPRINT* deleteJob = dynamic_cast<JOB_PCB_EDIT_DELETE_FOOTPRINT*>( aJob );
+
+    if( deleteJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( deleteJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    FOOTPRINT* fp = brd->FindFootprintByReference( deleteJob->m_ref );
+
+    if( !fp )
+    {
+        m_reporter->Report( wxString::Format( _( "Footprint '%s' not found on the board\n" ), deleteJob->m_ref ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    brd->Remove( fp );
+    delete fp;
+
+    wxString outPath = deleteJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = deleteJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Deleted footprint '%s' and wrote %s\n" ), deleteJob->m_ref, outPath ),
+                        RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }

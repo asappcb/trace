@@ -595,3 +595,113 @@ def test_pcb_edit_set_copper_layers_bad_count( kitest: KiTestFixture ):
              "-o", str( out_file ), str( input_file )] )
     assert exitcode != 0
     assert not out_file.exists()
+
+
+def _tw2_block( board_text: str ) -> str:
+    """Return the (footprint ...) block for reference TW2 from a saved board's text."""
+    i = board_text.find( '"Reference" "TW2"' )
+    assert i >= 0, "TW2 not found in board"
+    start = board_text.rfind( "(footprint", 0, i )
+    return board_text[start:i]
+
+
+def test_pcb_edit_move_footprint( kitest: KiTestFixture ):
+    """`pcb edit move-footprint --ref R --at X,Y --rotate D --flip` repositions/flips a footprint."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_move_footprint/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "moved.kicad_pcb"
+
+    # Reposition + rotate (no flip, so the angle stays literal).
+    stdout, stderr, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "move-footprint", "--ref", "TW2",
+             "--at", "120,90", "--rotate", "45", "-o", str( out_file ), str( input_file )] )
+    assert exitcode == 0
+    assert "Moved footprint 'TW2'" in stdout
+
+    blk = _tw2_block( out_file.read_text() )
+    assert re.search( r"\(translate 120 90\)", blk )   # --at
+    assert re.search( r"\(rotate 45\)", blk )           # --rotate
+    assert re.search( r'\(layer "F\.Cu"\)', blk )       # still front
+
+    # Flip to the back side.
+    flipped = out_file.parent / "flipped.kicad_pcb"
+    _, _, flip_exit = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "move-footprint", "--ref", "TW2",
+             "--flip", "-o", str( flipped ), str( input_file )] )
+    assert flip_exit == 0
+    assert re.search( r'\(layer "B\.Cu"\)', _tw2_block( flipped.read_text() ) )
+
+
+def test_pcb_edit_add_track( kitest: KiTestFixture ):
+    """`pcb edit add-track --net N --start .. --end .. --layer L` adds one copper segment."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_add_track/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "track.kicad_pcb"
+
+    before = input_file.read_text().count( "(segment" )
+
+    command = [utils.kicad_cli(), "pcb", "edit", "add-track", "--net", "GND",
+               "--start", "100,100", "--end", "110,100", "--layer", "F.Cu", "--width", "0.3",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode == 0
+    txt = out_file.read_text()
+    assert txt.count( "(segment" ) == before + 1
+
+    seg_ok = False
+    for blk in re.finditer( r"\(segment\b.*?\n\s*\)", txt, re.S ):
+        b = blk.group( 0 )
+        if "(start 100 100)" in b and "(end 110 100)" in b and "(width 0.3)" in b \
+                and '(layer "F.Cu")' in b and '(net "GND")' in b:
+            seg_ok = True
+    assert seg_ok
+
+
+def test_pcb_edit_remove_tracks( kitest: KiTestFixture ):
+    """`pcb edit remove-tracks --net N` rips up a net's segments/arcs/vias."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_remove_tracks/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "ripped.kicad_pcb"
+
+    command = [utils.kicad_cli(), "pcb", "edit", "remove-tracks", "--net", "Net-(Q2-C)",
+               "-o", str( out_file ), str( input_file )]
+
+    stdout, stderr, exitcode = utils.run_and_capture( command )
+    assert exitcode == 0
+    m = re.search( r"Removed (\d+) item", stdout )
+    assert m is not None and int( m.group( 1 ) ) > 0
+
+    # No routing on that net remains.
+    txt = out_file.read_text()
+    for blk in re.finditer( r"\((?:segment|arc|via)\b.*?\n\s*\)", txt, re.S ):
+        assert '(net "Net-(Q2-C)")' not in blk.group( 0 )
+
+
+def test_pcb_edit_delete_footprint( kitest: KiTestFixture ):
+    """`pcb edit delete-footprint --ref R` removes a footprint; an unknown ref fails cleanly."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_delete_footprint/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "deleted.kicad_pcb"
+
+    before = input_file.read_text().count( "(footprint" )
+
+    stdout, stderr, exitcode = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "delete-footprint", "--ref", "TW2",
+             "-o", str( out_file ), str( input_file )] )
+    assert exitcode == 0
+    out = out_file.read_text()
+    assert out.count( "(footprint" ) == before - 1
+    assert '"Reference" "TW2"' not in out
+
+    # Unknown ref: non-zero exit, no board written.
+    bad_out = output_dir / "nope.kicad_pcb"
+    _, _, bad_exit = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "delete-footprint", "--ref", "ZZZ99",
+             "-o", str( bad_out ), str( input_file )] )
+    assert bad_exit != 0
+    assert not bad_out.exists()
