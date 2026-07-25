@@ -209,6 +209,10 @@ set( KICOMMON_SRCS
     jobs/job_pcb_edit_remove_tracks.cpp
     jobs/job_pcb_edit_delete_footprint.cpp
     jobs/job_pcb_edit_cleanup_tracks.cpp
+    jobs/job_pcb_edit_set_fp_attribute.cpp
+    jobs/job_pcb_edit_set_field.cpp
+    jobs/job_pcb_edit_set_via_size.cpp
+    jobs/job_pcb_edit_set_lock.cpp
     jobs/job_sch_upgrade.cpp
 
     # Release management

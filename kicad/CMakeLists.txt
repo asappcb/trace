@@ -99,6 +99,11 @@ set( KICAD_CLI_SRCS
     cli/command_pcb_edit_remove_tracks.cpp
     cli/command_pcb_edit_delete_footprint.cpp
     cli/command_pcb_edit_cleanup_tracks.cpp
+    cli/command_pcb_edit_set_fp_attribute.cpp
+    cli/command_pcb_edit_set_field.cpp
+    cli/command_pcb_edit_set_via_size.cpp
+    cli/command_pcb_edit_lock.cpp
+    cli/command_pcb_edit_unlock.cpp
     cli/command_pcb_import.cpp
     cli/command_sch_import.cpp
     cli/command_import.cpp

@@ -71,6 +71,10 @@ public:
     int JobPcbEditRemoveTracks( JOB* aJob );
     int JobPcbEditDeleteFootprint( JOB* aJob );
     int JobPcbEditCleanupTracks( JOB* aJob );
+    int JobPcbEditSetFpAttribute( JOB* aJob );
+    int JobPcbEditSetField( JOB* aJob );
+    int JobPcbEditSetViaSize( JOB* aJob );
+    int JobPcbEditSetLock( JOB* aJob );
     int JobExportJson( JOB* aJob );
     int JobPcbFillZones( JOB* aJob );
     int JobUpgrade( JOB* aJob );

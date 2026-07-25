@@ -89,9 +89,14 @@
 #include <jobs/job_pcb_edit_remove_tracks.h>
 #include <jobs/job_pcb_edit_delete_footprint.h>
 #include <jobs/job_pcb_edit_cleanup_tracks.h>
+#include <jobs/job_pcb_edit_set_fp_attribute.h>
+#include <jobs/job_pcb_edit_set_field.h>
+#include <jobs/job_pcb_edit_set_via_size.h>
+#include <jobs/job_pcb_edit_set_lock.h>
 #include <tracks_cleaner.h>
 #include <cleanup_item.h>
 #include <footprint.h>
+#include <pcb_field.h>
 #include <lset.h>
 #include <board_stackup_manager/board_stackup.h>
 #include <board_design_settings.h>
@@ -257,6 +262,27 @@ PCBNEW_JOBS_HANDLER::PCBNEW_JOBS_HANDLER( KIWAY* aKiway ) :
               } );
     Register( "edit_cleanup_tracks",
               std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditCleanupTracks, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_set_fp_attribute",
+              std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetFpAttribute, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_set_field", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetField, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_set_via_size", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetViaSize, this, std::placeholders::_1 ),
+              []( JOB*, wxWindow* ) -> bool
+              {
+                  return false;
+              } );
+    Register( "edit_set_lock", std::bind( &PCBNEW_JOBS_HANDLER::JobPcbEditSetLock, this, std::placeholders::_1 ),
               []( JOB*, wxWindow* ) -> bool
               {
                   return false;
@@ -2527,6 +2553,251 @@ int PCBNEW_JOBS_HANDLER::JobPcbEditCleanupTracks( JOB* aJob )
     m_reporter->Report(
             wxString::Format( _( "Cleaned up %d item(s) and wrote %s\n" ), static_cast<int>( items.size() ), outPath ),
             RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditSetFpAttribute( JOB* aJob )
+{
+    JOB_PCB_EDIT_SET_FP_ATTRIBUTE* attrJob = dynamic_cast<JOB_PCB_EDIT_SET_FP_ATTRIBUTE*>( aJob );
+
+    if( attrJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( attrJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    FOOTPRINT* fp = brd->FindFootprintByReference( attrJob->m_ref );
+
+    if( !fp )
+    {
+        m_reporter->Report( wxString::Format( _( "Footprint '%s' not found on the board\n" ), attrJob->m_ref ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    if( attrJob->m_dnp >= 0 )
+        fp->SetDNP( attrJob->m_dnp == 1 );
+
+    if( attrJob->m_excludeFromBOM >= 0 )
+        fp->SetExcludedFromBOM( attrJob->m_excludeFromBOM == 1 );
+
+    if( attrJob->m_excludeFromPos >= 0 )
+        fp->SetExcludedFromPosFiles( attrJob->m_excludeFromPos == 1 );
+
+    wxString outPath = attrJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = attrJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report(
+            wxString::Format( _( "Set attributes on footprint '%s' and wrote %s\n" ), attrJob->m_ref, outPath ),
+            RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditSetField( JOB* aJob )
+{
+    JOB_PCB_EDIT_SET_FIELD* fieldJob = dynamic_cast<JOB_PCB_EDIT_SET_FIELD*>( aJob );
+
+    if( fieldJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( fieldJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    FOOTPRINT* fp = brd->FindFootprintByReference( fieldJob->m_ref );
+
+    if( !fp )
+    {
+        m_reporter->Report( wxString::Format( _( "Footprint '%s' not found on the board\n" ), fieldJob->m_ref ),
+                            RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_ARGS;
+    }
+
+    if( fieldJob->m_hasValue )
+        fp->SetValue( fieldJob->m_value );
+
+    for( const auto& [name, value] : fieldJob->m_fields )
+    {
+        if( PCB_FIELD* field = fp->GetField( name ) )
+        {
+            field->SetText( value );
+        }
+        else
+        {
+            PCB_FIELD* newField = new PCB_FIELD( fp, FIELD_T::USER, name );
+            newField->SetText( value );
+            fp->Add( newField );
+        }
+    }
+
+    wxString outPath = fieldJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = fieldJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report(
+            wxString::Format( _( "Updated fields on footprint '%s' and wrote %s\n" ), fieldJob->m_ref, outPath ),
+            RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditSetViaSize( JOB* aJob )
+{
+    JOB_PCB_EDIT_SET_VIA_SIZE* viaJob = dynamic_cast<JOB_PCB_EDIT_SET_VIA_SIZE*>( aJob );
+
+    if( viaJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( viaJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    int netCode = -1;
+
+    if( !viaJob->m_net.IsEmpty() )
+    {
+        NETINFO_ITEM* net = brd->FindNet( viaJob->m_net );
+
+        if( !net )
+        {
+            m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), viaJob->m_net ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_ARGS;
+        }
+
+        netCode = net->GetNetCode();
+    }
+
+    int sizeIU = viaJob->m_sizeMM > 0.0 ? pcbIUScale.mmToIU( viaJob->m_sizeMM ) : 0;
+    int drillIU = viaJob->m_drillMM > 0.0 ? pcbIUScale.mmToIU( viaJob->m_drillMM ) : 0;
+    int changed = 0;
+
+    for( PCB_TRACK* track : brd->Tracks() )
+    {
+        if( track->Type() != PCB_VIA_T )
+            continue;
+
+        if( netCode >= 0 && track->GetNetCode() != netCode )
+            continue;
+
+        PCB_VIA* via = static_cast<PCB_VIA*>( track );
+
+        if( sizeIU > 0 )
+            via->SetWidth( sizeIU );
+
+        if( drillIU > 0 )
+            via->SetDrill( drillIU );
+
+        changed++;
+    }
+
+    wxString outPath = viaJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = viaJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "Resized %d via(s) and wrote %s\n" ), changed, outPath ),
+                        RPT_SEVERITY_INFO );
+
+    return CLI::EXIT_CODES::OK;
+}
+
+
+int PCBNEW_JOBS_HANDLER::JobPcbEditSetLock( JOB* aJob )
+{
+    JOB_PCB_EDIT_SET_LOCK* lockJob = dynamic_cast<JOB_PCB_EDIT_SET_LOCK*>( aJob );
+
+    if( lockJob == nullptr )
+        return CLI::EXIT_CODES::ERR_UNKNOWN;
+
+    BOARD* brd = getBoard( lockJob->m_filename );
+
+    if( !brd )
+        return CLI::EXIT_CODES::ERR_INVALID_INPUT_FILE;
+
+    int changed = 0;
+
+    if( !lockJob->m_ref.IsEmpty() )
+    {
+        FOOTPRINT* fp = brd->FindFootprintByReference( lockJob->m_ref );
+
+        if( !fp )
+        {
+            m_reporter->Report( wxString::Format( _( "Footprint '%s' not found on the board\n" ), lockJob->m_ref ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_ARGS;
+        }
+
+        fp->SetLocked( lockJob->m_locked );
+        changed = 1;
+    }
+    else
+    {
+        NETINFO_ITEM* net = brd->FindNet( lockJob->m_net );
+
+        if( !net )
+        {
+            m_reporter->Report( wxString::Format( _( "Net '%s' not found on the board\n" ), lockJob->m_net ),
+                                RPT_SEVERITY_ERROR );
+            return CLI::EXIT_CODES::ERR_ARGS;
+        }
+
+        const int netCode = net->GetNetCode();
+
+        for( PCB_TRACK* track : brd->Tracks() )
+        {
+            if( track->GetNetCode() == netCode )
+            {
+                track->SetLocked( lockJob->m_locked );
+                changed++;
+            }
+        }
+    }
+
+    wxString outPath = lockJob->GetConfiguredOutputPath();
+
+    if( outPath.IsEmpty() )
+        outPath = lockJob->m_filename;
+
+    if( !BOARD_LOADER::SaveBoard( outPath, brd ) )
+    {
+        m_reporter->Report( wxString::Format( _( "Failed to write board to %s\n" ), outPath ), RPT_SEVERITY_ERROR );
+        return CLI::EXIT_CODES::ERR_INVALID_OUTPUT_CONFLICT;
+    }
+
+    m_reporter->Report( wxString::Format( _( "%s %d item(s) and wrote %s\n" ),
+                                          lockJob->m_locked ? _( "Locked" ) : _( "Unlocked" ), changed, outPath ),
+                        RPT_SEVERITY_INFO );
 
     return CLI::EXIT_CODES::OK;
 }

@@ -598,11 +598,19 @@ def test_pcb_edit_set_copper_layers_bad_count( kitest: KiTestFixture ):
 
 
 def _tw2_block( board_text: str ) -> str:
-    """Return the (footprint ...) block for reference TW2 from a saved board's text."""
+    """Return the whole (footprint ...) block for reference TW2 from a saved board's text.
+
+    Spans to the next top-level footprint (or a generous slice for the last one) so tokens that
+    follow the Reference property -- (attr ...), the Value/custom properties, (locked ...) -- are
+    included.
+    """
     i = board_text.find( '"Reference" "TW2"' )
     assert i >= 0, "TW2 not found in board"
     start = board_text.rfind( "(footprint", 0, i )
-    return board_text[start:i]
+    end = board_text.find( "\n\t(footprint", i )
+    if end < 0:
+        end = start + 8000
+    return board_text[start:end]
 
 
 def test_pcb_edit_move_footprint( kitest: KiTestFixture ):
@@ -736,3 +744,95 @@ def test_pcb_edit_cleanup_tracks( kitest: KiTestFixture ):
             [utils.kicad_cli(), "pcb", "edit", "cleanup-tracks", "-o", str( again ), str( cleaned )] )
     assert e == 0
     assert re.search( r"Cleaned up 0 item", stdout )
+
+
+def test_pcb_edit_set_footprint_attribute( kitest: KiTestFixture ):
+    """`pcb edit set-footprint-attribute` sets/clears DNP, exclude-from-BOM, exclude-from-pos."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_set_fp_attr/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "attr.kicad_pcb"
+
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "set-footprint-attribute", "--ref", "TW2",
+             "--dnp", "yes", "--exclude-from-bom", "yes", "--exclude-from-pos", "yes",
+             "-o", str( out_file ), str( input_file )] )
+    assert e == 0
+    blk = _tw2_block( out_file.read_text() )
+    attr = re.search( r"\(attr ([^)]*)\)", blk )
+    assert attr is not None
+    assert "dnp" in attr.group( 1 )
+    assert "exclude_from_bom" in attr.group( 1 )
+    assert "exclude_from_pos_files" in attr.group( 1 )
+
+
+def test_pcb_edit_set_field( kitest: KiTestFixture ):
+    """`pcb edit set-field --value / --field NAME=VALUE` edits the Value and named fields."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_set_field/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "field.kicad_pcb"
+
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "set-field", "--ref", "TW2",
+             "--value", "10k", "--field", "MPN=ABC123",
+             "-o", str( out_file ), str( input_file )] )
+    assert e == 0
+    blk = _tw2_block( out_file.read_text() )
+    assert '(property "Value" "10k"' in blk
+    assert '(property "MPN" "ABC123"' in blk
+
+
+def test_pcb_edit_set_via_size( kitest: KiTestFixture ):
+    """`pcb edit set-via-size --net N --size .. --drill ..` resizes matching vias."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_set_via_size/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    out_file = output_dir / "vias.kicad_pcb"
+
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "set-via-size", "--net", "GND",
+             "--size", "0.9", "--drill", "0.5", "-o", str( out_file ), str( input_file )] )
+    assert e == 0
+    m = re.search( r"Resized (\d+) via", stdout )
+    assert m is not None
+    n = int( m.group( 1 ) )
+    assert n > 0
+
+    # Exactly n vias now carry the new size/drill.
+    txt = out_file.read_text()
+    resized = 0
+    for blk in re.finditer( r"\(via\b.*?\n\s*\)", txt, re.S ):
+        b = blk.group( 0 )
+        if "(size 0.9)" in b and "(drill 0.5)" in b:
+            resized += 1
+    assert resized == n
+
+
+def test_pcb_edit_lock_unlock( kitest: KiTestFixture ):
+    """`pcb edit lock/unlock` toggles the locked flag on a footprint or a net's routing."""
+    input_file = kitest.get_data_file_path( "pcbnew/issue12609.kicad_pcb" )
+    output_dir = kitest.get_output_path( "cli/edit_lock/" )
+    output_dir.mkdir( parents=True, exist_ok=True )
+    locked = output_dir / "locked.kicad_pcb"
+    unlocked = output_dir / "unlocked.kicad_pcb"
+
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "lock", "--ref", "TW2",
+             "-o", str( locked ), str( input_file )] )
+    assert e == 0
+    assert "Locked 1 item" in stdout
+    assert re.search( r"\(locked yes\)", _tw2_block( locked.read_text() ) )
+
+    stdout, _, e = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "unlock", "--net", "GND",
+             "-o", str( unlocked ), str( input_file )] )
+    assert e == 0
+    m = re.search( r"Unlocked (\d+) item", stdout )
+    assert m is not None and int( m.group( 1 ) ) > 0
+
+    # lock/unlock require exactly one of --ref / --net.
+    _, _, bad = utils.run_and_capture(
+            [utils.kicad_cli(), "pcb", "edit", "lock", "--ref", "TW2", "--net", "GND",
+             "-o", str( output_dir / "x.kicad_pcb" ), str( input_file )] )
+    assert bad != 0

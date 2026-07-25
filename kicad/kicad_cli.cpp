@@ -98,6 +98,11 @@
 #include "cli/command_pcb_edit_remove_tracks.h"
 #include "cli/command_pcb_edit_delete_footprint.h"
 #include "cli/command_pcb_edit_cleanup_tracks.h"
+#include "cli/command_pcb_edit_set_fp_attribute.h"
+#include "cli/command_pcb_edit_set_field.h"
+#include "cli/command_pcb_edit_set_via_size.h"
+#include "cli/command_pcb_edit_lock.h"
+#include "cli/command_pcb_edit_unlock.h"
 #include "cli/command_pcb_import.h"
 #include "cli/command_sch_import.h"
 #include "cli/command_import.h"
@@ -181,6 +186,11 @@ static CLI::PCB_EDIT_ADD_TRACK_COMMAND          pcbEditAddTrackCmd{};
 static CLI::PCB_EDIT_REMOVE_TRACKS_COMMAND      pcbEditRemoveTracksCmd{};
 static CLI::PCB_EDIT_DELETE_FOOTPRINT_COMMAND   pcbEditDeleteFootprintCmd{};
 static CLI::PCB_EDIT_CLEANUP_TRACKS_COMMAND     pcbEditCleanupTracksCmd{};
+static CLI::PCB_EDIT_SET_FP_ATTRIBUTE_COMMAND   pcbEditSetFpAttributeCmd{};
+static CLI::PCB_EDIT_SET_FIELD_COMMAND          pcbEditSetFieldCmd{};
+static CLI::PCB_EDIT_SET_VIA_SIZE_COMMAND       pcbEditSetViaSizeCmd{};
+static CLI::PCB_EDIT_LOCK_COMMAND               pcbEditLockCmd{};
+static CLI::PCB_EDIT_UNLOCK_COMMAND             pcbEditUnlockCmd{};
 static CLI::PCB_IMPORT_COMMAND           pcbImportCmd{};
 static CLI::SCH_IMPORT_COMMAND           schImportCmd{};
 static CLI::IMPORT_COMMAND               importCmd{};
@@ -369,7 +379,12 @@ static std::vector<COMMAND_ENTRY> commandStack = {
                     &pcbEditAddTrackCmd,
                     &pcbEditRemoveTracksCmd,
                     &pcbEditDeleteFootprintCmd,
-                    &pcbEditCleanupTracksCmd
+                    &pcbEditCleanupTracksCmd,
+                    &pcbEditSetFpAttributeCmd,
+                    &pcbEditSetFieldCmd,
+                    &pcbEditSetViaSizeCmd,
+                    &pcbEditLockCmd,
+                    &pcbEditUnlockCmd
                 }
             }
         }
