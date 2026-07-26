@@ -32,12 +32,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore ccache
-        uses: actions/cache/restore@v4
+      - name: ccache (save + restore, so re-fires build fast)
+        # save+restore (not restore-only): the #68 crash is nondeterministic, so this workflow gets
+        # re-fired repeatedly. A stable key that updates each run lets each re-fire reuse the last
+        # run's objects and finish the build in minutes instead of a ~50-min cold rebuild.
+        uses: actions/cache@v4
         with:
           path: .ccache
           key: ccache-fedora-diagnose-${{ github.run_id }}
           restore-keys: |
+            ccache-fedora-diagnose-
             ccache-fedora-master-
             ccache-fedora-
 
@@ -54,48 +58,109 @@ jobs:
         # Full build so kicad-cli and every kiface it dlopens at runtime are present.
         run: ninja -C build
 
-      - name: gdb backtrace of a failing pcb export
+      - name: Reproduce the REAL qa_cli suite in a loop and capture a core (#68)
         run: |
           command -v gdb >/dev/null 2>&1 || dnf install -y gdb
+          # qa_cli imports these at COLLECTION time (qa/tests/requirements.txt: cairosvg, numpy,
+          # Pillow via pytest-image-diff, pydantic) plus xdist for `-n auto`. build-and-test.yml
+          # never installs them because it --excludes qa_cli, so the diagnostic must do it itself --
+          # without these every test module fails to import and the suite never actually runs.
+          pip3 install --quiet --break-system-packages -r qa/tests/requirements.txt pytest-xdist \
+            || pip3 install --quiet -r qa/tests/requirements.txt pytest-xdist
+          if ! python3 -c 'import pytest, xdist, cairosvg, numpy, PIL, pydantic'; then
+            echo "FATAL: qa_cli python deps still missing after install"; exit 1
+          fi
+          echo "python deps OK"
 
-          # Match how ctest runs kicad-cli from the build tree.
-          export KICAD_RUN_FROM_BUILD_DIR=1
-          export PATH="$PWD/build/kicad:$PWD/build/pcbnew:$PWD/build/common:$PWD/build/common/gal:$PWD/build/eeschema:$PWD/build/api:$PWD/build/cvpcb:$PATH"
-          export LD_LIBRARY_PATH="$PWD/build/common:$PWD/build/common/gal:$PWD/build/api:$PWD/build/pcbnew:$PWD/build/eeschema:${LD_LIBRARY_PATH:-}"
+          : > /tmp/gdb-diag.log
 
-          CLI="$PWD/build/kicad/kicad-cli"
-          BOARD=$(find qa/data/pcbnew -maxdepth 1 -name '*.kicad_pcb' 2>/dev/null | head -1)
-          echo "kicad-cli: $CLI"
-          echo "board:     $BOARD"
+          # Two prior diagnostics looped the 5 headless export commands ~800x (native AND gdb, bare-C
+          # AND C.UTF-8) and NEVER crashed. So the trigger is not a single command in isolation --
+          # it is the harness itself: qa_cli runs `pytest -n auto` (qa/tests/CMakeLists.txt), i.e.
+          # MANY kicad-cli processes concurrently over the full data matrix. Reproduce THAT: loop the
+          # real `ctest -R qa_cli` under core-dump capture, and gdb the core of whatever crashes.
+          # Deliberately DO NOT set LC_ALL -- run under the container's default locale, the exact
+          # condition under which #68/#140 were first seen.
+          mkdir -p /tmp/cores
+          ulimit -c unlimited || true
+          CORES=0
+          if echo '/tmp/cores/core.%e.%p' > /proc/sys/kernel/core_pattern 2>/dev/null; then
+            CORES=1; echo "core_pattern set -> /tmp/cores/core.<exe>.<pid>"
+          else
+            echo "WARNING: cannot write core_pattern (unprivileged container). Will still capture the"
+            echo "ctest/pytest output that names the crashing test; a follow-up run can gdb that test."
+          fi
 
-          echo "===== sanity: kicad-cli version (does it even start?) ====="
-          "$CLI" version || echo "[version subcommand exited $?]"
+          BUILD="$PWD/build"
+          echo "locale in effect:"; locale 2>&1 | tr '\n' ' '; echo
+          K=15
+          REPRO=0
+          for i in $(seq 1 $K); do
+            echo "################## qa_cli suite run $i/$K ##################"
+            rm -f /tmp/cores/core.* 2>/dev/null || true
+            # `&& rc=0 || rc=$?` keeps set -e happy while still capturing the exit code.
+            ctest --test-dir "$BUILD" -R '^qa_cli$' --output-on-failure > /tmp/ctest.$i.log 2>&1 \
+              && rc=0 || rc=$?
+            CORE=$(ls -t /tmp/cores/core.* 2>/dev/null | head -1)
 
-          echo "===== gdb: pcb export svg ====="
-          # NOTE: gdb's `info sharedlibrary` emits ~200 lines for kicad-cli, so a
-          # naive `| tail -200` evicts the backtrace entirely (this is why the first
-          # #68 diagnostic run captured only the shared-library list). Capture full
-          # output to a file, emit the shared-library list FIRST and the backtraces
-          # LAST so they always survive, and upload the file as an artifact.
-          gdb -batch -nx \
-            -ex 'set pagination off' \
-            -ex 'set confirm off' \
-            -ex run \
-            -ex 'printf "\n===== SHARED LIBRARIES =====\n"' \
-            -ex 'info sharedlibrary' \
-            -ex 'printf "\n===== ALL THREADS =====\n"' \
-            -ex 'thread apply all bt' \
-            -ex 'printf "\n===== STOPPED (signal/exit) — BACKTRACE =====\n"' \
-            -ex 'bt full' \
-            --args "$CLI" pcb export svg --page-size-mode 1 --exclude-drawing-sheet \
-                   --black-and-white --layers F.Cu,B.Cu,Edge.Cuts -o /tmp/diag.svg "$BOARD" \
-            2>&1 | tee /tmp/gdb-diag.log
-          echo "===== TAIL (backtrace, guaranteed to survive) ====="
-          tail -120 /tmp/gdb-diag.log
+            # Distinguish the #68 native crash from an ordinary (assert / image-diff) test failure:
+            # only a core or a real crash signature counts as THE crash. A plain rc!=0 without those
+            # is an ordinary failure -- still worth reporting (it stops the loop), but labelled so.
+            CRASH_SIG=0
+            if [ -n "$CORE" ] || grep -qiE "Segmentation|SIGSEGV|SIGABRT|worker .* crashed|Fatal Python error|INTERNALERROR|core dumped" /tmp/ctest.$i.log; then
+              CRASH_SIG=1
+            fi
 
-      - name: Upload full gdb log
+            if [ $CRASH_SIG -eq 1 ] || [ $rc -ne 0 ]; then
+              KIND=$( [ $CRASH_SIG -eq 1 ] && echo "NATIVE CRASH (#68)" || echo "ordinary test failure (not a crash)" )
+              echo ">>> qa_cli stopped the loop on run $i (rc=$rc, core=${CORE:-none}) -- $KIND"
+              REPRO=1
+              {
+                echo "############################################################"
+                echo "# suite run $i -- $KIND  (ctest rc=$rc, core=${CORE:-none})"
+                echo "############################################################"
+                echo "--- crash / failure lines ---"
+                grep -inE "Segmentation|SIGSEGV|SIGABRT|worker .* crashed|Fatal Python error|INTERNALERROR|core dumped|FAILED|assert|Error" /tmp/ctest.$i.log | head -100
+                echo
+                echo "--- ctest log tail ---"
+                tail -150 /tmp/ctest.$i.log
+              } >> /tmp/gdb-diag.log
+              if [ -n "$CORE" ] && [ -s "$CORE" ]; then
+                echo "===== GDB BACKTRACE FROM CORE $CORE ====="
+                {
+                  echo; echo "############################################################"
+                  echo "# GDB BACKTRACE FROM CORE $CORE"
+                  echo "############################################################"
+                  gdb -batch -nx -ex 'set pagination off' \
+                    -ex 'printf "\n===== CRASH THREAD =====\n"' -ex 'bt full' \
+                    -ex 'printf "\n===== ALL THREADS =====\n"' -ex 'thread apply all bt' \
+                    "$BUILD/kicad/kicad-cli" "$CORE" 2>&1
+                } | tee -a /tmp/gdb-diag.log
+              elif [ $CRASH_SIG -eq 1 ]; then
+                echo "(crash signature but no core; pytest lines above name the crashing test)" \
+                  | tee -a /tmp/gdb-diag.log
+              fi
+              break
+            fi
+            echo "  run $i: qa_cli PASSED (rc=0, no core)"
+          done
+
+          echo
+          echo "===================== SUMMARY ====================="
+          if [ $REPRO -eq 1 ]; then
+            echo "  qa_cli STOPPED the loop (see gdb-diag.log -- labelled crash vs ordinary failure)."
+            [ $CORES -eq 1 ] || echo "  (core_pattern was not writable, so no backtrace on a native crash -- but the test is named.)"
+          else
+            echo "  qa_cli PASSED all $K suite runs this session -- did not reproduce."
+            echo "  no crash reproduced (real qa_cli suite, $K runs)" > /tmp/gdb-diag.log
+          fi
+          echo "=================================================="
+
+      - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gdb-diag-log
-          path: /tmp/gdb-diag.log
+          path: |
+            /tmp/gdb-diag.log
+            /tmp/ctest.*.log
